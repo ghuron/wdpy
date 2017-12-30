@@ -9,7 +9,7 @@ query_train = '?item wdt:P31 ?param'  # '?item wdt:P31 wd:Q5; wdt:P21 ?param'
 query_unknown = '?item wdt:P18 ?i . OPTIONAL {?item wdt:P31 ?f} FILTER(!bound(?f)) . ' + \
                 'OPTIONAL {?item wdt:P279 ?s} FILTER(!bound(?s))'
 # '?item wdt:P31 wd:Q5 OPTIONAL {?item wdt:P21 ?f} FILTER(!bound(?f))'
-classes = ['Q11266439', 'Q4167836', 'Q15184295', 'Q16521', 'Q11173', 'Q5', 'Q56061', '']  # ['Q6581097', 'Q6581072']
+classes = ['Q5', 'Q16521', 'Q7187', 'Q8054', 'Q8502', 'Q4022', '']  # ['Q6581097', 'Q6581072']
 
 
 def tf_input_fn(data):
@@ -52,7 +52,7 @@ def query_labels_fn(query_filter):
                 row = [item.replace('http://www.wikidata.org/entity/', '') for item in row]
                 if len(row) == 3 and row[0].startswith('Q'):  # not header or exception
                     if row[1] != row[0]:  # actual label, not Qxxxxxx
-                        words = row[1].translate(''.maketrans('",.)(', '     ')).split()
+                        words = row[1].translate(''.maketrans('",.)(:', '      ')).split()
                         if len(words) == 0:
                             continue
 
@@ -86,8 +86,9 @@ def query_labels_fn(query_filter):
 tf.logging.set_verbosity(tf.logging.INFO)
 
 m = tf.contrib.learn.LinearClassifier(
-    feature_columns=[tf.contrib.layers.sparse_column_with_hash_bucket("label", hash_bucket_size=200000)],
-    optimizer=tf.train.FtrlOptimizer(learning_rate=100, l1_regularization_strength=0.001)
+    feature_columns=[tf.contrib.layers.sparse_column_with_hash_bucket("label", hash_bucket_size=200000)]
+    , n_classes=len(classes)
+    , optimizer=tf.train.FtrlOptimizer(learning_rate=100, l1_regularization_strength=0.001)
     # , model_dir='C:\\Users\\Ghuron\\AppData\\Local\\Temp\\tmpzy8ujk08\\'
 )
 m.fit(input_fn=lambda: tf_input_fn(query_labels_fn(query_filter=query_train)), steps=10000)
