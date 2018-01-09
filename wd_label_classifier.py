@@ -35,11 +35,14 @@ def query_labels_fn(query_filter):
             values = []
             indices = []
             y = []
-            download = session.post('https://query.wikidata.org/sparql', params={
-                'query': 'SELECT ?item ?itemLabel ?param WITH {SELECT * {' + query_filter + '} OFFSET ' + str(offset) +
-                         ' LIMIT 50000' +
-                         '} as %q {INCLUDE %q SERVICE wikibase:label {bd:serviceParam wikibase:language "ru"}}'
-            })
+            try:
+                download = session.post('https://query.wikidata.org/sparql', params={
+                    'query': 'SELECT ?item ?itemLabel ?param WITH {SELECT * {' + query_filter + '} OFFSET '
+                             + str(offset) + ' LIMIT 50000' +
+                             '} as %q {INCLUDE %q SERVICE wikibase:label {bd:serviceParam wikibase:language "pl"}}'
+                })
+            except requests.exceptions.RequestException:
+                break
             decoded_content = download.content.decode('utf-8')
             if 'exception' in decoded_content:
                 print('timeout')
