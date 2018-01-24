@@ -1,16 +1,17 @@
 #!/usr/bin/python3
+import codecs
 import csv
 
 import numpy as np
 import requests
 import tensorflow as tf
 
-query_train = '?item wdt:P31 ?param'  # '?item wdt:P31 wd:Q5; wdt:P21 ?param'
-classes = ['Q5', 'Q532', 'Q3947', 'Q5084', 'Q8502', 'Q4022', 'Q3863', 'Q571', 'Q12323', 'Q7366', 'Q15416', 'Q9842',
-           'Q7889', 'Q9826', 'Q14350', 'Q12284', 'Q515', 'Q11446', '']  # ['Q6581097', 'Q6581072']
+query_train = '?item wdt:P31 wd:Q5; wdt:P21 ?param'
+classes = ["Q6581097", "Q6581072"]
 model_folder = None # To reuse existing model specify path
-query_unknown = '?item wdt:P17 ?i . OPTIONAL {?item wdt:P31 ?f} FILTER(!bound(?f)) . ' + \
-                'OPTIONAL {?item wdt:P279 ?s} FILTER(!bound(?s))'
+query_unknown = '?item wdt:P31 wd:Q5; OPTIONAL {?item wdt:P21 ?f} FILTER(!bound(?f))'
+languages = '"ru","uk","be","kk","ky","sr","mk","tt","bg","tg","mn","cv","av","os","ce","ba","udm",' + \
+            '"xal","ab","crh","sah","myv","mdf","pnt","mhr","krc","mrj","gag","rue","tyv","ady"'
 
 
 def tf_input_fn(data):
@@ -38,8 +39,8 @@ def query_labels_fn(query_filter):
             try:
                 download = session.post('https://query.wikidata.org/sparql', params={
                     'query': 'SELECT ?item ?itemLabel ?param WITH {SELECT * {' + query_filter + '} OFFSET '
-                             + str(offset) + ' LIMIT 50000' +
-                             '} as %q {INCLUDE %q SERVICE wikibase:label {bd:serviceParam wikibase:language "pl"}}'
+                             + str(offset) + ' LIMIT 50000} as %q {INCLUDE %q '
+                             + 'SERVICE wikibase:label {bd:serviceParam wikibase:language ' + languages + '}}'
                 })
             except requests.exceptions.RequestException:
                 break
@@ -88,9 +89,8 @@ def query_labels_fn(query_filter):
 
 
 tf.logging.set_verbosity(tf.logging.INFO)
-
 m = tf.contrib.learn.LinearClassifier(
-    feature_columns=[tf.contrib.layers.sparse_column_with_hash_bucket("label", hash_bucket_size=200000)],
+    feature_columns=[tf.contrib.layers.sparse_column_with_hash_bucket("label", hash_bucket_size=1000000)],
     model_dir=model_folder, n_classes=len(classes), config=tf.contrib.learn.RunConfig(keep_checkpoint_max=2),
     optimizer=tf.train.FtrlOptimizer(learning_rate=100, l1_regularization_strength=0.001)
 )
@@ -99,7 +99,7 @@ if model_folder is None:
 unknown = query_labels_fn(query_filter=query_unknown)
 results = m.predict_proba(input_fn=lambda: tf_input_fn([unknown[0], unknown[1], []]))
 
-with open("output.csv", 'wb') as o:           
+with open("output.csv", 'wb') as o:
     o.write(codecs.BOM_UTF8)
     j = 0
     for i, p in enumerate(results):
