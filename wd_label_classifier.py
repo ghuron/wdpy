@@ -99,8 +99,9 @@ if model_folder is None:
 unknown = query_labels_fn(query_filter=query_unknown)
 results = m.predict_proba(input_fn=lambda: tf_input_fn([unknown[0], unknown[1], []]))
 
-j = 0
-with open("output.csv", 'wb') as o:
+with open("output.csv", 'wb') as o:           
+    o.write(codecs.BOM_UTF8)
+    j = 0
     for i, p in enumerate(results):
         label = ''
         while True:
