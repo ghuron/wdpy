@@ -10,8 +10,10 @@ query_train = '?item wdt:P31 wd:Q5; wdt:P21 ?param'
 classes = ["Q6581097", "Q6581072"]
 model_folder = None # To reuse existing model specify path
 query_unknown = '?item wdt:P31 wd:Q5; OPTIONAL {?item wdt:P21 ?f} FILTER(!bound(?f))'
-languages = '"ru","uk","be","kk","ky","sr","mk","tt","bg","tg","mn","cv","av","os","ce","ba","udm",' + \
-            '"xal","ab","crh","sah","myv","mdf","pnt","mhr","krc","mrj","gag","rue","tyv","ady"'
+languages = '"ru","uk","be","bg","kk","sr","ce",' \
+            '"ba","be-tarask","cv","os","ky","mrj","mk","mn","sah","tt","tg",' \
+            '"kbd","ab","av","bxr","crh","myv","xal","kv","lbe","lez","mdf","mhr","koi","krc","rue","tyv","udm",' \
+            '"cu","pnt","ady"'
 
 
 def tf_input_fn(data):
