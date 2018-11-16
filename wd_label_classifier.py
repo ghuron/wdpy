@@ -6,14 +6,35 @@ import numpy as np
 import requests
 import tensorflow as tf
 
-query_train = '?item wdt:P31 wd:Q5; wdt:P21 ?param'
-classes = ["Q6581097", "Q6581072"]
-model_folder = None # To reuse existing model specify path
-query_unknown = '?item wdt:P31 wd:Q5; OPTIONAL {?item wdt:P21 ?f} FILTER(!bound(?f))'
-languages = '"ru","uk","be","bg","kk","sr","ce",' \
-            '"ba","be-tarask","cv","os","ky","mrj","mk","mn","sah","tt","tg",' \
-            '"kbd","ab","av","bxr","crh","myv","xal","kv","lbe","lez","mdf","mhr","koi","krc","rue","tyv","udm",' \
-            '"cu","pnt","ady"'
+query_train = 'select * { ?item wdt:P31 wd:Q4167836; p:P4224/pq:P106 ?param }'
+classes = []
+model_folder = None  # To reuse existing model specify path
+query_unknown = 'select ?item { ?item wdt:P31 wd:Q4167836; p:P4224 ?s . ?s ps:P4224 wd:Q5; ?prop [] FILTER (?prop != pq:P21 ) FILTER NOT EXISTS {?item wdt:P971 []} } GROUP BY ?item HAVING(COUNT(*)=3)'
+#languages = '"ru","uk","be","bg","kk","sr","ce",' \
+#            '"ba","be-tarask","cv","os","ky","mrj","mk","mn","sah","tt","tg",' \
+#            '"kbd","ab","av","bxr","crh","myv","xal","kv","lbe","lez","mdf","mhr","koi","krc","rue","tyv","udm",' \
+#            '"cu","pnt","ady"'
+
+
+languages = '"en","de","fr","nl","es","it","pl","ceb","sv","vi","war"'
+
+def get_classes():
+    result = [""]
+    with requests.Session() as session:
+        session.headers.update({'Accept': 'text/csv'})
+        download = session.post('https://query.wikidata.org/sparql', params={
+            'query': 'select ?class { [] p:P4224 ?s . ?s ps:P4224 wd:Q5; pq:P106 ?class } GROUP BY ?class ORDER BY DESC(COUNT(*)) LIMIT 300'
+        })
+        decoded_content = download.content.decode('utf-8')
+
+        cr = csv.reader(decoded_content.splitlines(), delimiter=',')
+        my_list = list(cr)
+        for row in my_list:
+            row = [item.replace('http://www.wikidata.org/entity/', '') for item in row]
+            if row[0].startswith('Q'):  # not header or exception
+                result.append(row[0])
+
+    return result
 
 
 def tf_input_fn(data):
@@ -25,7 +46,7 @@ def tf_input_fn(data):
         return result
 
 
-def query_labels_fn(query_filter):
+def query_labels_fn(query):
     offset = 0
     first = []
     second = None
@@ -40,9 +61,8 @@ def query_labels_fn(query_filter):
             y = []
             try:
                 download = session.post('https://query.wikidata.org/sparql', params={
-                    'query': 'SELECT ?item ?itemLabel ?param WITH {SELECT * {' + query_filter + '} OFFSET '
-                             + str(offset) + ' LIMIT 50000} as %q {INCLUDE %q '
-                             + 'SERVICE wikibase:label {bd:serviceParam wikibase:language ' + languages + '}}'
+                    'query': 'SELECT ?item ?itemLabel ?param WITH {' + query + ' OFFSET ' + str(offset) +
+                             ' LIMIT 50000} as %q {INCLUDE %q SERVICE wikibase:label {bd:serviceParam wikibase:language ' + languages + '}}'
                 })
             except requests.exceptions.RequestException:
                 break
@@ -89,16 +109,16 @@ def query_labels_fn(query_filter):
 
     return [first, second, third]
 
-
+classes = get_classes()
 tf.logging.set_verbosity(tf.logging.INFO)
 m = tf.contrib.learn.LinearClassifier(
     feature_columns=[tf.contrib.layers.sparse_column_with_hash_bucket("label", hash_bucket_size=1000000)],
     model_dir=model_folder, n_classes=len(classes), config=tf.contrib.learn.RunConfig(keep_checkpoint_max=2),
-    optimizer=tf.train.FtrlOptimizer(learning_rate=100, l1_regularization_strength=0.001)
+    optimizer=tf.train.FtrlOptimizer(learning_rate=100, l1_regularization_strength=0.03)
 )
 if model_folder is None:
-    m.fit(input_fn=lambda: tf_input_fn(query_labels_fn(query_filter=query_train)), steps=10000)
-unknown = query_labels_fn(query_filter=query_unknown)
+    m.fit(input_fn=lambda: tf_input_fn(query_labels_fn(query=query_train)), steps=10000)
+unknown = query_labels_fn(query=query_unknown)
 results = m.predict_proba(input_fn=lambda: tf_input_fn([unknown[0], unknown[1], []]))
 
 with open("output.csv", 'wb') as o:
