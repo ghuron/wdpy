@@ -74,10 +74,10 @@ r2 = wdapi.post('https://www.wikidata.org/w/api.php', data={
 
 csrftoken = '<badtoken>'
 
-for prop in ['P1344', 'P136', 'P407', 'P577', 'P825', 'P364', 'P2632', 'P161', 'P569', 'P1046', 'P61', 'P400',
-             'P50', 'P17', 'P170', 'P840', 'P611', 'P162', 'P86', 'P57', 'P410', 'P264', 'P412', 'P413', 'P54',
+for prop in ['P621', 'P522', 'P462', 'P136', 'P407', 'P577', 'P825', 'P364', 'P2632', 'P161', 'P569', 'P1046', 'P61',
+             'P400', 'P50', 'P17', 'P170', 'P840', 'P611', 'P162', 'P86', 'P57', 'P410', 'P264', 'P412', 'P413', 'P54',
              'P19', 'P20', 'P1399', 'P1303', 'P512', 'P119', 'P411', 'P140', 'P101', 'P102', 'P39', 'P69',
-             'P108', 'P509', 'P21', 'P175', 'P3150', 'P106']:  # 'P2962', 'P97', 'P171', 'P405', 'P141',
+             'P108', 'P509', 'P21', 'P175', 'P3150', 'P106']:  # 'P2962', 'P97', 'P171', 'P405', 'P141', 'P1344',
     categories = '?s pq:' + prop + ' ?item; ps:P4224 ?type . ?cat p:P4224 ?s'
     filter = 'FILTER NOT EXISTS {?person wdt:' + prop + ' ?item}'
     if prop == 'P3150':
@@ -148,7 +148,7 @@ for prop in ['P1344', 'P136', 'P407', 'P577', 'P825', 'P364', 'P2632', 'P161', '
             value = '"datatype": "wikibase-item", "datavalue": {"type": "wikibase-entityid", "value": ' \
                     '{"entity-type": "item", "id":"' + row[1] + '"}}, "property": "' + prop + '", "snaktype": "value"'
 
-            if prop in ('P569', 'P577'):
+            if prop in ('P569', 'P577', 'P621'):
                 if row[2] in cache and \
                         'qualifiers' in cache[row[2]]['claims']['P4224'][0] and \
                         'datavalue' in cache[row[2]]['claims']['P4224'][0]['qualifiers'][prop][0]:
@@ -162,7 +162,7 @@ for prop in ['P1344', 'P136', 'P407', 'P577', 'P825', 'P364', 'P2632', 'P161', '
                                )
 
             if prop in person['claims']:
-                if not prop in ('P569', 'P577'):
+                if not prop in ('P569', 'P577', 'P621'):
                     replaceable = []
                     if row[1] in cache:
                         replaceable = get_superclasses(cache[row[1]], prop)
@@ -180,7 +180,7 @@ for prop in ['P1344', 'P136', 'P407', 'P577', 'P825', 'P364', 'P2632', 'P161', '
                                             'P143']):  # no "real" sources
                                     if (prop != 'P106' or entityId == 'Q901') and \
                                             (prop != 'P140' or entityId != 'Q5043') and \
-                                            (prop != 'P146') and \
+                                            (prop != 'P136') and \
                                             (prop != 'P407'):
                                         claim = copy.deepcopy(s)
                                         claim['mainsnak']['datavalue']['value']['id'] = row[1]
