@@ -10,6 +10,8 @@ import requests
 
 
 def are_references_dismissable(statement):
+    if 'qualifiers' in statement:
+        return False
     if not 'references' in statement:
         return True
     if len(statement['references']) == 1:
@@ -74,10 +76,11 @@ r2 = wdapi.post('https://www.wikidata.org/w/api.php', data={
 
 csrftoken = '<badtoken>'
 
-for prop in ['P621', 'P522', 'P462', 'P136', 'P407', 'P577', 'P825', 'P364', 'P2632', 'P161', 'P569', 'P1046', 'P61',
-             'P400', 'P50', 'P17', 'P170', 'P840', 'P611', 'P162', 'P86', 'P57', 'P410', 'P264', 'P412', 'P413', 'P54',
-             'P19', 'P20', 'P1399', 'P1303', 'P512', 'P119', 'P411', 'P140', 'P101', 'P102', 'P39', 'P69',
-             'P108', 'P509', 'P21', 'P175', 'P3150', 'P106']:  # 'P2962', 'P97', 'P171', 'P405', 'P141', 'P1344',
+for prop in ['P39', 'P19', 'P20', 'P176', 'P4884', 'P58', 'P1056', 'P621', 'P522', 'P462', 'P136', 'P407', 'P577',
+             'P825', 'P364', 'P2632', 'P161', 'P569', 'P1046', 'P61', 'P400', 'P50', 'P17', 'P170', 'P840', 'P611',
+             'P162', 'P86', 'P57', 'P410', 'P264', 'P412', 'P413', 'P54', 'P1399', 'P1303', 'P512',
+             'P119', 'P411', 'P140', 'P101', 'P102', 'P69', 'P108', 'P509', 'P21', 'P175', 'P3150', 'P106']:
+    # 'P2962', 'P97', 'P171', 'P405', 'P141', 'P1344',
     categories = '?s pq:' + prop + ' ?item; ps:P4224 ?type . ?cat p:P4224 ?s'
     filter = 'FILTER NOT EXISTS {?person wdt:' + prop + ' ?item}'
     if prop == 'P3150':
@@ -173,18 +176,16 @@ for prop in ['P621', 'P522', 'P462', 'P136', 'P407', 'P577', 'P825', 'P364', 'P2
                         if 'datavalue' in s['mainsnak']:
                             entityId = s['mainsnak']['datavalue']['value']['id']
                             if entityId == row[1]:  # exactly this statement already exists
-                                break  # any modification is unnecessary
+                                claim = {} # any modification is prohibited unnecessary
+                                break
                             if entityId in replaceable:  # we can update statement with more accurate info
-                                if not ('references' in s) or \
-                                        (len(s['references']) == 1 and s['references'][0]['snaks-order'] == [
-                                            'P143']):  # no "real" sources
+                                if are_references_dismissable(s):  # no "real" sources
                                     if (prop != 'P106' or entityId == 'Q901') and \
                                             (prop != 'P140' or entityId != 'Q5043') and \
                                             (prop != 'P136') and \
                                             (prop != 'P407'):
                                         claim = copy.deepcopy(s)
                                         claim['mainsnak']['datavalue']['value']['id'] = row[1]
-                                        break
                 else:
                     claim2 = claim
                     claim = {}
