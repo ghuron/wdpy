@@ -1,8 +1,10 @@
 #!/usr/bin/python3
 import copy
 import csv
+import datetime
 import json
 import re
+import sys
 import time
 import uuid
 
@@ -55,7 +57,20 @@ def get_superclasses(item, propertyId):
     return super_classes
 
 
+def is_datetime_updateable(source, target):
+    if source['precision'] > 10 or source['precision'] >= target['precision'] or \
+            source['calendarmodel'] != target['calendarmodel']:
+        return False
+    digits_in_year = source['time'].find('-', 1) - 1
+    compare_till = source['precision'] - (8 - digits_in_year)
+    if source['precision'] == 10:
+        compare_till = compare_till + 3
+    return source['time'][:compare_till] == target['time'][:compare_till]
+
+
 wdapi = requests.Session()
+wdapi.headers.update(
+    {'User-Agent': 'catbot/0.0 (https://github.com/ghuron/wdpy; https://www.wikidata.org/wiki/User:Ghuron)'})
 
 # get login token
 r1 = wdapi.get('https://www.wikidata.org/w/api.php', params={
@@ -69,17 +84,18 @@ r1 = wdapi.get('https://www.wikidata.org/w/api.php', params={
 r2 = wdapi.post('https://www.wikidata.org/w/api.php', data={
     'format': 'json',
     'action': 'login',
-    'lgname': '<username>',
-    'lgpassword': '<password>',
+    'lgname': sys.argv[1],
+    'lgpassword': sys.argv[2],
     'lgtoken': r1.json()['query']['tokens']['logintoken'],
 })
 
 csrftoken = '<badtoken>'
 
-for prop in ['P39', 'P19', 'P20', 'P176', 'P4884', 'P58', 'P1056', 'P621', 'P522', 'P462', 'P136', 'P407', 'P577',
-             'P825', 'P364', 'P2632', 'P161', 'P569', 'P1046', 'P61', 'P400', 'P50', 'P17', 'P170', 'P840', 'P611',
-             'P162', 'P86', 'P57', 'P410', 'P264', 'P412', 'P413', 'P54', 'P1399', 'P1303', 'P512',
-             'P119', 'P411', 'P140', 'P101', 'P102', 'P69', 'P108', 'P509', 'P21', 'P175', 'P3150', 'P106']:
+for prop in ['P131', 'P17', 'P569', 'P840', 'P59', 'P881', 'P6087', 'P571', 'P53', 'P403', 'P39', 'P19', 'P20', 'P176',
+             'P58', 'P1056', 'P621', 'P522', 'P462', 'P136', 'P407', 'P577', 'P825', 'P364', 'P2632', 'P161',
+             'P138', 'P1046', 'P61', 'P400', 'P50', 'P170', 'P611', 'P162', 'P86', 'P57', 'P410', 'P4884',
+             'P264', 'P412', 'P413', 'P54', 'P1399', 'P1303', 'P512', 'P119', 'P411', 'P140', 'P101',
+             'P102', 'P69', 'P108', 'P509', 'P21', 'P175', 'P3150', 'P106']:
     # 'P2962', 'P97', 'P171', 'P405', 'P141', 'P1344',
     categories = '?s pq:' + prop + ' ?item; ps:P4224 ?type . ?cat p:P4224 ?s'
     filter = 'FILTER NOT EXISTS {?person wdt:' + prop + ' ?item}'
@@ -90,7 +106,8 @@ for prop in ['P39', 'P19', 'P20', 'P176', 'P4884', 'P58', 'P1056', 'P621', 'P522
             filter = 'FILTER NOT EXISTS {?person p:P225/pq:P405 []}'
 
     with requests.Session() as wdqs:
-        wdqs.headers.update({'Accept': 'application/json'})
+        wdqs.headers.update({'Accept': 'application/json',
+                             'User-Agent': 'catbot/0.0 (https://github.com/ghuron/wdpy; https://www.wikidata.org/wiki/User:Ghuron)'})
         try:
             count = wdqs.post('https://query.wikidata.org/sparql', params={
                 'query': 'SELECT (COUNT(*) AS ?count) {' + categories + '}'
@@ -100,7 +117,8 @@ for prop in ['P39', 'P19', 'P20', 'P176', 'P4884', 'P58', 'P1056', 'P621', 'P522
 
     for offset in range(0, int(count), 10):
         with requests.Session() as wdqs:
-            wdqs.headers.update({'Accept': 'text/csv'})
+            wdqs.headers.update({'Accept': 'text/csv',
+                                 'User-Agent': 'catbot/0.0 (https://github.com/ghuron/wdpy; https://www.wikidata.org/wiki/User:Ghuron)'})
             try:
                 download = wdqs.post('https://query.wikidata.org/sparql', params={
                     'query': """
@@ -125,7 +143,8 @@ for prop in ['P39', 'P19', 'P20', 'P176', 'P4884', 'P58', 'P1056', 'P621', 'P522
             except requests.exceptions.RequestException:
                 break
         if download.status_code != 200:
-            print('Error: ' + str(download.status_code))
+            print(datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S') + ': Query error: ' + str(download.status_code),
+                  file=sys.stderr)
             continue
 
         decoded_content = download.content.decode('utf-8').replace('http://www.wikidata.org/entity/', '')
@@ -139,7 +158,7 @@ for prop in ['P39', 'P19', 'P20', 'P176', 'P4884', 'P58', 'P1056', 'P621', 'P522
                          'Q76326', 'Q9212085', 'Q40939', 'Q154993', 'Q156572', 'Q541599', 'Q76437', 'Q28911612',
                          'Q3123785', 'Q383541', 'Q19928416', 'Q17131', 'Q232725', 'Q43067', 'Q122386', 'Q2995934',
                          'Q41635', 'Q122386', 'Q37577', 'Q713439', 'Q43274', 'Q509124', 'Q11031', 'Q345', 'Q3349145',
-                         'Q3117649', 'Q3180990', 'Q4730963', 'Q167545', 'Q570982', 'Q145746']
+                         'Q3117649', 'Q3180990', 'Q4730963', 'Q167545', 'Q570982', 'Q145746', 'Q9203192']
             if len(row) != 4 or row[0] in blacklist or not row[0].startswith('Q'):
                 continue
 
@@ -151,7 +170,7 @@ for prop in ['P39', 'P19', 'P20', 'P176', 'P4884', 'P58', 'P1056', 'P621', 'P522
             value = '"datatype": "wikibase-item", "datavalue": {"type": "wikibase-entityid", "value": ' \
                     '{"entity-type": "item", "id":"' + row[1] + '"}}, "property": "' + prop + '", "snaktype": "value"'
 
-            if prop in ('P569', 'P577', 'P621'):
+            if prop in ('P569', 'P571', 'P577', 'P621'):
                 if row[2] in cache and \
                         'qualifiers' in cache[row[2]]['claims']['P4224'][0] and \
                         'datavalue' in cache[row[2]]['claims']['P4224'][0]['qualifiers'][prop][0]:
@@ -165,7 +184,7 @@ for prop in ['P39', 'P19', 'P20', 'P176', 'P4884', 'P58', 'P1056', 'P621', 'P522
                                )
 
             if prop in person['claims']:
-                if not prop in ('P569', 'P577', 'P621'):
+                if not prop in ('P569', 'P571', 'P577', 'P621'):
                     replaceable = []
                     if row[1] in cache:
                         replaceable = get_superclasses(cache[row[1]], prop)
@@ -176,7 +195,7 @@ for prop in ['P39', 'P19', 'P20', 'P176', 'P4884', 'P58', 'P1056', 'P621', 'P522
                         if 'datavalue' in s['mainsnak']:
                             entityId = s['mainsnak']['datavalue']['value']['id']
                             if entityId == row[1]:  # exactly this statement already exists
-                                claim = {} # any modification is prohibited unnecessary
+                                claim = {}  # any modification is prohibited unnecessary
                                 break
                             if entityId in replaceable:  # we can update statement with more accurate info
                                 if are_references_dismissable(s):  # no "real" sources
@@ -191,9 +210,8 @@ for prop in ['P39', 'P19', 'P20', 'P176', 'P4884', 'P58', 'P1056', 'P621', 'P522
                     claim = {}
                     if are_references_dismissable(person['claims'][prop][0]) and len(person['claims'][prop]) == 1:
                         if 'datavalue' in person['claims'][prop][0]['mainsnak']:
-                            if person['claims'][prop][0]['mainsnak']['datavalue']['value']['precision'] < \
-                                    claim2['mainsnak']['datavalue']['value']['precision'] and \
-                                    claim2['mainsnak']['datavalue']['value']['precision'] == 10:
+                            if is_datetime_updateable(person['claims'][prop][0]['mainsnak']['datavalue']['value'],
+                                                      claim2['mainsnak']['datavalue']['value']):
                                 claim = claim2
                                 claim['id'] = person['claims'][prop][0]['id']
 
@@ -230,8 +248,8 @@ for prop in ['P39', 'P19', 'P20', 'P176', 'P4884', 'P58', 'P1056', 'P621', 'P522
                                              '{"type": "wikibase-entityid", "value": {"entity-type": "item", "id": "?source"}}}]}}]'
                                              .replace('?source', row[3]))
 
-            while True:
-                r5 = wdapi.post('https://www.wikidata.org/w/api.php', data={
+            for retries in range(1, 3):
+                response = wdapi.post('https://www.wikidata.org/w/api.php', data={
                     'format': 'json',
                     'action': 'wbsetclaim',
                     'maxlag': '50',
@@ -239,20 +257,39 @@ for prop in ['P39', 'P19', 'P20', 'P176', 'P4884', 'P58', 'P1056', 'P621', 'P522
                     'baserevid': person['lastrevid'],
                     'summary': 'because included in the [[' + row[2] + ']]',
                     'token': csrftoken
-                })
+                }).content.decode('utf-8').lower()
 
-                if "badtoken" in r5.content.decode('utf-8'):
+                if "badtoken" in response:
                     r4 = wdapi.get('https://www.wikidata.org/w/api.php',
                                    params={'format': 'json', 'action': 'query', 'maxlag': '50', 'meta': 'tokens', })
                     if 'query' in r4.json():
                         csrftoken = r4.json()['query']['tokens']['csrftoken']
                         continue
 
-                if "abusefilter-warning-P225" in r5.content.decode('utf-8'):
+                if "abusefilter-warning-p225" in response:
                     continue
 
-                break
+                if "anonymous" in response:
+                    r1 = wdapi.get('https://www.wikidata.org/w/api.php', params={
+                        'format': 'json',
+                        'action': 'query',
+                        'meta': 'tokens',
+                        'type': 'login',
+                    })
+                    r2 = wdapi.post('https://www.wikidata.org/w/api.php', data={
+                        'format': 'json',
+                        'action': 'login',
+                        'lgname': sys.argv[1],
+                        'lgpassword': sys.argv[2],
+                        'lgtoken': r1.json()['query']['tokens']['logintoken'],
+                    })
+
+                if not 'error' in response or 'editconflict' in response:
+                    continue
+
+                print(datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S') + ':' + response, file=sys.stderr)
+
+                time.sleep(60)
 
             del cache[row[0]]
-
-            time.sleep(0.5)
+            time.sleep(10)
