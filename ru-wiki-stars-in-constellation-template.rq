@@ -1,0 +1,93 @@
+SELECT ?line WITH {
+  SELECT ?item ?constellation (SAMPLE(?bayer) as ?bayer) (SAMPLE(?flam) as ?flam) (SAMPLE(?var) as ?var) 
+         (SAMPLE(?parent) as ?parent) (SAMPLE(?ru) as ?ru) (SAMPLE(?iw) as ?iw) (COUNT(DISTINCT ?exo) as ?pl) {
+  ?constellation wdt:P1813 ?short
+  VALUES ?types { wd:Q595871 wd:Q523 wd:Q101600 }
+  ?item wdt:P59 ?constellation; wdt:P31/wdt:P279* ?types; wikibase:sitelinks ?iw
+  OPTIONAL { ?item p:P528[ps:P528 ?v; pq:P972 wd:Q222662] }
+  BIND(REPLACE(?v, CONCAT(' ', STR(?short)), '') AS ?var)
+  OPTIONAL { ?item p:P528[ps:P528 ?b; pq:P972 wd:Q105616; wikibase:rank wikibase:NormalRank] }
+  BIND(REPLACE(?b, CONCAT(' ', STR(?short)), '') AS ?bayer)
+  OPTIONAL { ?item p:P528[ps:P528 ?f; pq:P972 wd:Q111116; wikibase:rank wikibase:NormalRank] }
+  BIND(REPLACE(?f, CONCAT(' ', STR(?short)), '') AS ?flam)
+  OPTIONAL { [] schema:about ?item; schema:isPartOf <https://ru.wikipedia.org/>; schema:name ?ru }
+  OPTIONAL {?item wdt:P361 ?parent } 
+  OPTIONAL { ?item wdt:P398 ?exo }
+  FILTER NOT EXISTS { ?item wdt:P397 [] }
+} GROUP BY ?item ?constellation} AS %Q {
+  BIND (wd:Q8860 AS ?constellation) { # <--------------- Change constellation here
+    VALUES (?row ?line) { 
+      ('A1' '{{Навигационная таблица') 
+      ('A2' ' |state         = <includeonly>{{{state|autocollapse}}}</includeonly>')
+      ('A4' ' |класс_списков = hlist hlist-items-nowrap')
+      ('A5' '')
+      ('A6' ' |заголовок1    = [[Обозначения Байера|Байер]]')
+      ('A7' ' |список1       =')
+      ('A8' '') 
+      ('B1' '') 
+      ('B2' ' |заголовок2    = [[Обозначения Флемстида|Флемстид]]') 
+      ('B3' ' |список2       =') 
+      ('B4' '')
+      ('C1' '') 
+      ('C2' ' |заголовок3    = [[Переменная звезда|Переменные]]') 
+      ('C3' ' |список3       =') 
+      ('C4' '')
+      ('D1' '') 
+      ('D2' ' |заголовок4    = [[Планетная система|Планетные<br>системы]]') 
+      ('D3' ' |список4       =') 
+      ('D4' '')
+      ('E1' '') 
+      ('E2' ' |заголовок5    = Другие') 
+      ('E3' ' |список5       =') 
+      ('E4' '')
+      ('F1' '') 
+      ('F3' ' }}<noinclude>')
+      ('F4' '[[Категория:Навигационные шаблоны:Звёзды по созвездиям]]') 
+      ('F5' '</noinclude>')
+    }  
+  } UNION {
+    BIND ('A3' as ?row)
+    [] schema:about ?constellation; schema:isPartOf <https://ru.wikipedia.org/>; schema:name ?ruconst.
+    ?item p:P360[ps:P360 wd:Q523; pq:P59 ?constellation].
+    [] schema:about ?item; schema:isPartOf <https://ru.wikipedia.org/>; schema:name ?rulist
+    BIND(CONCAT(' |заголовок     = Звёзды созвездия [[', ?ruconst, '|', REPLACE (?rulist, 'Список звёзд созвездия ', ''), ']]') AS ?line)
+  } UNION {
+    INCLUDE %Q
+    BIND(IF(BOUND(?ru), CONCAT('* [[', ?ru, '|', ?bayer, ']]'), CONCAT('* {{нет статьи|', REPLACE(STR(?item), 'http://www.wikidata.org/entity/', ''), '|',?bayer, '|Звезда}}')) AS ?line)
+    OPTIONAL {?parent p:P527[ps:P527 ?item; pq:P1545 ?num]}
+    FILTER (BOUND(?bayer) && !BOUND(?num))
+    BIND (CONCAT('A', REPLACE(IF(REGEX(?bayer, '^[Aa-z]'), CONCAT('ωω',?bayer), ?bayer),'¹','1')) AS ?row)
+  } UNION {
+    INCLUDE %Q
+    BIND(IF(BOUND(?ru), CONCAT('* [[', ?ru, '|', ?flam, ']]'), CONCAT('* {{нет статьи|', REPLACE(STR(?item), 'http://www.wikidata.org/entity/', ''), '|', ?flam, '|Звезда}}')) AS ?line)            
+    FILTER (BOUND(?flam))
+    BIND(xsd:integer(?flam) as ?num)
+    BIND(CONCAT('BB', IF(BOUND(?num), SUBSTR(CONCAT('00', ?flam), STRLEN(?flam), 3), CONCAT('B', ?flam))) AS ?row)
+  } UNION {
+    INCLUDE %Q
+    BIND(IF(BOUND(?ru), CONCAT('* [[', ?ru, '|', ?var, ']]'), CONCAT('* {{нет статьи|', REPLACE(STR(?item), 'http://www.wikidata.org/entity/', ''), '|', ?var, '|Звезда}}')) AS ?line)            
+    FILTER(REGEX(?var, '[A-Z].*') && ?iw>0)
+    BIND(CONCAT('C', ?var) AS ?row)
+  } UNION {
+    { SELECT ?ru ?item ?itemLabel {
+        INCLUDE %Q
+        SERVICE wikibase:label { bd:serviceParam wikibase:language "ru,en" }
+        FILTER ((?pl>0)&&!BOUND(?parent))
+    } }
+    BIND(IF(BOUND(?ru), CONCAT('* [[', ?ru, ']]'), CONCAT('* {{нет статьи|', REPLACE(STR(?item), 'http://www.wikidata.org/entity/', ''), '|', ?itemLabel, '|Звезда}}')) AS ?line)    
+    BIND(CONCAT('DD', ?itemLabel) AS ?row)
+  } UNION {
+    { SELECT ?ru ?pl ?item ?itemLabel {
+      INCLUDE %Q
+      SERVICE wikibase:label { bd:serviceParam wikibase:language "ru,en" }
+      FILTER (BOUND(?ru)&&(?pl=0)&&!BOUND(?parent)&&!BOUND(?bayer)&&!BOUND(?flam)&&!BOUND(?var))
+    } }
+    BIND(IF(BOUND(?ru), CONCAT('* [[', ?ru, ']]'), CONCAT('* {{нет статьи|', REPLACE(STR(?item), 'http://www.wikidata.org/entity/', ''), '|', ?itemLabel, '|Звезда}}')) AS ?line)    
+    BIND(CONCAT('EE', ?ru) AS ?row)
+  } UNION {
+    BIND ('F2' as ?row)
+    ?list p:P360[ps:P360 wd:Q523; pq:P59 ?constellation].
+    [] schema:about ?list; schema:isPartOf <https://ru.wikipedia.org/>; schema:name ?rulist
+    BIND(CONCAT(' | внизу        = [[', ?rulist, '|Список]]') AS ?line)
+  }
+} ORDER BY ?row
