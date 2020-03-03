@@ -79,8 +79,9 @@ SELECT ?line WITH {
   } UNION {
     { SELECT ?ru ?pl ?item ?itemLabel {
       INCLUDE %Q
+      OPTIONAL {?parent p:P527[ps:P527 ?item; pq:P1545 ?num]}
       SERVICE wikibase:label { bd:serviceParam wikibase:language "ru,en" }
-      FILTER (BOUND(?ru)&&(?pl=0)&&!BOUND(?parent)&&!BOUND(?bayer)&&!BOUND(?flam)&&!BOUND(?var))
+      FILTER (BOUND(?ru)&&(?pl=0)&&!BOUND(?num)&&!BOUND(?bayer)&&!BOUND(?flam)&&!BOUND(?var))
     } }
     BIND(IF(BOUND(?ru), CONCAT('* [[', ?ru, ']]'), CONCAT('* {{нет статьи|', REPLACE(STR(?item), 'http://www.wikidata.org/entity/', ''), '|', ?itemLabel, '|Звезда}}')) AS ?line)    
     BIND(CONCAT('EE', ?ru) AS ?row)
