@@ -12,10 +12,11 @@ SELECT ?line WITH {
   BIND(REPLACE(?f, CONCAT(' ', STR(?short)), '') AS ?flam)
   OPTIONAL { [] schema:about ?item; schema:isPartOf <https://ru.wikipedia.org/>; schema:name ?ru }
   OPTIONAL {?item wdt:P361 ?parent } 
-  OPTIONAL { ?item wdt:P398 ?exo }
+  OPTIONAL { ?item wdt:P398 ?exo } # ignoring fictional planets that should have deprecated rank
   FILTER NOT EXISTS { ?item wdt:P397 [] }
+  FILTER ( BOUND(?ru) || BOUND(?var) || BOUND(?bayer) || BOUND(?flam) || BOUND(?exo) )
 } GROUP BY ?item ?constellation} AS %Q {
-  BIND (wd:Q8860 AS ?constellation) { # <--------------- Change constellation here
+  BIND (wd:Q10586 AS ?constellation) { # <--------------- Change constellation here
     VALUES (?row ?line) { 
       ('A1' '{{Навигационная таблица') 
       ('A2' ' |state         = <includeonly>{{{state|autocollapse}}}</includeonly>')
@@ -53,26 +54,26 @@ SELECT ?line WITH {
     BIND(CONCAT(' |заголовок     = Звёзды созвездия [[', ?ruconst, '|', REPLACE (?rulist, 'Список звёзд созвездия ', ''), ']]') AS ?line)
   } UNION {
     INCLUDE %Q
-    BIND(IF(BOUND(?ru), CONCAT('* [[', ?ru, '|', ?bayer, ']]'), CONCAT('* {{нет статьи|', REPLACE(STR(?item), 'http://www.wikidata.org/entity/', ''), '|',?bayer, '|Звезда}}')) AS ?line)
     OPTIONAL {?parent p:P527[ps:P527 ?item; pq:P1545 ?num]}
     FILTER (BOUND(?bayer) && !BOUND(?num))
+    BIND(IF(BOUND(?ru), CONCAT('* [[', ?ru, '|', ?bayer, ']]'), CONCAT('* {{нет статьи|', REPLACE(STR(?item), 'http://www.wikidata.org/entity/', ''), '|',?bayer, '|Звезда}}')) AS ?line)
     BIND (CONCAT('A', REPLACE(IF(REGEX(?bayer, '^[Aa-z]'), CONCAT('ωω',?bayer), ?bayer),'¹','1')) AS ?row)
   } UNION {
     INCLUDE %Q
-    BIND(IF(BOUND(?ru), CONCAT('* [[', ?ru, '|', ?flam, ']]'), CONCAT('* {{нет статьи|', REPLACE(STR(?item), 'http://www.wikidata.org/entity/', ''), '|', ?flam, '|Звезда}}')) AS ?line)            
     FILTER (BOUND(?flam))
+    BIND(IF(BOUND(?ru), CONCAT('* [[', ?ru, '|', ?flam, ']]'), CONCAT('* {{нет статьи|', REPLACE(STR(?item), 'http://www.wikidata.org/entity/', ''), '|', ?flam, '|Звезда}}')) AS ?line)            
     BIND(xsd:integer(?flam) as ?num)
     BIND(CONCAT('BB', IF(BOUND(?num), SUBSTR(CONCAT('00', ?flam), STRLEN(?flam), 3), CONCAT('B', ?flam))) AS ?row)
   } UNION {
     INCLUDE %Q
-    BIND(IF(BOUND(?ru), CONCAT('* [[', ?ru, '|', ?var, ']]'), CONCAT('* {{нет статьи|', REPLACE(STR(?item), 'http://www.wikidata.org/entity/', ''), '|', ?var, '|Звезда}}')) AS ?line)            
     FILTER(REGEX(?var, '[A-Z].*') && ?iw>0)
+    BIND(IF(BOUND(?ru), CONCAT('* [[', ?ru, '|', ?var, ']]'), CONCAT('* {{нет статьи|', REPLACE(STR(?item), 'http://www.wikidata.org/entity/', ''), '|', ?var, '|Звезда}}')) AS ?line)            
     BIND(CONCAT('C', ?var) AS ?row)
   } UNION {
     { SELECT ?ru ?item ?itemLabel {
         INCLUDE %Q
-        SERVICE wikibase:label { bd:serviceParam wikibase:language "ru,en" }
         FILTER ((?pl>0)&&!BOUND(?parent))
+        SERVICE wikibase:label { bd:serviceParam wikibase:language "ru,en" }
     } }
     BIND(IF(BOUND(?ru), CONCAT('* [[', ?ru, ']]'), CONCAT('* {{нет статьи|', REPLACE(STR(?item), 'http://www.wikidata.org/entity/', ''), '|', ?itemLabel, '|Звезда}}')) AS ?line)    
     BIND(CONCAT('DD', ?itemLabel) AS ?row)
@@ -80,8 +81,8 @@ SELECT ?line WITH {
     { SELECT ?ru ?pl ?item ?itemLabel {
       INCLUDE %Q
       OPTIONAL {?parent p:P527[ps:P527 ?item; pq:P1545 ?num]}
-      SERVICE wikibase:label { bd:serviceParam wikibase:language "ru,en" }
       FILTER (BOUND(?ru)&&(?pl=0)&&!BOUND(?num)&&!BOUND(?bayer)&&!BOUND(?flam)&&!BOUND(?var))
+      SERVICE wikibase:label { bd:serviceParam wikibase:language "ru,en" }
     } }
     BIND(IF(BOUND(?ru), CONCAT('* [[', ?ru, ']]'), CONCAT('* {{нет статьи|', REPLACE(STR(?item), 'http://www.wikidata.org/entity/', ''), '|', ?itemLabel, '|Звезда}}')) AS ?line)    
     BIND(CONCAT('EE', ?ru) AS ?row)
