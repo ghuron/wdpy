@@ -12,11 +12,11 @@ SELECT ?line WITH {
   BIND(REPLACE(?f, CONCAT(' ', STR(?short)), '') AS ?flam)
   OPTIONAL { [] schema:about ?item; schema:isPartOf <https://ru.wikipedia.org/>; schema:name ?ru }
   OPTIONAL {?item wdt:P361 ?parent } 
-  OPTIONAL { ?item wdt:P398 ?exo } # ignoring fictional planets that should have deprecated rank
+  OPTIONAL { ?item wdt:P527*/wdt:P398 ?exo } # +multiple-star system -fictional planets (deprecated)
   FILTER NOT EXISTS { ?item wdt:P397 [] }
   FILTER ( BOUND(?ru) || BOUND(?var) || BOUND(?bayer) || BOUND(?flam) || BOUND(?exo) )
 } GROUP BY ?item ?constellation} AS %Q {
-  BIND (wd:Q10586 AS ?constellation) { # <--------------- Change constellation here
+  BIND (wd:Q10511 AS ?constellation) { # <--------------- Change constellation here
     VALUES (?row ?line) { 
       ('A1' '{{Навигационная таблица') 
       ('A2' ' |state         = <includeonly>{{{state|autocollapse}}}</includeonly>')
@@ -72,7 +72,8 @@ SELECT ?line WITH {
   } UNION {
     { SELECT ?ru ?item ?itemLabel {
         INCLUDE %Q
-        FILTER ((?pl>0)&&!BOUND(?parent))
+        OPTIONAL {?parent p:P527[ps:P527 ?item; pq:P1545 ?num]}
+        FILTER (!BOUND(?num) && ?pl>0)
         SERVICE wikibase:label { bd:serviceParam wikibase:language "ru,en" }
     } }
     BIND(IF(BOUND(?ru), CONCAT('* [[', ?ru, ']]'), CONCAT('* {{нет статьи|', REPLACE(STR(?item), 'http://www.wikidata.org/entity/', ''), '|', ?itemLabel, '|Звезда}}')) AS ?line)    
