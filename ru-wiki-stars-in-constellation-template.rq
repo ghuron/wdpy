@@ -15,11 +15,12 @@ SELECT ?line WITH {
     FILTER EXISTS { ?item wdt:P31/wdt:P279* ?types }
     OPTIONAL { [] p:P527[ps:P527 ?item; pq:P1545 ?component] } # part of multiple-star system?
     OPTIONAL { ?item wdt:P397 ?parent }
+    FILTER NOT EXISTS { ?item wdt:P361/wdt:P31/wdt:P279* wd:Q318 } # extragalactic objects
     FILTER ( !BOUND(?component) && !BOUND(?parent) )
     OPTIONAL { [] schema:about ?item; schema:isPartOf <https://ru.wikipedia.org/>; schema:name ?ru }
     ?constellation wdt:P1813 ?short
   } GROUP BY ?item ?constellation } AS %Q {
-  BIND (wd:Q8865 AS ?constellation) { # <--------------- Change constellation here
+  BIND (wd:Q9253 AS ?constellation) { # <--------------- Change constellation here
     VALUES (?row ?line) { 
       ('A1' '{{Навигационная таблица') 
       ('A2' ' |state         = <includeonly>{{{state|autocollapse}}}</includeonly>')
