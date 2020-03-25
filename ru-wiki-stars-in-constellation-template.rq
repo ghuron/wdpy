@@ -1,6 +1,6 @@
 SELECT ?line WITH { 
   SELECT DISTINCT ?constellation ?item ?line ?row {
-  BIND (wd:Q8667 AS ?constellation)
+  BIND (wd:Q10452 AS ?constellation)
   {
     ?constellation wdt:P1813 ?short.
     ?item wdt:P59 ?constellation; p:P528[ps:P528 ?b; pq:P972 wd:Q105616; wikibase:rank wikibase:NormalRank]
@@ -10,7 +10,7 @@ SELECT ?line WITH {
     FILTER NOT EXISTS { [] p:P527[ps:P527 ?item; pq:P1545 []] }
     BIND (REPLACE(?b, CONCAT(' ', STR(?short)), '') AS ?bayer)
     BIND (IF(BOUND(?ru), CONCAT('* [[', ?ru, '|', ?bayer, ']]'), CONCAT('* {{нет статьи|', REPLACE(STR(?item), 'http://www.wikidata.org/entity/', ''), '|',?bayer, '|Звезда}}')) AS ?line)
-    BIND (CONCAT('A', REPLACE(IF(REGEX(?bayer, '^[A-Za-z]'), CONCAT('ωω',?bayer), ?bayer),'¹','1')) AS ?row)
+    BIND (CONCAT('A', REPLACE(IF(REGEX(?bayer, '^[A-Za-z]'), CONCAT('ωω',?bayer), IF(CONTAINS(?bayer, ' '), CONCAT('ωωω',?bayer), ?bayer)),'¹','1')) AS ?row)
   } UNION {
     ?constellation wdt:P1813 ?short.
     ?item wdt:P59 ?constellation; p:P528[ps:P528 ?f; pq:P972 wd:Q111116; wikibase:rank wikibase:NormalRank]
@@ -26,7 +26,7 @@ SELECT ?line WITH {
     BIND(REPLACE(?v, CONCAT(' ', STR(?short)), '') AS ?var)
     FILTER(REGEX(?var, '[A-Z].*') && (?iw > 0))
     BIND(IF(BOUND(?ru), CONCAT('* [[', ?ru, '|', ?var, ']]'), CONCAT('* {{нет статьи|', REPLACE(STR(?item), 'http://www.wikidata.org/entity/', ''), '|', ?var, '|Звезда}}')) AS ?line)            
-    BIND(CONCAT(IF(REGEX(?var, '^[R-Z]+'), 'CC', 'CD'), STR(STRLEN(?var)), ?var) AS ?row)
+    BIND(CONCAT(IF(REGEX(?var, '^[R-Z]+$'), 'CC', 'CD'), STR(STRLEN(?var)), ?var) AS ?row)
   } UNION {
     { 
       SELECT DISTINCT ?constellation ?item ?itemLabel {
@@ -46,13 +46,14 @@ SELECT ?line WITH {
 } AS %Q {
   {
     VALUES (?row ?line) { 
-      ('A1' '{{Навигационная таблица') 
-      ('A2' ' |state         = <includeonly>{{{state|autocollapse}}}</includeonly>')
-      ('A4' ' |класс_списков = hlist hlist-items-nowrap')
-      ('A5' '')
-      ('A6' ' |заголовок1    = [[Обозначения Байера|Байер]]')
-      ('A7' ' |список1       =')
-      ('A8' '') 
+      ('A1' '{{Навигационная таблица')
+      ('A2' ' |имя           = {{subst:PAGENAME}}')
+      ('A3' ' |state         = <includeonly>{{{state|autocollapse}}}</includeonly>')
+      ('A5' ' |класс_списков = hlist hlist-items-nowrap')
+      ('A6' '')
+      ('A7' ' |заголовок1    = [[Обозначения Байера|Байер]]')
+      ('A8' ' |список1       =')
+      ('A9' '') 
       ('B1' '') 
       ('B2' ' |заголовок2    = [[Обозначения Флемстида|Флемстид]]') 
       ('B3' ' |список2       =') 
@@ -75,8 +76,8 @@ SELECT ?line WITH {
       ('F5' '</noinclude>')
     }  
   } UNION {
-    BIND ('A3' as ?row)
-    BIND (wd:Q8667 AS ?constellation) 
+    BIND ('A4' as ?row)
+    BIND (wd:Q10452 AS ?constellation) 
     [] schema:about ?constellation; schema:isPartOf <https://ru.wikipedia.org/>; schema:name ?ruconst.
     ?item p:P360[ps:P360 wd:Q523; pq:P59 ?constellation].
     [] schema:about ?item; schema:isPartOf <https://ru.wikipedia.org/>; schema:name ?rulist
@@ -85,7 +86,7 @@ SELECT ?line WITH {
     INCLUDE %Q
   } UNION {
     { SELECT DISTINCT ?ru ?item ?itemLabel {
-      BIND (wd:Q8667 AS ?constellation) 
+      BIND (wd:Q10452 AS ?constellation) 
       ?constellation wdt:P1813 ?short.
       ?item wdt:P59 ?constellation.
       VALUES ?types { wd:Q595871 wd:Q523 wd:Q101600 }
@@ -99,7 +100,7 @@ SELECT ?line WITH {
     BIND(IF(BOUND(?ru), CONCAT('* [[', ?ru, ']]'), CONCAT('* {{нет статьи|', REPLACE(STR(?item), 'http://www.wikidata.org/entity/', ''), '|', ?itemLabel, '|Звезда}}')) AS ?line)    
     BIND(CONCAT('EE', ?ru) AS ?row)
   } UNION {
-    BIND (wd:Q8667 AS ?constellation) 
+    BIND (wd:Q10452 AS ?constellation) 
     BIND ('F2' as ?row)
     ?list p:P360[ps:P360 wd:Q523; pq:P59 ?constellation].
     [] schema:about ?list; schema:isPartOf <https://ru.wikipedia.org/>; schema:name ?rulist
