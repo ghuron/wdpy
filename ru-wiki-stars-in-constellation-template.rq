@@ -1,6 +1,6 @@
 SELECT ?line WITH { 
   SELECT DISTINCT ?constellation ?item ?line ?row {
-  BIND (wd:Q8839 AS ?constellation)
+  BIND (wd:{0} AS ?constellation)
   {
     ?constellation wdt:P1813 ?short.
     ?item wdt:P59 ?constellation; p:P528[ps:P528 ?b; pq:P972 wd:Q105616; wikibase:rank wikibase:NormalRank]
@@ -80,7 +80,7 @@ SELECT ?line WITH {
     }  
   } UNION {
     BIND ('A4' as ?row)
-    BIND (wd:Q8839 AS ?constellation) 
+    BIND (wd:{0} AS ?constellation) 
     [] schema:about ?constellation; schema:isPartOf <https://ru.wikipedia.org/>; schema:name ?ruconst.
     ?item p:P360[ps:P360 wd:Q523; pq:P59 ?constellation].
     [] schema:about ?item; schema:isPartOf <https://ru.wikipedia.org/>; schema:name ?rulist
@@ -89,7 +89,7 @@ SELECT ?line WITH {
     INCLUDE %Q
   } UNION {
     { SELECT DISTINCT ?ru ?item ?itemLabel {
-      BIND (wd:Q8839 AS ?constellation) 
+      BIND (wd:{0} AS ?constellation) 
       ?constellation wdt:P1813 ?short.
       ?item wdt:P59 ?constellation.
       VALUES ?types { wd:Q595871 wd:Q523 wd:Q101600 }
@@ -104,7 +104,7 @@ SELECT ?line WITH {
     BIND(IF(BOUND(?ru), CONCAT('* [[', ?ru, ']]'), CONCAT('* {{нет статьи|', REPLACE(STR(?item), 'http://www.wikidata.org/entity/', ''), '|', ?itemLabel, '|Звезда}}')) AS ?line)    
     BIND(CONCAT('EE', ?ru) AS ?row)
   } UNION {
-    BIND (wd:Q8839 AS ?constellation) 
+    BIND (wd:{0} AS ?constellation) 
     BIND ('F2' as ?row)
     ?list p:P360[ps:P360 wd:Q523; pq:P59 ?constellation].
     [] schema:about ?list; schema:isPartOf <https://ru.wikipedia.org/>; schema:name ?rulist
