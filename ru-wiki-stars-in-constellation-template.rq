@@ -53,8 +53,11 @@ SELECT ?line WITH {
     } }
     OPTIONAL { [] schema:about ?item; schema:isPartOf <https://ru.wikipedia.org/>; schema:name ?ru }
     BIND(IF(BOUND(?ru), CONCAT('* [[', ?ru, ']]'), CONCAT('* {{нет статьи|', REPLACE(STR(?item), 'http://www.wikidata.org/entity/', ''), '|', ?itemLabel, '|Звезда}}')) AS ?line)    
-    BIND(CONCAT('DD', IF(BOUND(?ru), ?ru, ?itemLabel)) AS ?row)
-  } }
+    BIND(IF(BOUND(?ru), ?ru, ?itemLabel) AS ?row1)
+    BIND(IF(STRSTARTS(?row1, 'HD '), CONCAT('HD', SUBSTR(REPLACE(?row1, 'HD ', '000000000'), STRLEN(?row1))), ?row1) AS ?row2)
+    BIND(IF(STRSTARTS(?row2, 'HAT-P-'), CONCAT('HATP', SUBSTR(REPLACE(?row2, 'HAT-P-', '000000000'), STRLEN(?row2))), ?row2) AS ?row3)
+    BIND(IF(STRSTARTS(?row3, 'WASP-'), CONCAT('WASP', SUBSTR(REPLACE(?row3, 'WASP-', '000000000'), STRLEN(?row3))), ?row3) AS ?row4)
+    BIND(CONCAT('DD', ?row4) AS ?row)  } }
 } AS %Q {
   {
     VALUES (?row ?line) { 
@@ -111,7 +114,8 @@ SELECT ?line WITH {
       SERVICE wikibase:label { bd:serviceParam wikibase:language "ru,en" }
     } }
     BIND(IF(BOUND(?ru), CONCAT('* [[', ?ru, ']]'), CONCAT('* {{нет статьи|', REPLACE(STR(?item), 'http://www.wikidata.org/entity/', ''), '|', ?itemLabel, '|Звезда}}')) AS ?line)    
-    BIND(CONCAT('EE', ?ru) AS ?row)
+    BIND(IF(STRSTARTS(?ru, 'HD '), CONCAT('HD', SUBSTR(REPLACE(?ru, 'HD ', '000000000'), STRLEN(?ru))), ?ru) AS ?row1)
+    BIND(CONCAT('EE', ?row1) AS ?row)
   } UNION {
     BIND (wd:{0} AS ?constellation) 
     BIND ('F2' as ?row)
