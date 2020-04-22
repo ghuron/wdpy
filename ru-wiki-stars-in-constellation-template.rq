@@ -23,7 +23,7 @@ SELECT ?line WITH {
     BIND(REPLACE(?f, CONCAT(' ', STR(?short)), '') AS ?flam)
     BIND(IF(BOUND(?ru), CONCAT('* [[', ?ru, '|', ?flam, ']]'), CONCAT('* {{нет статьи|', REPLACE(STR(?item), 'http://www.wikidata.org/entity/', ''), '|', ?flam, '|Звезда}}')) AS ?line)            
     BIND(xsd:integer(?flam) as ?num)
-    BIND(CONCAT('BB', IF(BOUND(?num), SUBSTR(CONCAT('00', ?flam), STRLEN(?flam), 3), CONCAT('B', ?flam))) AS ?row)
+    BIND(CONCAT('BB', IF(BOUND(?num), SUBSTR(CONCAT('00', ?flam), STRLEN(?flam)), CONCAT('B', SUBSTR(CONCAT('00', ?flam), STRLEN(?flam)-4)))) AS ?row)
   } UNION {
     BIND (wd:{0} AS ?constellation)
     ?constellation wdt:P1813 ?short.
@@ -41,10 +41,10 @@ SELECT ?line WITH {
       SELECT DISTINCT ?constellation ?item ?itemLabel {
       {
         BIND (wd:{0} AS ?constellation)
-        ?item wdt:P59 ?constellation; wdt:P398 ?exo # fictional planets should be deprecated
+        ?item wdt:P59 ?constellation; wdt:P398 [] # fictional planets should be deprecated
       } UNION {
         BIND (wd:{0} AS ?constellation)
-        ?item wdt:P59 ?constellation; wdt:P527/wdt:P398 ?exo # in multiple systems exoplanet are associated with concrete star
+        ?item wdt:P59 ?constellation; wdt:P527/wdt:P398 [] # in multiple systems exoplanet are associated with concrete star
       }
       VALUES ?types { wd:Q595871 wd:Q523 wd:Q101600 }
       FILTER EXISTS { ?item wdt:P31/wdt:P279* ?types }
@@ -52,7 +52,8 @@ SELECT ?line WITH {
       SERVICE wikibase:label { bd:serviceParam wikibase:language "ru,en" }
     } }
     OPTIONAL { [] schema:about ?item; schema:isPartOf <https://ru.wikipedia.org/>; schema:name ?ru }
-    BIND(IF(BOUND(?ru), CONCAT('* [[', ?ru, ']]'), CONCAT('* {{нет статьи|', REPLACE(STR(?item), 'http://www.wikidata.org/entity/', ''), '|', ?itemLabel, '|Звезда}}')) AS ?line)    
+    BIND(IF(BOUND(?ru), CONCAT('* [[', ?ru, ']]'), CONCAT('* {{нет статьи|', REPLACE(STR(?item), 'http://www.wikidata.org/entity/', ''), '|', 
+                                                          CONCAT(UCASE(SUBSTR(?itemLabel, 1, 1)), SUBSTR(?itemLabel, 2)), '|Звезда}}')) AS ?line)    
     BIND(IF(BOUND(?ru), ?ru, ?itemLabel) AS ?row1)
     BIND(IF(STRSTARTS(?row1, 'HD '), CONCAT('HD', SUBSTR(REPLACE(?row1, 'HD ', '000000000'), STRLEN(?row1))), ?row1) AS ?row2)
     BIND(IF(STRSTARTS(?row2, 'HAT-P-'), CONCAT('HATP', SUBSTR(REPLACE(?row2, 'HAT-P-', '000000000'), STRLEN(?row2))), ?row2) AS ?row3)
@@ -113,7 +114,7 @@ SELECT ?line WITH {
       FILTER NOT EXISTS { ?item wdt:P397 [] } # exclude exoplanet
       SERVICE wikibase:label { bd:serviceParam wikibase:language "ru,en" }
     } }
-    BIND(IF(BOUND(?ru), CONCAT('* [[', ?ru, ']]'), CONCAT('* {{нет статьи|', REPLACE(STR(?item), 'http://www.wikidata.org/entity/', ''), '|', ?itemLabel, '|Звезда}}')) AS ?line)    
+    BIND(CONCAT('* [[', ?ru, ']]') AS ?line)    
     BIND(IF(STRSTARTS(?ru, 'HD '), CONCAT('HD', SUBSTR(REPLACE(?ru, 'HD ', '000000000'), STRLEN(?ru))), ?ru) AS ?row1)
     BIND(CONCAT('EE', ?row1) AS ?row)
   } UNION {
