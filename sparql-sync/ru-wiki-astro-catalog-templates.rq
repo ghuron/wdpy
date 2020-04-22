@@ -1,0 +1,24 @@
+SELECT ?line {
+  {
+    ?item p:P528 [ps:P528 ?code; pq:P972 wd:Q91442269 ]
+    BIND(xsd:integer(REPLACE(?code, "Trumpler ", "")) AS ?num)
+    OPTIONAL { [] schema:about ?item; schema:isPartOf <https://ru.wikipedia.org/>; schema:name ?ru }
+    SERVICE wikibase:label { bd:serviceParam wikibase:language "ru". }
+    BIND (CONCAT('B', SUBSTR(CONCAT('0', STR(?num)), STRLEN(STR(?num)))) AS ?row)
+    BIND(IF(BOUND(?ru), CONCAT("* [[", ?ru, "|", STR(?num), "]]"), CONCAT("* {{нет статьи|", REPLACE(STR(?item), "http://www.wikidata.org/entity/", ""), "|", STR(?num), "|Звёздное скопление}}")) AS ?line)
+  }
+  UNION
+  {
+    VALUES (?row ?line) {
+      ("A1" "{{Навигационная таблица")
+      ("A2" " |имя           = {{subst:PAGENAME}}")
+      ("A3" " |state         = <includeonly>{{{state|autocollapse}}}</includeonly>")
+      ("A4" " |заголовок     = Скопления {{нет статьи|Q91442269|каталога Трюмплера}}")
+      ("A5" " |класс_списков = hlist hlist-items-nowrap")
+      ("A6" " |список1       =")
+      ("C1" " }}<noinclude>")
+      ("C2" "[[Категория:Навигационные шаблоны:Астрономия]]")
+      ("C3" "</noinclude>")
+    }
+  }
+} ORDER BY ?row
