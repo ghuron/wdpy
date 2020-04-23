@@ -1,24 +1,36 @@
-SELECT ?line {
+SELECT * {
   {
-    ?item p:P528 [ps:P528 ?code; pq:P972 wd:Q91442269 ]
-    BIND(xsd:integer(REPLACE(?code, "Trumpler ", "")) AS ?num)
+    wd:{0} wdt:P1423 ?catalog; (wdt:P1269/wdt:P279/wdt:P1424) ?infobox.
+    [] schema:about ?infobox; schema:isPartOf <https://ru.wikipedia.org/>; schema:name ?template.
+    ?item p:P528[ps:P528 ?code; pq:P972 ?catalog]
+    BIND(IF(CONTAINS(?code, "-"), STRAFTER(?code, "-"), STRAFTER(?code, " ")) AS ?num)
     OPTIONAL { [] schema:about ?item; schema:isPartOf <https://ru.wikipedia.org/>; schema:name ?ru }
-    SERVICE wikibase:label { bd:serviceParam wikibase:language "ru". }
-    BIND (CONCAT('B', SUBSTR(CONCAT('0', STR(?num)), STRLEN(STR(?num)))) AS ?row)
-    BIND(IF(BOUND(?ru), CONCAT("* [[", ?ru, "|", STR(?num), "]]"), CONCAT("* {{нет статьи|", REPLACE(STR(?item), "http://www.wikidata.org/entity/", ""), "|", STR(?num), "|Звёздное скопление}}")) AS ?line)
-  }
-  UNION
-  {
+    SERVICE wikibase:label { bd:serviceParam wikibase:language "ru" }
+    BIND(CONCAT("B", SUBSTR(CONCAT("00", STR(?num)), IF(CONTAINS(?num, " "), STRLEN(STRBEFORE(?num, " ")), STRLEN(?num)))) AS ?row)
+    BIND(IF(BOUND(?ru), CONCAT("* [[", ?ru, "|", ?num, "]]"), 
+            CONCAT("* {{нет статьи|", REPLACE(STR(?item), "http://www.wikidata.org/entity/", ""), "|", ?num, "|", STRAFTER(?template, ":"), "}}")) AS ?line)
+  } UNION {
+    BIND("A4" AS ?row)
+    { 
+      SELECT ?catalog ?catalogLabel { 
+        wd:{0} wdt:P1423 ?catalog
+        SERVICE wikibase:label { bd:serviceParam wikibase:language "ru" }
+      }
+    }  
+    OPTIONAL { [] schema:about ?catalog; schema:isPartOf <https://ru.wikipedia.org/>; schema:name ?ru }
+    BIND(CONCAT(" |заголовок     = ", IF(BOUND(?ru), CONCAT("* [[", ?ru, "|", ?catalogLabel, "]]"), 
+                                         CONCAT("{{нет статьи|", REPLACE(STR(?catalog), "http://www.wikidata.org/entity/", ""), "|", ?catalogLabel, "}}"))) AS ?line)
+  } UNION {
     VALUES (?row ?line) {
       ("A1" "{{Навигационная таблица")
       ("A2" " |имя           = {{subst:PAGENAME}}")
       ("A3" " |state         = <includeonly>{{{state|autocollapse}}}</includeonly>")
-      ("A4" " |заголовок     = Скопления {{нет статьи|Q91442269|каталога Трюмплера}}")
       ("A5" " |класс_списков = hlist hlist-items-nowrap")
       ("A6" " |список1       =")
-      ("C1" " }}<noinclude>")
+      ("C1" "}}<noinclude>")
       ("C2" "[[Категория:Навигационные шаблоны:Астрономия]]")
-      ("C3" "</noinclude>")
+      ("C3" "[[Категория:Википедия:Навигационные шаблоны по астрокаталогам формируемые из Викиданных]]")
+      ("C4" "</noinclude>")
     }
   }
-} ORDER BY ?row
+} ORDER BY (?row)
