@@ -13,4 +13,4 @@ source pyvenv/bin/activate
 pip install -U pip wheel
 
 # install some concrete packages
-pip install requests
+pip install -r src/requirements.txt
