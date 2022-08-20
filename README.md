@@ -8,5 +8,5 @@ You can run them in IDE of your choice, just specify your login and password as 
 If you want to run them in [toolforge](https://wikitech.wikimedia.org/wiki/Portal:Toolforge), do the following:
 1. Get content of this repository
 2. Create a ```src/toolforge/.credentials``` file that contains your login and password separated by space. Script will use it to make edits in wikidata. **Highly** recommend creating a [BotPassword](https://www.wikidata.org/wiki/Special:BotPasswords) with a limited set of permissions rather than providing your real credentials. Don't forget ```chmod 440 .credentials``` to restrict who can read it.
-3. Run ```toolforge-jobs run bootstrap-venv --command "cd $PWD && ./bootstrap_venv.sh" --image tf-python39 --wait``` in order to initialize python virtual environment and install nessecary packages.
-4. Load jobs schedule via ```toolforge-jobs load jobs.yaml```
+3. Run ```toolforge-jobs run bootstrap-venv --command "cd $PWD && src/bootstrap_venv.sh" --image tf-python39 --wait``` in order to initialize python virtual environment and install nessecary packages.
+4. Load jobs schedule via ```toolforge-jobs load src/toolforge/jobs.yaml```
