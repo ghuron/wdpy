@@ -12,6 +12,9 @@ class YadVashem(WikiData):
         self.db_property = 'P1979'
         self.yv_endpoint = requests.Session()
         self.yv_endpoint.headers.update({'Content-Type': 'application/json'})
+        self.yv_endpoint.post('https://righteous.yadvashem.org/RighteousWS.asmx/BuildQuery',
+                              data='{uniqueId:"16475",lang:"eng",strSearch:"",newSearch:true,' +
+                                   'clearFilter:true,searchType:"righteous_only"}')
 
     def get_summary(self, entity):
         named_as = entity['claims']['P1979'][0]['qualifiers']['P1810'][0]['datavalue']['value']
@@ -50,7 +53,7 @@ class YadVashem(WikiData):
     @staticmethod
     def parse_item(input_item):
         mapping = {
-            'ACCOUNTANT': 326653, 'ACTIVIST': 15253558, 'ACTOR': 33999, 'ACTRESS': 15290732, 'ADMINISTRATOR': 16532929,
+            'ACCOUNTANT': 326653, 'ACTIVIST': 15253558, 'ACTOR': 33999, 'ACTRESS': 33999, 'ADMINISTRATOR': 16532929,
             'ADVISOR': 2994387, 'AGENT': 109555060, 'AGRICULTEUR': 131512, 'AGRICULTURAL ENGINEER': 10272925,
             'Agriculture': 11451, 'AGRICULTURIST': 1781198, 'AGRONOMIST': 1781198, 'AIR FORCE OFFICER': 19934710,
             'ALBANIA': 222, 'ANTHROPOLOGIST': 4773904, 'ARCHAEOLOGIST': 3621491, 'ARCHITECT': 42973,
@@ -98,7 +101,7 @@ class YadVashem(WikiData):
             'GENERAL SECRETARY': 6501749, 'Geodesist': 294126, 'GEOLOGIST': 520549, 'GEORGIA': 230,
             'GERMAN TEACHER': 101444594, 'GERMANY': 183, 'GOLDSMITH': 211423, 'GOVERNESS': 1540278, 'GRADUATE': 332763,
             'GRAFIK': 5592483, 'GRAPHIC ARTIST': 1925963, 'GRAVEDIGGER': 537575, 'Great Britain': 145, 'GREECE': 41,
-            'GREEK CATHOLIC': 1546359, 'GREEK ORTHODOX': 7970362, 'GREENGROCER': 104383916, 'GROCER': 7892860,
+            'GREEK CATHOLIC': 1546359, 'GREEK ORTHODOX': 7970362, 'GREENGROCER': 104383916, 'GROCER': 5669609,
             'GROOM': 1455520, 'GUIDE': 14290559, 'GYMNASTICS TEACHER': 60583668, 'HABERDASHER': 17305512,
             'HABERDASHERY': 1491689, 'HAIRDRESSER': 55187, 'HANDICRAFT': 877729, 'HANGING': 175111, 'HATTER': 1639239,
             'HEAD GARDENER': 5689301, 'HEAD OF DEPARTMENT': 4182948, 'HEART ATTACK': 181754,
@@ -201,43 +204,42 @@ class YadVashem(WikiData):
         self.add_refs(award, [self.db_ref])  # add YV Righteous DB
         return entity
 
-    def initial_yv_loop(self, yv_dict):
-        self.yv_endpoint.post('https://righteous.yadvashem.org/RighteousWS.asmx/BuildQuery',
-                              data='{uniqueId:"16475",lang:"eng",strSearch:"",newSearch:true,' +
-                                   'clearFilter:true,searchType:"righteous_only"}')
-        offset = 0
-        while True:
-            page = self.yv_endpoint.post('https://righteous.yadvashem.org/RighteousWS.asmx/GetRighteousList',
-                                         data='{uniqueId:"16475",lang:"eng",searchType:"righteous_only",rowNum:' +
-                                              str(offset) + ',sort:{dir:"",field:""}}').json()['d']
-            if len(page) == 0:
-                return
-            offset += len(page)
-            for case_id in page:
-                if str(case_id['BookId']) not in yv_dict:
-                    yv_dict[str(case_id['BookId'])] = {}
+    def get_chunk_from_search(self, offset):
+        results = []
+        page = self.yv_endpoint.post('https://righteous.yadvashem.org/RighteousWS.asmx/GetRighteousList',
+                                     data='{uniqueId:"16475",lang:"eng",searchType:"righteous_only",rowNum:' +
+                                          str(offset) + ',sort:{dir:"",field:""}}').json()['d']
+        for case_item in page:
+            results.append(str(case_item['BookId']))
+        return results
 
 
-righteous = WikiData.query('SELECT ?r ?n ?i { ?i wdt:P31 wd:Q5; p:P1979 ?s . ?s ps:P1979 ?r OPTIONAL {?s pq:P1810 ?n}}',
-                           lambda new, existing: {new[0]: new[1]} if len(existing) == 0 else
+# wd_items = WikiData.query('SELECT ?r ?n ?i { ?i wdt:P31 wd:Q5; p:P1979 ?s . ?s ps:P1979 ?r OPTIONAL {?s pq:P1810 ?n}}',
+#                           lambda new, existing: {new[0]: new[1]} if len(existing) == 0 else
+#                            {**existing, new[0]: new[1]} if new[0] not in existing else
+#                            {**existing, new[0]: existing[new[0]] + 1} if isinstance(existing[new[0]], int) else
+#                            {**existing, new[0]: 2})
+
+wd = YadVashem(sys.argv[1], sys.argv[2])
+wd_items = wd.get_all_items('SELECT ?r ?n ?i { ?i wdt:P31 wd:Q5; p:P1979 ?s . ?s ps:P1979 ?r OPTIONAL {?s pq:P1810 ?n}}',
+                          lambda new, existing: {new[0]: new[1]} if len(existing) == 0 else
                            {**existing, new[0]: new[1]} if new[0] not in existing else
                            {**existing, new[0]: existing[new[0]] + 1} if isinstance(existing[new[0]], int) else
                            {**existing, new[0]: 2})
 
-yv = YadVashem(sys.argv[1], sys.argv[2])
+# yv.initial_yv_loop(righteous)
+# wd.enrich_with_new_items(wd_items)
 
-yv.initial_yv_loop(righteous)
-
-for item_id in righteous:
-    case = yv.yv_endpoint.post('https://righteous.yadvashem.org/RighteousWS.asmx/GetPersonDetailsBySession',
+for item_id in wd_items:
+    case = wd.yv_endpoint.post('https://righteous.yadvashem.org/RighteousWS.asmx/GetPersonDetailsBySession',
                                data='{bookId:"' + item_id + '",lang:"eng"}').json()['d']['Individuals']
 
     missing = []
     entities = {}
-    qids = '|'.join(list(filter(lambda x: isinstance(x, str), righteous[item_id].values())))
+    qids = '|'.join(list(filter(lambda x: isinstance(x, str), wd_items[item_id].values())))
     if len(qids) > 0:
         try:
-            entities = json.loads(yv.api_call('wbgetentities', {'props': 'claims|info', 'ids': qids}))['entities']
+            entities = json.loads(wd.api_call('wbgetentities', {'props': 'claims|info', 'ids': qids}))['entities']
         except json.decoder.JSONDecodeError:
             print('Cannot decode wbgetentities response')
             break
@@ -250,34 +252,34 @@ for item_id in righteous:
             continue
 
         item['Title'] = ' '.join(item['Title'].split())
-        if item['Title'] in righteous[item_id] and isinstance(righteous[item_id][item['Title']], int):
-            righteous[item_id][item['Title']] -= 1
+        if item['Title'] in wd_items[item_id] and isinstance(wd_items[item_id][item['Title']], int):
+            wd_items[item_id][item['Title']] -= 1
             continue  # multiple values for the same key - skipping updates
 
         entity = None
-        if item['Title'] in righteous[item_id] and righteous[item_id][item['Title']] in entities:
-            entity = entities[righteous[item_id][item['Title']]]
-            del righteous[item_id][item['Title']]
-        entity = yv.init_entity(entity, item_id, item['Title'])
+        if item['Title'] in wd_items[item_id] and wd_items[item_id][item['Title']] in entities:
+            entity = entities[wd_items[item_id][item['Title']]]
+            del wd_items[item_id][item['Title']]
+        entity = wd.init_entity(entity, item_id, item['Title'])
 
-        yv.update(entity, YadVashem.parse_item(item['Details']))
+        wd.update(entity, YadVashem.parse_item(item['Details']))
         if 'id' in entity:
-            yv.save(entity)
+            wd.save(entity)
         else:
             missing.append(entity)
 
-    for named_as in list(righteous[item_id]):
-        if isinstance(righteous[item_id][named_as], int):
-            YadVashem.info(item_id, named_as, ' is ambiguous: ' + str(righteous[item_id][named_as]))
-            del righteous[item_id][named_as]
+    for named_as in list(wd_items[item_id]):
+        if isinstance(wd_items[item_id][named_as], int):
+            YadVashem.info(item_id, named_as, ' is ambiguous: ' + str(wd_items[item_id][named_as]))
+            del wd_items[item_id][named_as]
         else:
             YadVashem.info(item_id, named_as,
-                           'https://wikidata.org/wiki/' + righteous[item_id][named_as] + ' is missing')
+                           'https://wikidata.org/wiki/' + wd_items[item_id][named_as] + ' is missing')
 
     if len(missing) > 0:
         for entity in missing:
             named_as = entity['claims']['P1979'][0]['qualifiers']['P1810'][0]['datavalue']['value']
-            if len(righteous[item_id]) == 0:
-                yv.save(entity)
+            if len(wd_items[item_id]) == 0:
+                wd.save(entity)
             else:
                 YadVashem.info(item_id, named_as, ' was not created (see above)')
