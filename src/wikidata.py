@@ -18,19 +18,6 @@ class WikiData(abc.ABC):
     db_ref = None
     db_property = None
 
-    @staticmethod
-    def query(query, process=lambda new, existing: new[0]):
-        result = CaseInsensitiveDict()
-        with requests.Session() as session:
-            session.headers.update({'Accept': 'text/csv', 'User-Agent': WikiData.USER_AGENT})
-            with closing(session.post('https://query.wikidata.org/sparql', params={'query': query}, stream=True)) as r:
-                reader = csv.reader(r.iter_lines(decode_unicode='utf-8'), delimiter=',', quotechar='"')
-                next(reader)
-                for line in reader:
-                    line = [item.replace('http://www.wikidata.org/entity/', '') for item in line]
-                    result[line[0]] = process(line[1:], result[line[0]] if line[0] in result else [])
-        return result
-
     def __init__(self, login, password):
         self.api = requests.Session()
         self.api.headers.update({'User-Agent': WikiData.USER_AGENT})
@@ -211,7 +198,6 @@ class WikiData(abc.ABC):
                     if 'source' not in row:
                         row['source'] = []
                     row['source'].append(self.db_ref)
-                    claim['references'] = [] #################################################################
                     self.add_refs(claim, row['source'])
 
         for property_id in affected_statements:
@@ -255,6 +241,36 @@ class WikiData(abc.ABC):
 
     def trace(self, entity, message):
         print('https://www.wikidata.org/wiki/' + entity['id'] + '\t' + message)
+
+    @staticmethod
+    def query(query, process=lambda new, existing: new[0]):
+        result = CaseInsensitiveDict()
+        with requests.Session() as session:
+            session.headers.update({'Accept': 'text/csv', 'User-Agent': WikiData.USER_AGENT})
+            with closing(session.post('https://query.wikidata.org/sparql', params={'query': query}, stream=True)) as r:
+                reader = csv.reader(r.iter_lines(decode_unicode='utf-8'), delimiter=',', quotechar='"')
+                next(reader)
+                for line in reader:
+                    line = [item.replace('http://www.wikidata.org/entity/', '') for item in line]
+                    result[line[0]] = process(line[1:], result[line[0]] if line[0] in result else [])
+        return result
+
+    def get_all_items(self, sparql, process=lambda new, existing: new[0]):
+        results = self.query(sparql, process)
+        starts_at = 0
+        while True:
+            chunk = self.get_chunk_from_search(starts_at)
+            if len(chunk) == 0:
+                break
+            starts_at += len(chunk)
+            for external_id in chunk:
+                if external_id not in results:
+                    results[external_id] = None
+        return results
+
+    @abc.abstractmethod
+    def get_chunk_from_search(self, offset):
+        pass
 
     @abc.abstractmethod
     def get_summary(self, entity):
