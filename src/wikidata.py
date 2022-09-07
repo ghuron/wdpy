@@ -9,6 +9,7 @@ import uuid
 from contextlib import closing
 from datetime import datetime
 from decimal import Decimal, DecimalException
+
 import requests
 from requests.structures import CaseInsensitiveDict
 
@@ -17,6 +18,35 @@ class WikiData(abc.ABC):
     USER_AGENT = 'automated import by https://www.wikidata.org/wiki/User:Ghuron)'
     db_ref = None
     db_property = None
+
+    @staticmethod
+    def query(query, process=lambda new, existing: new[0]):
+        result = CaseInsensitiveDict()
+        with requests.Session() as session:
+            session.headers.update({'Accept': 'text/csv', 'User-Agent': WikiData.USER_AGENT})
+            with closing(session.post('https://query.wikidata.org/sparql', params={'query': query}, stream=True)) as r:
+                reader = csv.reader(r.iter_lines(decode_unicode='utf-8'), delimiter=',', quotechar='"')
+                next(reader)
+                for line in reader:
+                    line = [item.replace('http://www.wikidata.org/entity/', '') for item in line]
+                    result[line[0]] = process(line[1:], result[line[0]] if line[0] in result else [])
+        return result
+
+    @staticmethod
+    def format_float(figure, digits=-1):
+        if 0 <= int(digits) < 20:
+            return ('{0:.' + str(digits) + 'f}').format(Decimal(figure))
+        if amount := re.search('(?P<mantissa>\\d\\.\\d+)e-(?P<exponent>\\d+)', str(figure)):
+            return WikiData.format_float(figure, str(len(amount.group('mantissa')) + int(amount.group('exponent')) - 2))
+        return str(Decimal(figure))
+
+    @staticmethod
+    def fix_error(figure):
+        if re.search('999+\\d$', figure):
+            n = Decimal(999999999999999999999999)
+            return WikiData.format_float(n - Decimal(WikiData.fix_error(WikiData.format_float(n - Decimal(figure)))))
+        else:
+            return WikiData.format_float(re.sub('^000+\\d$', '', figure))
 
     def __init__(self, login, password):
         self.api = requests.Session()
@@ -45,29 +75,55 @@ class WikiData(abc.ABC):
 
     def api_search(self, query):
         response = json.loads(self.api_call('query', {'list': 'search', 'srsearch': query}))
-        if 'query' in response and len(response['query']['search']) > 0:
-            if len(response['query']['search']) > 1:
-                print(response['query']['search'][0]['title'] + ' duplicate')
-            return response['query']['search'][0]['title']
+        if 'query' in response:
+            if len(response['query']['search']) == 1:
+                return response['query']['search'][0]['title']
+            print(query + ' returned ' + str(len(response['query']['search'])) + ' results')
 
-    @staticmethod
-    def format_float(figure, digits=-1):
-        if 0 <= int(digits) < 20:
-            return ('{0:.' + str(digits) + 'f}').format(Decimal(figure))
-        if amount := re.search('(?P<mantissa>\\d\\.\\d+)e-(?P<exponent>\\d+)', str(figure)):
-            return WikiData.format_float(figure, str(len(amount.group('mantissa')) + int(amount.group('exponent')) - 2))
-        return str(Decimal(figure))
+    def create_snak(self, property_id, value, lower=None, upper=None):
+        if property_id not in self.types or value == '' or value == 'NaN':
+            return None
 
-    @staticmethod
-    def fix_error(figure):
-        if re.search('999+\\d$', figure):
-            return WikiData.format_float(
-                Decimal(999999999999999999999999) - Decimal(
-                    WikiData.fix_error(WikiData.format_float(Decimal(999999999999999999999999) - Decimal(figure)))))
-        else:
-            return WikiData.format_float(re.sub('^000+\\d$', '', figure))
+        snak = {'datatype': self.types[property_id], 'property': property_id, 'snaktype': 'value',
+                'datavalue': {'value': str(value).strip(), 'type': self.types[property_id]}}
+        if snak['datatype'] == 'quantity':
+            try:
+                snak['datavalue']['value'] = {'amount': self.format_float(value), 'unit': '1'}
+                if upper is not None and lower is not None:
+                    min_bound = Decimal(self.fix_error(lower))
+                    if min_bound < 0:
+                        min_bound = -min_bound
+                    amount = Decimal(value)
+                    max_bound = Decimal(self.fix_error(upper))
 
-    pubs = None
+                    if min_bound > 0 or max_bound > 0:  # +/- 0 can be skipped
+                        if max_bound != Decimal('Infinity'):
+                            snak['datavalue']['value']['lowerBound'] = self.format_float(amount - min_bound)
+                            snak['datavalue']['value']['upperBound'] = self.format_float(amount + max_bound)
+            except (ValueError, DecimalException, KeyError):
+                return None
+        elif snak['datatype'] == 'wikibase-item':
+            if not re.search('^Q\\d+$', snak['datavalue']['value']):
+                return None
+            snak['datavalue']['type'] = 'wikibase-entityid'
+            snak['datavalue']['value'] = {'entity-type': 'item', 'id': snak['datavalue']['value']}
+        elif snak['datatype'] == 'time':
+            snak['datavalue']['type'] = 'time'
+            if len(snak['datavalue']['value']) == 4:  # year only
+                snak['datavalue']['value'] = {'time': '+' + snak['datavalue']['value'] + '-00-00T00:00:00Z',
+                                              'precision': 9, 'timezone': 0, 'before': 0, 'after': 0,
+                                              'calendarmodel': 'http://www.wikidata.org/entity/Q1985727'}
+            else:
+                try:  # trying to parse date
+                    snak['datavalue']['value'] = {
+                        'time': datetime.strptime(snak['datavalue']['value'], '%d/%m/%Y').strftime(
+                            '+%Y-%m-%dT00:00:00Z'), 'precision': 11, 'timezone': 0, 'before': 0, 'after': 0,
+                        'calendarmodel': 'http://www.wikidata.org/entity/Q1985727'}
+                except ValueError:
+                    return None
+        elif snak['datatype'] == 'external-id':
+            snak['datavalue']['type'] = 'string'
+        return snak
 
     def obtain_claim(self, entity, snak):
         if snak is None:
@@ -122,7 +178,7 @@ class WikiData(abc.ABC):
                 claim['references'].remove(ref)
 
         for ref in references:
-            claim['references'].append({'snaks': {'P248': [self.build_snak({'property': 'P248', 'value': ref})]}})
+            claim['references'].append({'snaks': {'P248': [self.create_snak('P248', ref)]}})
 
     def filter_by_ref(self, unfiltered):
         filtered = []
@@ -135,70 +191,21 @@ class WikiData(abc.ABC):
                             break
         return filtered
 
-    # noinspection PyTypedDict
-    def build_snak(self, row):
-        if row['property'] not in self.types or row['value'] == '' or row['value'] == 'NaN':
-            return None
-
-        snak = {'datatype': self.types[row['property']], 'property': row['property'], 'snaktype': 'value',
-                'datavalue': {'value': str(row['value']).strip(), 'type': self.types[row['property']]}}
-        if snak['datatype'] == 'quantity':
-            try:
-                snak['datavalue']['value'] = {
-                    'amount': self.format_float(row['value']),
-                    'unit': 'http://www.wikidata.org/entity/Q' + str(row['unit']) if 'unit' in row else '1'
-                }
-                if 'min' in row and 'max' in row:
-                    min_bound = Decimal(self.fix_error(row['min']))
-                    if min_bound < 0:
-                        min_bound = -min_bound
-                    amount = Decimal(row['value'])
-                    max_bound = Decimal(self.fix_error(row['max']))
-
-                    if min_bound > 0 and max_bound > 0:  # +/- 0 can be skipped
-                        if max_bound != Decimal('Infinity'):
-                            snak['datavalue']['value']['lowerBound'] = self.format_float(amount - min_bound)
-                            snak['datavalue']['value']['upperBound'] = self.format_float(amount + max_bound)
-            except (ValueError, DecimalException, KeyError):
-                return None
-        elif snak['datatype'] == 'wikibase-item':
-            if not re.search('^Q\\d+$', snak['datavalue']['value']):
-                return None
-            snak['datavalue']['type'] = 'wikibase-entityid'
-            snak['datavalue']['value'] = {'entity-type': 'item', 'id': snak['datavalue']['value']}
-        elif snak['datatype'] == 'time':
-            snak['datavalue']['type'] = 'time'
-            if len(snak['datavalue']['value']) == 4:  # year only
-                snak['datavalue']['value'] = {'time': '+' + snak['datavalue']['value'] + '-00-00T00:00:00Z',
-                                              'precision': 9, 'timezone': 0, 'before': 0, 'after': 0,
-                                              'calendarmodel': 'http://www.wikidata.org/entity/Q1985727'}
-            else:
-                try:  # trying to parse date
-                    snak['datavalue']['value'] = {
-                        'time': datetime.strptime(snak['datavalue']['value'], '%d/%m/%Y').strftime(
-                            '+%Y-%m-%dT00:00:00Z'), 'precision': 11, 'timezone': 0, 'before': 0, 'after': 0,
-                        'calendarmodel': 'http://www.wikidata.org/entity/Q1985727'}
-                except ValueError:
-                    return None
-        elif snak['datatype'] == 'external-id':
-            snak['datavalue']['type'] = 'string'
-        return snak
-
-    def update(self, entity, input_rows):
+    def update(self, entity, input_snaks):
         affected_statements = {}
-        for row in input_rows:
-            claim = self.obtain_claim(entity, self.build_snak(row))
+        for snak in input_snaks:
+            claim = self.obtain_claim(entity, snak)
             if claim:
-                if row['property'] not in affected_statements and row['property'] in entity['claims']:
-                    affected_statements[row['property']] = self.filter_by_ref(entity['claims'][row['property']])
-                if claim in affected_statements[row['property']]:
-                    affected_statements[row['property']].remove(claim)
+                if snak['property'] not in affected_statements and snak['property'] in entity['claims']:
+                    affected_statements[snak['property']] = self.filter_by_ref(entity['claims'][snak['property']])
+                if claim in affected_statements[snak['property']]:
+                    affected_statements[snak['property']].remove(claim)
                 # noinspection PyTypeChecker
                 if claim['mainsnak']['datatype'] != 'external-id':
-                    if 'source' not in row:
-                        row['source'] = []
-                    row['source'].append(self.db_ref)
-                    self.add_refs(claim, row['source'])
+                    if 'source' not in snak:
+                        snak['source'] = []
+                    snak['source'].append(self.db_ref)
+                    self.add_refs(claim, snak['source'])
 
         for property_id in affected_statements:
             for claim in affected_statements[property_id]:
@@ -208,8 +215,31 @@ class WikiData(abc.ABC):
                             if ref['snaks']['P248'][0]['datavalue']['value']['id'] == self.db_ref:
                                 claim['references'].remove(ref)
                                 continue
-                else:  # there is always P248:db_ref, so no other references -> delete statement
+                else:  # there is always P248:db_ref, so if there are no other references -> delete statement
                     claim['remove'] = 1
+
+    def post_process(self, entity):
+        if 'labels' not in entity:
+            entity['labels'] = {}
+        if 'en' not in entity['labels']:
+            entity['labels']['en'] = {'value': entity['claims'][self.db_property][0]['mainsnak']['datavalue']['value'],
+                                      'language': 'en'}
+
+    def sync(self, entity, input_rows, external_id):
+        if 'claims' not in entity:
+            entity['claims'] = {}
+        primary_id = self.obtain_claim(entity, self.create_snak(self.db_property, external_id))
+        primary_id['references'] = []  # no need for sources
+        primary_id['rank'] = 'normal'  # if we are here, id is actual
+        self.update(entity, input_rows)
+        self.post_process(entity)
+
+    def trace(self, entity, message):
+        print('https://www.wikidata.org/wiki/' + entity['id'] + '\t' + message)
+
+    @abc.abstractmethod
+    def get_summary(self, entity):
+        pass
 
     def save(self, entity):
         data = {'maxlag': '15', 'data': json.dumps(entity), 'summary': self.get_summary(entity)}
@@ -227,7 +257,8 @@ class WikiData(abc.ABC):
                     time.sleep(0.5)
                     if 'nochange' not in response.lower():
                         self.trace(json.loads(response)['entity'], 'modified' if 'id' in entity else 'created')
-                    return
+                        return json.loads(response)['entity']['id']
+                    return None
 
                 if 'badtoken' in response.lower():
                     self.token = json.loads(self.api_call('query', {'meta': 'tokens'}))['query']['tokens']['csrftoken']
@@ -238,22 +269,11 @@ class WikiData(abc.ABC):
                 pass
             time.sleep(10)
             self.logon()  # just in case - re-authenticate
+        return None
 
-    def trace(self, entity, message):
-        print('https://www.wikidata.org/wiki/' + entity['id'] + '\t' + message)
-
-    @staticmethod
-    def query(query, process=lambda new, existing: new[0]):
-        result = CaseInsensitiveDict()
-        with requests.Session() as session:
-            session.headers.update({'Accept': 'text/csv', 'User-Agent': WikiData.USER_AGENT})
-            with closing(session.post('https://query.wikidata.org/sparql', params={'query': query}, stream=True)) as r:
-                reader = csv.reader(r.iter_lines(decode_unicode='utf-8'), delimiter=',', quotechar='"')
-                next(reader)
-                for line in reader:
-                    line = [item.replace('http://www.wikidata.org/entity/', '') for item in line]
-                    result[line[0]] = process(line[1:], result[line[0]] if line[0] in result else [])
-        return result
+    @abc.abstractmethod
+    def get_chunk_from_search(self, offset):
+        pass
 
     def get_all_items(self, sparql, process=lambda new, existing: new[0]):
         results = self.query(sparql, process)
@@ -267,11 +287,3 @@ class WikiData(abc.ABC):
                 if external_id not in results:
                     results[external_id] = None
         return results
-
-    @abc.abstractmethod
-    def get_chunk_from_search(self, offset):
-        pass
-
-    @abc.abstractmethod
-    def get_summary(self, entity):
-        pass
