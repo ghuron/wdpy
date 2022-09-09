@@ -1,5 +1,4 @@
 #!/bin/bash
-
 # use bash strict mode
 set -euo pipefail
 
