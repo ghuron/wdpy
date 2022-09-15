@@ -8,7 +8,11 @@ Few scripts demonstrate the use of the framework in practice:
 You can run them in IDE of your choice, just specify your login and password as a command line argument. Required modules can be installed by ```pip install -r src/requirements.txt```
 
 If you want to run them in [toolforge](https://wikitech.wikimedia.org/wiki/Portal:Toolforge), do the following:
-1. Get content of this repository
-2. Create a ```src/toolforge/.credentials``` file that contains your login and password separated by space. Script will use it to make edits in wikidata. **Highly** recommend creating a [BotPassword](https://www.wikidata.org/wiki/Special:BotPasswords) with a limited set of permissions rather than providing your real credentials. Don't forget ```chmod 440 .credentials``` to restrict who can read it.
-3. Run ```toolforge-jobs run bootstrap-venv --command "cd $PWD && src/bootstrap_venv.sh" --image tf-python39 --wait``` in order to initialize python virtual environment and install nessecary packages.
-4. Load jobs schedule via ```toolforge-jobs load src/toolforge/jobs.yaml```
+1. Open ssh session to your tool on toolforge and run the following 3 commands:
+   1. ```git init```
+   2. ```git remote add origin https://github.com/ghuron/wdpy.git```
+   3. ```git pull origin master```
+2. Create [BotPassword](https://www.wikidata.org/wiki/Special:BotPasswords) with a limited set of permissions (normally besides *basic* I request *editpage*, *createeditmovepage* and *highvolume* (see https://www.wikidata.org/wiki/Special:ListGrants for details)
+3. Create one-liner file ```src/toolforge/.credentials``` and type there login and password separated by space. Script will use it to make edits in wikidata. Don't forget ```chmod 440 src/toolforge/.credentials``` to make sure other toolforge users will not see your credentials.
+4. Run ```toolforge-jobs run bootstrap-venv --command "cd $PWD && src/bootstrap_venv.sh" --image tf-python39 --wait``` in order to initialize python virtual environment and install nessecary packages.
+5. Load jobs schedule via ```toolforge-jobs load src/toolforge/jobs.yaml``` or run them individually (see https://wikitech.wikimedia.org/wiki/Help:Toolforge/Jobs_framework)
