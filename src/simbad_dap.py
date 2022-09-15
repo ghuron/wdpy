@@ -38,7 +38,7 @@ class SimbadDAP(WikiData):
             epoch = self.obtain_claim(entity, self.create_snak('P6259', 'Q1264450'))  # J2000
             epoch['references'] = []
             self.add_refs(epoch, [self.db_ref])
-        if 'rank' not in claim and int(snak['mespos']) > min:
+        if 'rank' not in claim and 'mespos' in snak and int(snak['mespos']) > min:
             claim['rank'] = 'deprecated'
         return claim
 
@@ -227,10 +227,9 @@ class SimbadDAP(WikiData):
             for claim in entity['claims'][property_id]:
                 if 'rank' not in claim or claim['rank'] == 'normal':
                     result = 0
-                else:
-                    if claim['rank'] == 'deprecated' and 'mespos' in claim['mainsnak']:
-                        if result > int(claim['mainsnak']['mespos']):
-                            result = int(claim['mainsnak']['mespos'])
+                elif claim['rank'] == 'deprecated' and 'mespos' in claim['mainsnak']:
+                    if result > int(claim['mainsnak']['mespos']):
+                        result = int(claim['mainsnak']['mespos'])
         return result
 
 
