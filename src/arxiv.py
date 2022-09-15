@@ -18,7 +18,7 @@ class ArXiv(WikiData):
         self.suffix = '&metadataPrefix=arXiv'
         self.arxiv = {}
 
-    def get_chunk_from_search(self, offset):
+    def get_next_chunk(self):
         # if len(self.arxiv) > 100000:
         #     return []
         try:

@@ -21,11 +21,11 @@ class SimbadDAP(WikiData):
         self.ads_articles = self.query('SELECT ?id ?item {?item wdt:P819 ?id}')
         self.simbad = {}
 
-    def get_chunk_from_search(self, offset):
-        if offset > 0:
+    def get_next_chunk(self):
+        if len(self.simbad) > 0:
             return []
         wd.load('''otype IN ('Pl', 'Pl?')''')
-        return self.simbad  # .keys()
+        return self.simbad.keys()
 
     def obtain_claim(self, entity, snak):
         min = self.get_min_position(entity, snak['property'])

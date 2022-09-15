@@ -272,17 +272,15 @@ class WikiData(abc.ABC):
             self.logon()  # just in case - re-authenticate
         return None
 
-    def get_chunk_from_search(self, offset):
+    def get_next_chunk(self):
         return []
 
     def get_all_items(self, sparql, process=lambda new, existing: new[0]):
         results = self.query(sparql, process)
-        starts_at = 0
         while True:
-            chunk = self.get_chunk_from_search(starts_at)
+            chunk = self.get_next_chunk()
             if len(chunk) == 0:
                 break
-            starts_at += len(chunk)
             for external_id in chunk:
                 if external_id not in results:
                     results[external_id] = None

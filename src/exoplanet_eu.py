@@ -16,18 +16,20 @@ class ExoplanetEu(WikiData):
         super().__init__(login, password)
         self.db_ref = 'Q1385430'
         self.db_property = 'P5653'
+        self.offset = 0
         self.simbad = SimbadDAP(login, password)
         self.constellations = self.query('SELECT DISTINCT ?n ?i {?i wdt:P31/wdt:P279* wd:Q8928; wdt:P1813 ?n}')
 
-    def get_chunk_from_search(self, offset):
+    def get_next_chunk(self):
         result = []
         response = requests.post('http://exoplanet.eu/catalog/json/',
-                                 {'sSearch': '', 'iSortCol_0': 9, 'iDisplayStart': offset, 'sEcho': 1,
+                                 {'sSearch': '', 'iSortCol_0': 9, 'iDisplayStart': self.offset, 'sEcho': 1,
                                   'iDisplayLength': 1000, 'sSortDir_0': 'desc'})
         if response.status_code == 200:
             aa_data = json.loads(response.content)['aaData']
             for record in aa_data:
                 result.append(re.sub('<[^<]+?>', '', record[0]))
+            self.offset += len(result)
         return result
 
     def obtain_claim(self, entity, snak):

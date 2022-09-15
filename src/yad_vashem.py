@@ -10,6 +10,7 @@ class YadVashem(WikiData):
         super().__init__(login, password)
         self.db_ref = 'Q77598447'
         self.db_property = 'P1979'
+        self.offset = 0
         self.yv_endpoint = requests.Session()
         self.yv_endpoint.headers.update({'Content-Type': 'application/json'})
         self.yv_endpoint.post('https://righteous.yadvashem.org/RighteousWS.asmx/BuildQuery',
@@ -21,14 +22,15 @@ class YadVashem(WikiData):
         code = entity['claims']['P1979'][0]['mainsnak']['datavalue']['value']
         return 'basic facts about: ' + named_as + ' from Yad Vashem database entry ' + code
 
-    def get_chunk_from_search(self, offset):
-        results = []
+    def get_next_chunk(self):
+        result = []
         page = self.yv_endpoint.post('https://righteous.yadvashem.org/RighteousWS.asmx/GetRighteousList',
                                      data='{uniqueId:"16475",lang:"eng",searchType:"righteous_only",rowNum:' +
-                                          str(offset) + ',sort:{dir:"",field:""}}').json()['d']
+                                          str(self.offset) + ',sort:{dir:"",field:""}}').json()['d']
         for case_item in page:
-            results.append(str(case_item['BookId']))
-        return results
+            result.append(str(case_item['BookId']))
+        self.offset += len(result)
+        return result
 
     def obtain_claim(self, entity, snak):
         if snak is not None and snak['property'] in ['P585', 'P27']:  # date and nationality to qualifiers for award
