@@ -6,6 +6,7 @@ import sys
 import urllib.request
 import urllib.error
 import xml.etree.ElementTree as ElementTree
+import time
 
 from wikidata import WikiData
 
@@ -21,12 +22,16 @@ class ArXiv(WikiData):
     def get_next_chunk(self):
         # if len(self.arxiv) > 100000:
         #     return []
-        try:
-            file = urllib.request.urlopen('http://export.arxiv.org/oai2?verb=ListRecords' + self.suffix)
-            data = file.read()
-            file.close()
-        except (urllib.error.HTTPError, http.client.IncompleteRead):
-            return []
+        while True:
+            try:
+                file = urllib.request.urlopen('http://export.arxiv.org/oai2?verb=ListRecords' + self.suffix)
+                data = file.read()
+                file.close()
+                break
+            except (urllib.error.HTTPError, http.client.IncompleteRead):
+                print('Error while fetching ' + self.suffix)
+                time.sleep(60)
+                continue
 
         tree = ElementTree.fromstring(data)
         ns = {'oa': 'http://arxiv.org/OAI/arXiv/'}
