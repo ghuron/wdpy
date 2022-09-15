@@ -19,38 +19,16 @@ class SimbadDAP(WikiData):
         self.db_property = 'P3083'
         self.constellations = self.query('SELECT DISTINCT ?n ?i {?i wdt:P31/wdt:P279* wd:Q8928; wdt:P1813 ?n}')
         self.ads_articles = self.query('SELECT ?id ?item {?item wdt:P819 ?id}')
-        # coo_err_angle, coo_err_maj, coo_err_maj_prec, coo_err_min, coo_err_min_prec, coo_qual, coo_wavelength,
-        # hpx, morph_qual, nbref, oid, plx_qual, pm_err_angle, pm_qual, sp_qual, update_date,
-        # rvz_bibcode, rvz_err, rvz_err_prec, rvz_nature, rvz_qual, rvz_radvel, rvz_radvel_prec,
-        # rvz_redshift, rvz_redshift_prec, rvz_type,
-        # vlsr, vlsr_bibcode, vlsr_max, vlsr_min, vlsr_wavelength
-        self.simbad = [  # p: precision, h: +error, l: -error, u: unit, r: reference
-            {'query': '''SELECT main_id, otype AS P31, morph_type AS P223, morph_bibcode AS P223r, 
-    ra AS P6257, ra_prec AS P6257p, 'Q28390' AS P6257u, coo_bibcode AS P6257r, sp_type AS P215, sp_bibcode AS P215r,
-    dec AS P6258, dec_prec AS P6258p, 'Q28390' AS P6258u, coo_bibcode AS P6258r, 
-    plx_value AS P2214, plx_prec AS P2214p, plx_err AS P2214h, plx_err_prec AS P2214hp, 
-    plx_err AS P2214l, plx_err_prec AS P2214lp, 'Q21500224' AS P2214u, plx_bibcode AS P2214r,
-    pmra AS P10752, pmra_prec AS P10752p, pm_err_maj AS P10752h, pm_err_maj_prec AS P10752hp,
-    pm_err_maj AS P10752l, pm_err_maj_prec AS P10752lp, 'Q22137107' AS P10752u, pm_bibcode AS P10752r,
-    pmdec AS P10751, pmdec_prec AS P10751p, pm_err_min AS P10751h, pm_err_min_prec AS P10751hp,
-    pm_err_min AS P10751l, pm_err_min_prec AS P10751lp, 'Q22137107' AS P10751u, pm_bibcode AS P10751r
-                           FROM basic WHERE {}''', 'cache': {}},
-            {'query': '''SELECT id, main_id AS P397, link_bibcode AS P397r, otype AS parent_type
-                         FROM (SELECT main_id AS id, oid FROM basic WHERE {} ORDER BY oid) b
-                         JOIN h_link ON h_link.child = b.oid JOIN basic s ON h_link.parent = s.oid''', 'cache': {}},
-            {'query': '''SELECT id, otype AS P31, origin 
-                         FROM (SELECT main_id AS id, oid FROM basic WHERE {} ORDER BY oid) b
-                         JOIN otypes ON oidref = oid''', 'cache': {}}
-        ]
-
-    def get_summary(self, entity):
-        return 'batch import from [[Q654724|SIMBAD]] for object ' + \
-               entity['claims']['P3083'][0]['mainsnak']['datavalue']['value']
+        self.simbad = {}
 
     def get_chunk_from_search(self, offset):
-        return self.simbad[0] if offset == 0 else []  # .keys()
+        if offset > 0:
+            return []
+        wd.load('''otype IN ('Pl', 'Pl?')''')
+        return self.simbad  # .keys()
 
     def obtain_claim(self, entity, snak):
+        min = self.get_min_position(entity, snak['property'])
         claim = super().obtain_claim(entity, snak)
         if snak is not None and snak['property'] in ['P6257', 'P6258']:
             if snak['property'] in entity['claims']:
@@ -60,25 +38,58 @@ class SimbadDAP(WikiData):
             epoch = self.obtain_claim(entity, self.create_snak('P6259', 'Q1264450'))  # J2000
             epoch['references'] = []
             self.add_refs(epoch, [self.db_ref])
-        if 'default_rank' in snak and 'rank' not in claim:
-            claim['rank'] = snak['default_rank']
+        if 'rank' not in claim and int(snak['mespos']) > min:
+            claim['rank'] = 'deprecated'
         return claim
 
     def load(self, condition):
-        for table in self.simbad:
-            table['cache'] = table['cache'] | self.tap_query('https://simbad.u-strasbg.fr/simbad/sim-tap',
-                                                             table['query'].format(condition), lambda n, r: r + [n])
+        for query in [  # p: precision, h: +error, l: -error, u: unit, r: reference
+            '''SELECT main_id, otype AS P31, morph_type AS P223, morph_bibcode AS P223r, 
+                    ra AS P6257, ra_prec AS P6257p, 'Q28390' AS P6257u, coo_bibcode AS P6257r, 
+                    dec AS P6258, dec_prec AS P6258p, 'Q28390' AS P6258u, coo_bibcode AS P6258r, 
+                    sp_type AS P215, sp_bibcode AS P215r,
+                    plx_value AS P2214, plx_prec AS P2214p, 'Q21500224' AS P2214u, plx_err_prec AS P2214hp, 
+                    plx_err AS P2214h, plx_err AS P2214l, plx_err_prec AS P2214lp, plx_bibcode AS P2214r,
+                    pmra AS P10752, pmra_prec AS P10752p, pm_err_maj AS P10752h, pm_err_maj AS P10752l, 
+                    pm_err_maj_prec AS P10752hp, pm_err_maj_prec AS P10752lp, 'Q22137107' AS P10752u, 
+                    pm_bibcode AS P10752r,
+                    pmdec AS P10751, pmdec_prec AS P10751p, pm_err_min AS P10751h, pm_err_min AS P10751l, 
+                    pm_err_min_prec AS P10751hp, pm_err_min_prec AS P10751lp, 'Q22137107' AS P10751u, 
+                    pm_bibcode AS P10751r,
+                    rvz_radvel AS P2216, rvz_radvel_prec AS P2216p, rvz_err AS P2216h, rvz_err AS P2216l, 
+                    rvz_err_prec AS P2216hp, rvz_err_prec AS P2216lp, 'Q3674704' AS P2216u, 
+                    rvz_bibcode AS P2216r, rvz_type AS P2216t, 0 AS mespos
+                FROM basic WHERE {} ''',
+            '''SELECT id, main_id AS P397, link_bibcode AS P397r, otype AS parent_type, 0 AS mespos
+                FROM (SELECT main_id AS id, oid FROM basic WHERE {} ORDER BY oid) b
+                JOIN h_link ON h_link.child = b.oid JOIN basic s ON h_link.parent = s.oid''',
+            '''SELECT id, pmra AS P10752, pmra_prec AS P10752p, pmra_err AS P10752h, pmra_err AS P10752l, 
+                    pmra_err_prec AS P10752hp, pmra_err_prec AS P10752lp, 'Q22137107' AS P10752u, 
+                    pmde AS P10751, pmde_prec AS P10751p, pmde_err AS P10751h, pmde_err_prec AS P10751hp, 
+                    pmde_err AS P10751l, pmde_err_prec AS P10751lp, 'Q22137107' AS P10751u, 
+                    bibcode AS P10751r, bibcode AS P10752r, mespos
+                FROM (SELECT main_id AS id, oid FROM basic WHERE otype='Pl' ORDER BY oid) b
+                JOIN mesPM ON oidref = oid
+                WHERE coosystem='ICRS' ''',
+            '''SELECT id, otype AS P31, origin AS P31r, 1 AS mespos
+                FROM (SELECT main_id AS id, oid FROM basic WHERE {} ORDER BY oid) b
+                JOIN otypes ON oidref = oid''',
+            '''SELECT id, sptype AS P215, bibcode AS P215r, mespos
+                FROM (SELECT main_id AS id, oid FROM basic WHERE {} ORDER BY oid) b
+                JOIN mesSpT ON oidref = oid''',
+            '''SELECT id, plx AS P2214, plx_prec AS P2214p, plx_err AS P2214h, plx_err AS P2214l, 
+                    'Q21500224' AS P2214u, bibcode AS P2214r, mespos
+                FROM (SELECT main_id AS id, oid FROM basic WHERE {} ORDER BY oid) b
+                JOIN mesPlx ON oidref = oid'''
+        ]:
+            self.tap_query('https://simbad.u-strasbg.fr/simbad/sim-tap', query.format(condition), self.simbad)
 
     def transform_to_snak(self, identifier):
-        if identifier not in self.simbad[0]['cache']:
+        if identifier not in self.simbad:
             self.load('main_id = \'' + identifier + '\'')  # attempt to load this specific object
-            if identifier not in self.simbad[0]['cache']:
+            if identifier not in self.simbad:
                 return None
-        result = []
-        for table in self.simbad:
-            if identifier in table['cache']:
-                result = result + self.parse_page(table['cache'][identifier])
-        return result
+        return self.parse_page(self.simbad[identifier])
 
     def post_process(self, entity):
         super().post_process(entity)
@@ -88,7 +99,7 @@ class SimbadDAP(WikiData):
                                unit='deg')
             const = self.constellations[p.get_constellation(short_name=True)]
             self.obtain_claim(entity, self.create_snak('P59', const if isinstance(const, str) else const[0]))
-        for property_id in ['P10751', 'P10752']:
+        for property_id in ['P2214', 'P2215', 'P10751', 'P10752']:
             if property_id in entity['claims']:
                 for claim in entity['claims'][property_id]:
                     try:
@@ -101,8 +112,7 @@ class SimbadDAP(WikiData):
                         pass
 
     @staticmethod
-    def tap_query(url, sql, process=lambda new, existing: new):
-        result = {}
+    def tap_query(url, sql, result={}):
         with closing(requests.post(url + '/sync', params={'request': 'doQuery', 'lang': 'adql', 'format': 'csv',
                                                           'maxrec': -1, 'query': sql, }, stream=True)) as r:
             reader = csv.reader(r.iter_lines(decode_unicode='utf-8'), delimiter=',', quotechar='"')
@@ -113,7 +123,10 @@ class SimbadDAP(WikiData):
                     for i in range(1, len(line)):
                         row[header[i]] = ' '.join(line[i].split()) if isinstance(line[i], str) else line[i]
                     object_id = ' '.join(line[0].split())
-                    result[object_id] = process(row, result[object_id] if object_id in result else [])
+                    if object_id in result:
+                        result[object_id].append(row)
+                    else:
+                        result[object_id] = [row]
         return result
 
     @staticmethod
@@ -180,6 +193,8 @@ class SimbadDAP(WikiData):
                     elif column == 'p215':
                         snak = self.create_snak('P215', row[column].replace(' ', ''))
                     else:
+                        if column == 'p2216' and row['p2216t'] != 'v':
+                            continue
                         if column + 'h' not in row:
                             try:
                                 snak = self.create_snak(column.upper(), SimbadDAP.format_figure(row, column))
@@ -197,27 +212,35 @@ class SimbadDAP(WikiData):
                     if snak is not None:
                         if column + 'u' in row:
                             snak['datavalue']['value']['unit'] = 'http://www.wikidata.org/entity/' + row[column + 'u']
-                        if column.upper() == 'P31':
-                            if 'origin' in row:  # from otypes table
-                                if ads_bibcode := re.search('bibcode=(\\d{4}[\\dA-Za-z.&]+)', row['origin']):
-                                    if ads_bibcode.group(1) in self.ads_articles:
-                                        snak['source'] = [self.ads_articles[ads_bibcode.group(1)]]
-                                snak['default_rank'] = 'deprecated'
-                            else:  # from basic
-                                snak['default_rank'] = 'normal'
                         if column + 'r' in row and row[column + 'r'] != '':
+                            if ads_bibcode := re.search('bibcode=(\\d{4}[\\dA-Za-z.&]+)', row[column + 'r']):
+                                row[column + 'r'] = ads_bibcode.group(1)
                             if row[column + 'r'] in self.ads_articles:
                                 snak['source'] = [self.ads_articles[row[column + 'r']]]
+                        snak['mespos'] = row['mespos']
                         result.append(snak)
+        return result
+
+    def get_min_position(self, entity, property_id):
+        result = 999
+        if property_id in entity['claims']:
+            for claim in entity['claims'][property_id]:
+                if 'rank' not in claim or claim['rank'] == 'normal':
+                    result = 0
+                else:
+                    if claim['rank'] == 'deprecated' and 'mespos' in claim['mainsnak']:
+                        if result > int(claim['mainsnak']['mespos']):
+                            result = int(claim['mainsnak']['mespos'])
         return result
 
 
 if sys.argv[0].endswith(os.path.basename(__file__)):  # if not imported
     wd = SimbadDAP(sys.argv[1], sys.argv[2])
-    wd.load('''otype IN ('Pl', 'Pl?')''')
     wd_items = wd.get_all_items('SELECT DISTINCT ?id ?item {?item wdt:P3083 ?id; wdt:P31/wdt:P279* wd:Q44559}')
+    # wd_items= {}
+    # wd_items['SDSS J003906.37+250601.3'] = None
     for simbad_id in wd_items:
-        # simbad_id = 'TOI-1259b'
+        # simbad_id = 'HD 89744b'
         item = {}
         if wd_items[simbad_id] is not None:
             info = json.loads(wd.api_call('wbgetentities', {'props': 'claims|info|labels', 'ids': wd_items[simbad_id]}))
