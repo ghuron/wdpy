@@ -29,7 +29,8 @@ class WikiData(abc.ABC):
                 next(reader)
                 for line in reader:
                     line = [item.replace('http://www.wikidata.org/entity/', '') for item in line]
-                    result[line[0]] = process(line[1:], result[line[0]] if line[0] in result else [])
+                    if len(line) > 1:
+                        result[line[0]] = process(line[1:], result[line[0]] if line[0] in result else [])
         return result
 
     @staticmethod
@@ -237,9 +238,9 @@ class WikiData(abc.ABC):
     def trace(self, entity, message):
         print('https://www.wikidata.org/wiki/' + entity['id'] + '\t' + message)
 
-    @abc.abstractmethod
     def get_summary(self, entity):
-        pass
+        return 'batch import from [[' + self.db_ref + ']] for object ' + \
+               entity['claims'][self.db_property][0]['mainsnak']['datavalue']['value']
 
     def save(self, entity):
         data = {'maxlag': '15', 'data': json.dumps(entity), 'summary': self.get_summary(entity)}
@@ -271,9 +272,8 @@ class WikiData(abc.ABC):
             self.logon()  # just in case - re-authenticate
         return None
 
-    @abc.abstractmethod
     def get_chunk_from_search(self, offset):
-        pass
+        return []
 
     def get_all_items(self, sparql, process=lambda new, existing: new[0]):
         results = self.query(sparql, process)
