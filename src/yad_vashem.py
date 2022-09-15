@@ -233,11 +233,11 @@ for item_id in wd_items:
         try:
             group = json.loads(wd.api_call('wbgetentities', {'props': 'claims|info', 'ids': qids}))['entities']
         except json.decoder.JSONDecodeError:
-            print('Cannot decode wbgetentities response')
-            break
+            YadVashem.info(item_id, '', 'cannot decode wbgetentities response from:' + qids)
+            continue
         except requests.exceptions.ConnectionError:
             print('Connection error while calling wbgetentities')
-            break
+            continue
 
     for row in case:
         if row['Title'] is None:
