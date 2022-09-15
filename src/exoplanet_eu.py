@@ -19,10 +19,6 @@ class ExoplanetEu(WikiData):
         self.simbad = SimbadDAP(login, password)
         self.constellations = self.query('SELECT DISTINCT ?n ?i {?i wdt:P31/wdt:P279* wd:Q8928; wdt:P1813 ?n}')
 
-    def get_summary(self, entity):
-        return 'batch import from [[Q1385430|exoplanet.eu]] for object ' + \
-               entity['claims']['P5653'][0]['mainsnak']['datavalue']['value']
-
     def get_chunk_from_search(self, offset):
         result = []
         response = requests.post('http://exoplanet.eu/catalog/json/',
@@ -161,11 +157,12 @@ class ExoplanetEu(WikiData):
                     ident = self.simbad.tap_query('https://simbad.u-strasbg.fr/simbad/sim-tap',
                                                   'SELECT id, main_id FROM ident JOIN basic ON oid = oidref ' +
                                                   'WHERE id=\'' + td.text + '\'')
-                    if len(ident) != 1 or not force_parent_creation:
+                    if len(list(ident.values())) != 1 or not force_parent_creation:
                         continue
+                    simbad_id = list(ident.values())[0]['main_id']
                     parent = {}
-                    if parent_data := self.simbad.transform_to_snak(list(ident.values())[0]['main_id']):
-                        self.simbad.sync(parent, parent_data, list(ident.values())[0]['main_id'])
+                    if parent_data := self.simbad.transform_to_snak(simbad_id):
+                        self.simbad.sync(parent, parent_data, simbad_id)
                         parent_id = self.simbad.save(parent)
                     else:
                         continue
@@ -179,10 +176,10 @@ class ExoplanetEu(WikiData):
 
 if sys.argv[0].endswith(os.path.basename(__file__)):  # if not imported
     wd = ExoplanetEu(sys.argv[1], sys.argv[2])
-    wd_items = wd.get_all_items('SELECT ?id ?item { ?item p:P5653/ps:P5653 ?id FILTER NOT EXISTS {?item p:P397 []} }')
+    wd_items = wd.get_all_items('SELECT ?id ?item {?item p:P5653/ps:P5653 ?id}')
 
     for ex_id in wd_items:
-        # exoplanet_id = 'GJ 2056 b'
+        # ex_id = 'Gaia-ASOI-031 b'
         item = {}
         if wd_items[ex_id] is not None:
             try:
