@@ -112,7 +112,8 @@ class SimbadDAP(WikiData):
                         pass
 
     @staticmethod
-    def tap_query(url, sql, result={}):
+    def tap_query(url, sql, result=None):
+        result = {} if result is None else result
         with closing(requests.post(url + '/sync', params={'request': 'doQuery', 'lang': 'adql', 'format': 'csv',
                                                           'maxrec': -1, 'query': sql, }, stream=True)) as r:
             reader = csv.reader(r.iter_lines(decode_unicode='utf-8'), delimiter=',', quotechar='"')
