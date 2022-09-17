@@ -69,15 +69,14 @@ class ExoplanetEu(WikiData):
         for p in publications:
             links = p.find_all('a', {'target': '_blank'})
             for a in links:
-                for search_pattern in patterns:
-                    if a.get('href') is not None:
+                if a.get('href') is not None:
+                    for search_pattern in patterns:
                         query = re.sub(search_pattern, patterns[search_pattern], a.get('href').strip())
                         if query.startswith('haswbstatement'):
                             if ref_id := self.api_search(query):
                                 result[p.get('id')] = ref_id
                                 break
-                            # else:
-                            #     print(url + ' is missing')
+                    # print(a.get('href') + ' is missing')
         return result
 
     def parse_page(self, suffix, force_parent_creation=False):
