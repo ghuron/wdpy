@@ -22,6 +22,7 @@ class ArXiv(WikiData):
     def get_next_chunk(self):
         # if len(self.arxiv) > 100000:
         #     return []
+        data = None
         while True:
             try:
                 file = urllib.request.urlopen('http://export.arxiv.org/oai2?verb=ListRecords' + self.suffix)
@@ -33,17 +34,18 @@ class ArXiv(WikiData):
                 time.sleep(60)
                 continue
 
-        tree = ElementTree.fromstring(data)
-        ns = {'oa': 'http://arxiv.org/OAI/arXiv/'}
         result = {}
-        for preprint in tree.findall('.//oa:arXiv', ns):
-            if len(doi := preprint.findall('oa:doi', ns)) > 0:
-                result[preprint.find('oa:id', ns).text] = doi[0].text.upper().split()[0].replace('\\', '')
-            else:
-                result[preprint.find('oa:id', ns).text] = None
-        self.arxiv = self.arxiv | result
-        self.suffix = '&resumptionToken=' + tree.find('.//oa:resumptionToken',
-                                                      {'oa': 'http://www.openarchives.org/OAI/2.0/'}).text
+        ns = {'oa': 'http://arxiv.org/OAI/arXiv/'}
+        if data is not None:
+            tree = ElementTree.fromstring(data)
+            for preprint in tree.findall('.//oa:arXiv', ns):
+                if len(doi := preprint.findall('oa:doi', ns)) > 0:
+                    result[preprint.find('oa:id', ns).text] = doi[0].text.upper().split()[0].replace('\\', '')
+                else:
+                    result[preprint.find('oa:id', ns).text] = None
+            self.arxiv = self.arxiv | result
+            self.suffix = '&resumptionToken=' + tree.find('.//oa:resumptionToken',
+                                                          {'oa': 'http://www.openarchives.org/OAI/2.0/'}).text
         return result
 
 
