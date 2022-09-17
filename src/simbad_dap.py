@@ -218,7 +218,8 @@ class SimbadDAP(WikiData):
                         result.append(snak)
         return result
 
-    def get_min_position(self, entity, property_id):
+    @staticmethod
+    def get_min_position(entity, property_id):
         result = 999
         if property_id in entity['claims']:
             for claim in entity['claims'][property_id]:
