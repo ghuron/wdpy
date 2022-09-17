@@ -154,13 +154,15 @@ class ExoplanetEu(WikiData):
                     result.append(current_snak)
                     current_snak = None
             elif len(td.attrs) == 0 and td.parent.parent.get('id') == 'table_' + td.text:
-                if (parent_id := self.api_search('haswbstatement:"P3083=' + td.text + '"')) is None:
-                    ident = self.simbad.tap_query('https://simbad.u-strasbg.fr/simbad/sim-tap',
-                                                  'SELECT id, main_id FROM ident JOIN basic ON oid = oidref ' +
-                                                  'WHERE id=\'' + td.text + '\'')
-                    if len(list(ident.values())) != 1 or not force_parent_creation:
+                ident = self.simbad.tap_query('https://simbad.u-strasbg.fr/simbad/sim-tap',
+                                              'SELECT main_id FROM ident JOIN basic ON oid = oidref ' +
+                                              'WHERE id=\'' + td.text + '\'')
+                if len(ident) != 1:
+                    continue
+                simbad_id = list(ident.keys())[0]
+                if (parent_id := self.api_search('haswbstatement:"P3083=' + simbad_id + '"')) is None:
+                    if not force_parent_creation:
                         continue
-                    simbad_id = list(ident.values())[0]['main_id']
                     parent = {}
                     if parent_data := self.simbad.transform_to_snak(simbad_id):
                         self.simbad.sync(parent, parent_data, simbad_id)
