@@ -37,8 +37,10 @@ class ArXiv(WikiData):
         ns = {'oa': 'http://arxiv.org/OAI/arXiv/'}
         result = {}
         for preprint in tree.findall('.//oa:arXiv', ns):
-            for doi in preprint.findall('oa:doi', ns):
-                result[preprint.find('oa:id', ns).text] = doi.text.upper().split()[0].replace('\\', '')
+            if len(doi := preprint.findall('oa:doi', ns)) > 0:
+                result[preprint.find('oa:id', ns).text] = doi[0].text.upper().split()[0].replace('\\', '')
+            else:
+                result[preprint.find('oa:id', ns).text] = None
         self.arxiv = self.arxiv | result
         self.suffix = '&resumptionToken=' + tree.find('.//oa:resumptionToken',
                                                       {'oa': 'http://www.openarchives.org/OAI/2.0/'}).text
@@ -49,7 +51,8 @@ if sys.argv[0].endswith(os.path.basename(__file__)):  # if not imported
     wd = ArXiv(sys.argv[1], sys.argv[2])
     wd_items = wd.get_all_items('SELECT ?id (SAMPLE(?i) AS ?a) {?i wdt:P818 ?id} GROUP BY ?id')
     for arxiv_id in wd_items:
-        if arxiv_id not in wd.arxiv:
+        if arxiv_id not in wd.arxiv:  # if it not comes from OAI, it must comes from sparql
+            wd.trace(wd_items[arxiv_id], 'contains arxiv value ' + arxiv_id + ' that is not found in batch OAI')
             continue
 
         if wd_items[arxiv_id] is None:
