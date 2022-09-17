@@ -77,9 +77,10 @@ class WikiData(abc.ABC):
     def api_search(self, query):
         response = json.loads(self.api_call('query', {'list': 'search', 'srsearch': query}))
         if 'query' in response:
-            if len(response['query']['search']) == 1:
-                return response['query']['search'][0]['title']
-            print(query + ' returned ' + str(len(response['query']['search'])) + ' results')
+            if len(response['query']['search']) != 1:
+                print(query + ' returned ' + str(len(response['query']['search'])) + ' results')
+                if len(response['query']['search']) > 0:
+                    return response['query']['search'][0]['title']
 
     def create_snak(self, property_id, value, lower=None, upper=None):
         if property_id not in self.types or value == '' or value == 'NaN':
