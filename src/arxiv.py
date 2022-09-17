@@ -48,6 +48,9 @@ class ArXiv(WikiData):
                                                           {'oa': 'http://www.openarchives.org/OAI/2.0/'}).text
         return result
 
+    def get_snaks(self, external_id):
+        return [wd.create_snak('P356', self.arxiv[external_id]), wd.create_snak('P818', external_id)]
+
 
 if sys.argv[0].endswith(os.path.basename(__file__)):  # if not imported
     wd = ArXiv(sys.argv[1], sys.argv[2])
@@ -69,5 +72,4 @@ if sys.argv[0].endswith(os.path.basename(__file__)):  # if not imported
         item = info['entities'][qid]
 
         if 'P356' not in item['claims'] or 'P818' not in item['claims']:
-            wd.sync(item, [wd.create_snak('P356', wd.arxiv[arxiv_id]), wd.create_snak('P818', arxiv_id)], arxiv_id)
-            wd.save(item)
+            wd.sync(arxiv_id, item)

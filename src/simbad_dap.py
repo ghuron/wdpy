@@ -84,7 +84,7 @@ class SimbadDAP(WikiData):
         ]:
             self.tap_query('https://simbad.u-strasbg.fr/simbad/sim-tap', query.format(condition), self.simbad)
 
-    def transform_to_snak(self, identifier):
+    def get_snaks(self, identifier):
         if identifier not in self.simbad:
             self.load('main_id = \'' + identifier + '\'')  # attempt to load this specific object
             if identifier not in self.simbad:
@@ -178,11 +178,7 @@ class SimbadDAP(WikiData):
                         snak = self.create_snak(column.upper(), 'Q' + str(mapping[row[column]]))
                     elif column == 'p397':
                         if (parent_id := self.api_search('haswbstatement:"P3083=' + row[column] + '"')) is None:
-                            parent = {}
-                            if parent_data := self.transform_to_snak(row[column]):
-                                self.sync(parent, parent_data, row[column])
-                                parent_id = self.save(parent)
-                            else:
+                            if (parent_id := self.sync(row[column])) == '':
                                 continue
 
                         if row['parent_type'] in ['As*', 'Cl*', 'ClG', 'Cld', 'DNe', 'G', 'HII',
@@ -240,17 +236,12 @@ if sys.argv[0].endswith(os.path.basename(__file__)):  # if not imported
     # wd_items['SDSS J003906.37+250601.3'] = None
     for simbad_id in wd_items:
         # simbad_id = 'HD 89744b'
-        item = {}
         if wd_items[simbad_id] is not None:
             info = json.loads(wd.api_call('wbgetentities', {'props': 'claims|info|labels', 'ids': wd_items[simbad_id]}))
             if 'entities' not in info:
                 continue
             item = info['entities'][wd_items[simbad_id]]
-        # else:
-        #     continue  # uncomment if we do not want to create new items
-
-        if data := wd.transform_to_snak(simbad_id):
-            wd.sync(item, data, simbad_id)
-            wd.save(item)
         else:
-            wd.trace(item, 'was not updated because corresponding simbad page was not parsed')
+            # continue  # uncomment if we do not want to create new items
+            item = {}
+        wd.sync(simbad_id, item)

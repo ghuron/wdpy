@@ -62,7 +62,7 @@ class YadVashem(WikiData):
         print('https://righteous.yadvashem.org/?itemId=' + book_id + '\t"' + named_as + '"\t' + message)
 
     @staticmethod
-    def parse_item(input_item):
+    def get_snaks(input_item):
         mapping = {
             'ACCOUNTANT': 326653, 'ACTIVIST': 15253558, 'ACTOR': 33999, 'ACTRESS': 33999, 'ADMINISTRATOR': 16532929,
             'ADVISOR': 2994387, 'AGENT': 109555060, 'AGRICULTEUR': 131512, 'AGRICULTURAL ENGINEER': 10272925,
@@ -256,7 +256,7 @@ for item_id in wd_items:
             del wd_items[item_id][row['Title']]
         item = wd.init_entity(item, item_id, row['Title'])
 
-        wd.update(item, YadVashem.parse_item(row['Details']))
+        wd.update(item, YadVashem.get_snaks(row['Details']))
         if 'id' in item:
             wd.save(item)
         else:

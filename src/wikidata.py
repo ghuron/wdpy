@@ -1,5 +1,5 @@
 #!/usr/bin/python3
-import abc
+from abc import ABC, abstractmethod
 import csv
 import json
 import re
@@ -14,7 +14,7 @@ import requests
 from requests.structures import CaseInsensitiveDict
 
 
-class WikiData(abc.ABC):
+class WikiData(ABC):
     USER_AGENT = 'automated import by https://www.wikidata.org/wiki/User:Ghuron)'
     db_ref = None
     db_property = None
@@ -227,14 +227,24 @@ class WikiData(abc.ABC):
             entity['labels']['en'] = {'value': entity['claims'][self.db_property][0]['mainsnak']['datavalue']['value'],
                                       'language': 'en'}
 
-    def sync(self, entity, input_rows, external_id):
-        if 'claims' not in entity:
-            entity['claims'] = {}
-        primary_id = self.obtain_claim(entity, self.create_snak(self.db_property, external_id))
-        primary_id['references'] = []  # no need for sources
-        primary_id['rank'] = 'normal'  # if we are here, id is actual
-        self.update(entity, input_rows)
-        self.post_process(entity)
+    @abstractmethod
+    def get_snaks(self, external_id):
+        pass
+
+    def sync(self, external_id, entity=None):
+        entity = {} if entity is None else entity
+        if input_rows := self.get_snaks(external_id):
+            if 'claims' not in entity:
+                entity['claims'] = {}
+            primary_id = self.obtain_claim(entity, self.create_snak(self.db_property, external_id))
+            primary_id['rank'] = 'normal'  # if we are here, id is actual
+            self.update(entity, input_rows)
+            self.post_process(entity)
+            return self.save(entity)
+        else:
+            entity['id'] = entity['id'] if 'id' in entity else ''
+            self.trace(entity, 'was not updated because ' + external_id + ' was not parsed')
+            return entity['id']
 
     def trace(self, entity, message):
         print('https://www.wikidata.org/wiki/' + entity['id'] + '\t' + message)
@@ -271,7 +281,7 @@ class WikiData(abc.ABC):
                 pass
             time.sleep(10)
             self.logon()  # just in case - re-authenticate
-        return None
+        return ''
 
     def get_next_chunk(self):
         return []

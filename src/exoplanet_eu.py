@@ -17,6 +17,7 @@ class ExoplanetEu(WikiData):
         self.db_ref = 'Q1385430'
         self.db_property = 'P5653'
         self.offset = 0
+        self.force_parent_creation = False
         self.simbad = SimbadDAP(login, password)
         self.constellations = self.query('SELECT DISTINCT ?n ?i {?i wdt:P31/wdt:P279* wd:Q8928; wdt:P1813 ?n}')
 
@@ -79,7 +80,7 @@ class ExoplanetEu(WikiData):
                     # print(a.get('href') + ' is missing')
         return result
 
-    def parse_page(self, suffix, force_parent_creation=False):
+    def get_snaks(self, suffix):
         response = requests.Session().get("http://exoplanet.eu/catalog/" + suffix)
         if response.status_code != 200:
             return None
@@ -161,15 +162,12 @@ class ExoplanetEu(WikiData):
                     continue
                 simbad_id = list(ident.keys())[0]
                 if (parent_id := self.api_search('haswbstatement:"P3083=' + simbad_id + '"')) is None:
-                    if not force_parent_creation:
+                    if not self.force_parent_creation:
                         continue
-                    parent = {}
-                    if parent_data := self.simbad.transform_to_snak(simbad_id):
-                        self.simbad.sync(parent, parent_data, simbad_id)
-                        parent_id = self.simbad.save(parent)
-                    else:
+                    if (parent_id := self.simbad.sync(simbad_id)) != '':
                         continue
 
+                print('adding ' + parent_id + ' to ' + suffix)
                 current_snak = self.create_snak('P397', parent_id)
 
         if current_snak is not None:
@@ -183,7 +181,6 @@ if sys.argv[0].endswith(os.path.basename(__file__)):  # if not imported
 
     for ex_id in wd_items:
         # ex_id = 'Gaia-ASOI-031 b'
-        item = {}
         if wd_items[ex_id] is not None:
             try:
                 info = json.loads(wd.api_call('wbgetentities', {'props': 'claims|info|labels', 'ids': wd_items[ex_id]}))
@@ -196,13 +193,9 @@ if sys.argv[0].endswith(os.path.basename(__file__)):  # if not imported
             if 'entities' not in info:
                 continue
             item = info['entities'][wd_items[ex_id]]
-        # else:
-        #     continue  # uncomment if we do not want to create new items
-
-        if data := wd.parse_page(ex_id, 'claims' in item and 'P397' not in item['claims']):
-            wd.sync(item, data, ex_id)
-            wd.save(item)
         else:
-            wd.trace(item, 'was not updated because corresponding exoplanet.eu page was not parsed: ' + ex_id)
-
+            # continue  # uncomment if we do not want to create new items
+            item = {}
+        wd.force_parent_creation = 'claims' in item and 'P397' not in item['claims']  # no P397 claim
+        wd.sync(ex_id, item)
         time.sleep(2)
