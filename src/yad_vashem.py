@@ -230,7 +230,8 @@ for item_id in wd_items:
 
     missing = []
     group = {}
-    qids = '|'.join(list(filter(lambda x: isinstance(x, str), wd_items[item_id].values())))
+    qids = '|'.join(list(
+        filter(lambda x: isinstance(x, str), wd_items[item_id].values() if wd_items[item_id] is not None else [])))
     if len(qids) > 0:
         try:
             group = json.loads(wd.api_call('wbgetentities', {'props': 'claims|info', 'ids': qids}))['entities']
