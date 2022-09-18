@@ -55,16 +55,14 @@ class WikiData(ABC):
 
         self.login = login
         self.password = password
-        self.logon()
+        if login != '':
+            self.logon()
 
         self.token = 'bad token'
         self.types = WikiData.query('SELECT ?prop ?type { ?prop wikibase:propertyType ?type }')
         for prop in self.types:
-            self.types[prop] = self.types[prop]. \
-                replace('http://wikiba.se/ontology#', ''). \
-                replace('WikibaseItem', 'wikibase-item'). \
-                replace('ExternalId', 'external-id'). \
-                lower()
+            self.types[prop] = self.types[prop].replace('http://wikiba.se/ontology#', ''). \
+                replace('WikibaseItem', 'wikibase-item').replace('ExternalId', 'external-id').lower()
 
     def api_call(self, action, params):
         return self.api.post('https://www.wikidata.org/w/api.php',

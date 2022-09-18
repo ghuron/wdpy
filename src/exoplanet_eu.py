@@ -4,11 +4,11 @@ import re
 import sys
 import time
 import requests
-import os.path
+from os.path import basename
 from simbad_dap import SimbadDAP
 from wikidata import WikiData
 from bs4 import BeautifulSoup
-from astropy import coordinates as coord
+from astropy import coordinates
 
 
 class ExoplanetEu(WikiData):
@@ -18,8 +18,8 @@ class ExoplanetEu(WikiData):
         self.db_property = 'P5653'
         self.offset = 0
         self.force_parent_creation = False
-        self.simbad = SimbadDAP(login, password)
-        self.constellations = self.query('SELECT DISTINCT ?n ?i {?i wdt:P31/wdt:P279* wd:Q8928; wdt:P1813 ?n}')
+        self.simbad = None
+        self.constellations = None
 
     def get_next_chunk(self):
         result = []
@@ -46,11 +46,12 @@ class ExoplanetEu(WikiData):
     def post_process(self, entity):
         super().post_process(entity)
         if 'P59' not in entity['claims'] and 'P6257' in entity['claims'] and 'P6258' in entity['claims']:
-            p = coord.SkyCoord(entity['claims']['P6257'][0]['mainsnak']['datavalue']['value']['amount'],
-                               entity['claims']['P6258'][0]['mainsnak']['datavalue']['value']['amount'], frame='icrs',
-                               unit='deg')
-            const = self.constellations[p.get_constellation(short_name=True)]
-            self.obtain_claim(entity, self.create_snak('P59', const if isinstance(const, str) else const[0]))
+            ra = entity['claims']['P6257'][0]['mainsnak']['datavalue']['value']['amount']
+            dec = entity['claims']['P6258'][0]['mainsnak']['datavalue']['value']['amount']
+            tla = coordinates.SkyCoord(ra, dec, frame='icrs', unit='deg').get_constellation(short_name=True)
+            if self.constellations is None:
+                self.constellations = self.query('SELECT DISTINCT ?n ?i {?i wdt:P31/wdt:P279* wd:Q8928; wdt:P1813 ?n}')
+            self.obtain_claim(entity, self.create_snak('P59', self.constellations[tla]))
 
     def parse_sources(self, page):
         patterns = {'(http[s]?://)?(dx\\.)?doi\\.org/': 'haswbstatement:P356=',
@@ -155,15 +156,16 @@ class ExoplanetEu(WikiData):
                     result.append(current_snak)
                     current_snak = None
             elif len(td.attrs) == 0 and td.parent.parent.get('id') == 'table_' + td.text:
-                ident = self.simbad.tap_query('https://simbad.u-strasbg.fr/simbad/sim-tap',
-                                              'SELECT main_id FROM ident JOIN basic ON oid = oidref ' +
-                                              'WHERE id=\'' + td.text + '\'')
+                ident = SimbadDAP.tap_query('https://simbad.u-strasbg.fr/simbad/sim-tap',
+                                            'SELECT main_id FROM ident JOIN basic ON oid = oidref ' +
+                                            'WHERE id=\'' + td.text + '\'')
                 if len(ident) != 1:
                     continue
                 simbad_id = list(ident.keys())[0]
                 if (parent_id := self.api_search('haswbstatement:"P3083=' + simbad_id + '"')) is None:
                     if not self.force_parent_creation:
                         continue
+                    self.simbad = SimbadDAP(self.login, self.password) if self.simbad is None else self.simbad
                     if (parent_id := self.simbad.sync(simbad_id)) != '':
                         continue
 
@@ -175,7 +177,7 @@ class ExoplanetEu(WikiData):
         return result
 
 
-if sys.argv[0].endswith(os.path.basename(__file__)):  # if not imported
+if sys.argv[0].endswith(basename(__file__)):  # if not imported
     wd = ExoplanetEu(sys.argv[1], sys.argv[2])
     wd_items = wd.get_all_items('SELECT ?id ?item {?item p:P5653/ps:P5653 ?id}')
 
