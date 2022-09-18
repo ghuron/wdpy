@@ -81,6 +81,41 @@ class ExoplanetEu(WikiData):
                     # print(a.get('href') + ' is missing')
         return result
 
+    def parse_text(self, property_id, text):
+        ids = {'Confirmed': 44559, 'MJ': 651336, 'AU': 1811, 'day': 573, 'deg': 28390, 'JD': 14267, 'TTV': 2945337,
+               'Radial Velocity': 2273386, 'm/s': 182429, 'RJ': 3421309, 'Imaging': 15279026, 'Candidate': 18611609,
+               'Primary Transit': 2069919, 'Microlensing': 1028022, 'Astrometry': 181505, 'Controversial': 18611609,
+               'Retracted': 7936582}
+        num = '\\d[-.e\\d]+'
+        unit = '\\s*(?P<unit>[A-Za-z]\\S+)?'
+        if reg := re.search(
+                '(?P<value>' + num + ')\\s*\\(\\s*(?P<min>-' + num + ')\\s+(?P<max>\\+' + num + ')\\s*\\)' + unit,
+                text):
+            result = self.create_snak(property_id, reg.group('value'), reg.group('min'), reg.group('max'))
+        elif reg := re.search('^(?P<value>' + num + ')\\s*(\\(\\s*±\\s*(?P<bound>' + num + ')\\s*\\))?' + unit + '$',
+                              text):
+            if reg.group('bound'):
+                result = self.create_snak(property_id, reg.group('value'), reg.group('bound'), reg.group('bound'))
+            else:
+                result = self.create_snak(property_id, reg.group('value'))
+        elif len(deg := text.split(':')) == 3:
+            digits = 3 + (len(text) - text.find('.') - 1 if text.find('.') > 0 else 0)
+            mult = 15 if property_id == 'P6257' else 1
+            if deg[0].startswith('-'):
+                angle = -((float(deg[2]) / 60 + float(deg[1])) / 60 - float(deg[0]))
+            else:
+                angle = +((float(deg[2]) / 60 + float(deg[1])) / 60 + float(deg[0]))
+            result = self.create_snak(property_id, self.format_float(angle * mult, digits))
+            result['datavalue']['value']['unit'] = 'http://www.wikidata.org/entity/Q28390'
+        elif text in ids:
+            return self.create_snak(property_id, 'Q' + str(ids[text]))
+        else:
+            return self.create_snak(property_id, text)
+
+        if reg is not None and reg.group('unit'):
+            result['datavalue']['value']['unit'] = 'http://www.wikidata.org/entity/Q' + str(ids[reg.group('unit')])
+        return result
+
     def get_snaks(self, suffix):
         response = requests.Session().get("http://exoplanet.eu/catalog/" + suffix)
         if response.status_code != 200:
@@ -92,59 +127,13 @@ class ExoplanetEu(WikiData):
                       'planet_eccentricity_0': 'P1096', 'planet_omega_0': 'P2248', 'planet_radius_0': 'P2120',
                       'planet_detection_type_0': 'P1046', 'planet_inclination_0': 'P2045', 'planet_albedo_0': 'P4501',
                       'star_0_stars__ra_0': 'P6257', 'star_0_stars__dec_0': 'P6258'}
-        mapping = {'Confirmed': 44559, 'MJ': 651336, 'AU': 1811, 'day': 573, 'deg': 28390, 'JD': 14267, 'TTV': 2945337,
-                   'Radial Velocity': 2273386, 'm/s': 182429, 'RJ': 3421309, 'Imaging': 15279026, 'Candidate': 18611609,
-                   'Primary Transit': 2069919, 'Microlensing': 1028022, 'Astrometry': 181505, 'Controversial': 18611609,
-                   'Retracted': 7936582}
         result = []
         current_snak = None
         for td in page.find_all('td'):
             if td.get('id') in properties and td.text != '—':
                 if current_snak is not None:
                     result.append(current_snak)
-                    current_snak = None
-
-                if amount := re.search(
-                        '(?P<value>\\d[-.e\\d]+)\\s*\\(\\s*(?P<min>-\\S+)\\s+(?P<max>\\+\\d[-.e\\d]+)\\s*\\)(?P<unit>\\s+[A-Za-z]\\S+)?',
-                        td.text):
-                    current_snak = self.create_snak(properties[td.get('id')], amount.group('value'),
-                                                    amount.group('min'), amount.group('max'))
-                    if current_snak is not None and amount.group('unit'):
-                        current_snak['datavalue']['value']['unit'] = \
-                            'http://www.wikidata.org/entity/Q' + str(mapping[amount.group('unit').strip()])
-                elif amount := re.search(
-                        '^(?P<value>\\d[-.e\\d]+)\\s*(\\(\\s*±\\s*(?P<bound>\\d[-.e\\d]+)\\s*\\))?(?P<unit>\\s+[A-Za-z]\\S+)?$',
-                        td.text):
-                    if amount.group('bound'):
-                        current_snak = self.create_snak(properties[td.get('id')], amount.group('value'),
-                                                        '-' + amount.group('bound'), amount.group('bound'))
-                    else:
-                        current_snak = self.create_snak(properties[td.get('id')], amount.group('value'))
-                    if current_snak is not None and amount.group('unit'):
-                        current_snak['datavalue']['value']['unit'] = \
-                            'http://www.wikidata.org/entity/Q' + str(mapping[amount.group('unit').strip()])
-                elif td.text in mapping:
-                    current_snak = self.create_snak(properties[td.get('id')], 'Q' + str(mapping[td.text]))
-                elif properties[td.get('id')] == 'P6257':
-                    digits = 3 + (len(td.text) - td.text.find('.') - 1 if td.text.find('.') > 0 else 0)
-                    ra = td.text.split(':')
-                    current_snak = self.create_snak(properties[td.get('id')], self.format_float(
-                        ((float(ra[2]) / 60 + float(ra[1])) / 60 + float(ra[0])) * 15, digits))
-                    if current_snak is not None:
-                        current_snak['datavalue']['value']['unit'] = 'http://www.wikidata.org/entity/Q28390'
-                elif properties[td.get('id')] == 'P6258':
-                    digits = 3 + (len(td.text) - td.text.find('.') - 1 if td.text.find('.') > 0 else 0)
-                    dec = td.text.split(':')
-                    if dec[0].startswith('-'):
-                        current_snak = self.create_snak(properties[td.get('id')], self.format_float(
-                            -((float(dec[2]) / 60 + float(dec[1])) / 60 - float(dec[0])), digits))
-                    else:
-                        current_snak = self.create_snak(properties[td.get('id')], self.format_float(
-                            ((float(dec[2]) / 60 + float(dec[1])) / 60 + float(dec[0])), digits))
-                    if current_snak is not None:
-                        current_snak['datavalue']['value']['unit'] = 'http://www.wikidata.org/entity/Q28390'
-                else:
-                    current_snak = self.create_snak(properties[td.get('id')], td.text)
+                current_snak = self.parse_text(properties[td.get('id')], td.text)
             elif current_snak is not None:
                 if 'showArticle' in str(td):
                     ref_id = re.sub('.+\'(\\d+)\'.+', '\\g<1>', str(td))
