@@ -263,13 +263,14 @@ for item_id in wd_items:
         else:
             missing.append(item)
 
-    for name in list(wd_items[item_id]):
-        if isinstance(wd_items[item_id][name], int):
-            YadVashem.info(item_id, name, ' is ambiguous: ' + str(wd_items[item_id][name]))
-            del wd_items[item_id][name]
-        else:
-            YadVashem.info(item_id, name,
-                           'https://wikidata.org/wiki/' + wd_items[item_id][name] + ' is missing')
+    if wd_items[item_id] is not None:
+        for name in list(wd_items[item_id]):
+            if isinstance(wd_items[item_id][name], int):
+                YadVashem.info(item_id, name, ' is ambiguous: ' + str(wd_items[item_id][name]))
+                del wd_items[item_id][name]
+            else:
+                YadVashem.info(item_id, name,
+                               'https://wikidata.org/wiki/' + wd_items[item_id][name] + ' is missing')
 
     if len(missing) > 0:
         for item in missing:
