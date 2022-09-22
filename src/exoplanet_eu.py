@@ -54,7 +54,8 @@ class ExoplanetEu(WikiData):
             self.obtain_claim(entity, self.create_snak('P59', self.constellations[tla]))
 
     def parse_sources(self, page):
-        patterns = {'(http[s]?://)?(dx\\.)?doi\\.org/': 'haswbstatement:P356=',
+        patterns = {'https://doi.org/10.48550/arXiv.': 'haswbstatement:P818=',
+                    '(http[s]?://)?(dx\\.)?doi\\.org/': 'haswbstatement:P356=',
                     'http[s]?://(fr\\.)?arxiv\\.org/abs/': 'haswbstatement:P818=',
                     'https://doi.org/10.48550/arXiv.': 'haswbstatement:P818=',
                     'http[s]?://www\\.journals\\.uchicago\\.edu/doi/abs/': 'haswbstatement:P356=',
