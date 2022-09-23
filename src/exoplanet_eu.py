@@ -3,6 +3,7 @@ import json
 import re
 import sys
 import time
+from arxiv import ArXiv
 import requests
 from os.path import basename
 from simbad_dap import SimbadDAP
@@ -17,9 +18,10 @@ class ExoplanetEu(WikiData):
         self.db_ref = 'Q1385430'
         self.db_property = 'P5653'
         self.offset = 0
-        self.force_parent_creation = False
-        self.simbad = None
         self.constellations = None
+        self.source = {}
+        self.simbad = None
+        self.arxiv = None
 
     def get_next_chunk(self):
         result = []
@@ -57,7 +59,6 @@ class ExoplanetEu(WikiData):
         patterns = {'https://doi.org/10.48550/arXiv.': 'haswbstatement:P818=',
                     '(http[s]?://)?(dx\\.)?doi\\.org/': 'haswbstatement:P356=',
                     'http[s]?://(fr\\.)?arxiv\\.org/abs/': 'haswbstatement:P818=',
-                    'https://doi.org/10.48550/arXiv.': 'haswbstatement:P818=',
                     'http[s]?://www\\.journals\\.uchicago\\.edu/doi/abs/': 'haswbstatement:P356=',
                     'http://iopscience.iop.org/0004-637X/': 'haswbstatement:P356=10.1088/0004-637X/',
                     'http[s]?://(?:ui\\.)?adsabs.harvard.edu/abs/([^/]+).*': 'haswbstatement:P819=\\g<1>',
@@ -67,20 +68,21 @@ class ExoplanetEu(WikiData):
                     'isbn=(\\d{3})(\\d)(\\d{3})(\\d{5})(\\d)': 'haswbstatement:P212=\\g<1>-\\g<2>-\\g<3>-\\g<4>-\\g<5>',
                     '.+jstor\\.org/stable/(info/)?': 'haswbstatement:P356='}
 
-        result = {}
         publications = page.find_all('p', {'class': 'publication'})
         for p in publications:
             links = p.find_all('a', {'target': '_blank'})
             for a in links:
-                if a.get('href') is not None:
+                if p.get('id') not in self.source and a.get('href') is not None:
                     for search_pattern in patterns:
                         query = re.sub(search_pattern, patterns[search_pattern], a.get('href').strip())
                         if query.startswith('haswbstatement'):
-                            if ref_id := self.api_search(query):
-                                result[p.get('id')] = ref_id
+                            if (ref_id := self.api_search(query)) is None:
+                                if query.startswith('haswbstatement:P818='):
+                                    self.arxiv = ArXiv(self.login, self.password) if self.arxiv is None else self.arxiv
+                                    ref_id = self.arxiv.sync(query.replace('haswbstatement:P818=', ''))
+                            if ref_id is not None:
+                                self.source[p.get('id')] = ref_id
                                 break
-                    # print(a.get('href') + ' is missing')
-        return result
 
     def parse_text(self, property_id, text):
         ids = {'Confirmed': 44559, 'MJ': 651336, 'AU': 1811, 'day': 573, 'deg': 28390, 'JD': 14267, 'TTV': 2945337,
@@ -93,8 +95,8 @@ class ExoplanetEu(WikiData):
                 '(?P<value>' + num + ')\\s*\\(\\s*(?P<min>-' + num + ')\\s+(?P<max>\\+' + num + ')\\s*\\)' + unit,
                 text):
             result = self.create_snak(property_id, reg.group('value'), reg.group('min'), reg.group('max'))
-        elif reg := re.search('^(?P<value>' + num + ')\\s*(\\(\\s*±\\s*(?P<bound>' + num + ')\\s*\\))?' + unit + '$',
-                              text):
+        elif reg := re.search(
+                '^(?P<value>' + num + ')\\s*(\\(\\s*±\\s*(?P<bound>' + num + ')\\s*\\))?' + unit + '$', text):
             if reg.group('bound'):
                 result = self.create_snak(property_id, reg.group('value'), reg.group('bound'), reg.group('bound'))
             else:
@@ -117,18 +119,18 @@ class ExoplanetEu(WikiData):
             result['datavalue']['value']['unit'] = 'http://www.wikidata.org/entity/Q' + str(ids[reg.group('unit')])
         return result
 
-    def get_snaks(self, suffix):
-        response = requests.Session().get("http://exoplanet.eu/catalog/" + suffix)
+    def load_snaks(self, external_id, force_parent_creation):
+        response = requests.Session().get("http://exoplanet.eu/catalog/" + external_id)
         if response.status_code != 200:
             return None
         page = BeautifulSoup(response.content, 'html.parser')
-        sources = self.parse_sources(page)
+        self.parse_sources(page)
         properties = {'planet_planet_status_string_0': 'P31', 'planet_discovered_0': 'P575', 'planet_mass_0': 'P2067',
                       'planet_mass_sini_0': 'P2051', 'planet_axis_0': 'P2233', 'planet_period_0': 'P2146',
                       'planet_eccentricity_0': 'P1096', 'planet_omega_0': 'P2248', 'planet_radius_0': 'P2120',
                       'planet_detection_type_0': 'P1046', 'planet_inclination_0': 'P2045', 'planet_albedo_0': 'P4501',
                       'star_0_stars__ra_0': 'P6257', 'star_0_stars__dec_0': 'P6258'}
-        result = []
+        result = [self.create_snak(self.db_property, external_id)]
         current_snak = None
         for td in page.find_all('td'):
             if td.get('id') in properties and td.text != '—':
@@ -138,11 +140,11 @@ class ExoplanetEu(WikiData):
             elif current_snak is not None:
                 if 'showArticle' in str(td):
                     ref_id = re.sub('.+\'(\\d+)\'.+', '\\g<1>', str(td))
-                    if ref_id in sources:
+                    if ref_id in self.source:
                         if 'source' not in current_snak:
                             current_snak['source'] = []
-                        current_snak['source'].append(sources[ref_id])
-                elif 'showAllPubs' not in str(td):
+                        current_snak['source'].append(self.source[ref_id])
+                elif 'showAllPubs' not in str(td) and current_snak is not None:
                     result.append(current_snak)
                     current_snak = None
             elif len(td.attrs) == 0 and td.parent.parent.get('id') == 'table_' + td.text:
@@ -153,18 +155,21 @@ class ExoplanetEu(WikiData):
                     continue
                 simbad_id = list(ident.keys())[0]
                 if (parent_id := self.api_search('haswbstatement:"P3083=' + simbad_id + '"')) is None:
-                    if not self.force_parent_creation:
+                    if not force_parent_creation:
                         continue
                     self.simbad = SimbadDAP(self.login, self.password) if self.simbad is None else self.simbad
                     if (parent_id := self.simbad.sync(simbad_id)) != '':
                         continue
-
-                print('adding ' + parent_id + ' to ' + suffix)
                 current_snak = self.create_snak('P397', parent_id)
 
+        page.decompose()
         if current_snak is not None:
             result.append(current_snak)
         return result
+
+    def sync(self, external_id, qid=None):
+        entity = self.get_items(qid)
+        return self.update(self.load_snaks(external_id, 'claims' in entity and 'P397' not in entity['claims']), entity)
 
 
 if sys.argv[0].endswith(basename(__file__)):  # if not imported
@@ -173,21 +178,5 @@ if sys.argv[0].endswith(basename(__file__)):  # if not imported
 
     for ex_id in wd_items:
         # ex_id = 'Gaia-ASOI-031 b'
-        if wd_items[ex_id] is not None:
-            try:
-                info = json.loads(wd.api_call('wbgetentities', {'props': 'claims|info|labels', 'ids': wd_items[ex_id]}))
-            except json.decoder.JSONDecodeError:
-                print('Cannot decode wbgetentities response')
-                continue
-            except requests.exceptions.ConnectionError:
-                print('Connection error while calling wbgetentities')
-                continue
-            if 'entities' not in info:
-                continue
-            item = info['entities'][wd_items[ex_id]]
-        else:
-            # continue  # uncomment if we do not want to create new items
-            item = {}
-        wd.force_parent_creation = 'claims' in item and 'P397' not in item['claims']  # no P397 claim
-        wd.sync(ex_id, item)
-        time.sleep(2)
+        wd.sync(ex_id, wd_items[ex_id])
+        time.sleep(5)

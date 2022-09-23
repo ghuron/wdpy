@@ -1,6 +1,5 @@
 #!/usr/bin/python3
 import csv
-import json
 import re
 import sys
 from contextlib import closing
@@ -85,11 +84,11 @@ class SimbadDAP(WikiData):
             self.tap_query('https://simbad.u-strasbg.fr/simbad/sim-tap', query.format(condition), self.simbad)
 
     def get_snaks(self, identifier):
-        if identifier not in self.simbad:
-            self.load('main_id = \'' + identifier + '\'')  # attempt to load this specific object
-            if identifier not in self.simbad:
-                return None
-        return self.parse_page(self.simbad[identifier])
+        if identifier in self.simbad:
+            return self.parse_page(self.simbad[identifier])
+        self.load('main_id = \'' + identifier + '\'')  # attempt to load this specific object
+        if identifier in self.simbad:
+            return self.parse_page(self.simbad[identifier])
 
     def post_process(self, entity):
         super().post_process(entity)
@@ -131,9 +130,8 @@ class SimbadDAP(WikiData):
         return result
 
     @staticmethod
-    def format_figure(row, field):
-        return SimbadDAP.format_float(row[field],
-                                      row[field + 'p'] if field + 'p' in row and row[field + 'p'] != '' else -1)
+    def format_figure(row, col):
+        return WikiData.format_float(row[col], int(row[col + 'p']) if col + 'p' in row and row[col + 'p'] != '' else -1)
 
     def parse_page(self, rows):
         mapping = {'?': 6999, 'ev': 2680861, 'Rad': 1931185, 'mR': 67201491, 'cm': 67201524, 'mm': 67201561,
@@ -174,7 +172,6 @@ class SimbadDAP(WikiData):
         for row in rows:
             for column in row:
                 if re.search('p\\d+$', column) and row[column] != '':
-                    snak = None
                     if row[column] in mapping:
                         snak = self.create_snak(column.upper(), 'Q' + str(mapping[row[column]]))
                     elif column == 'p397':
@@ -238,12 +235,4 @@ if sys.argv[0].endswith(os.path.basename(__file__)):  # if not imported
     # wd_items['SDSS J003906.37+250601.3'] = None
     for simbad_id in wd_items:
         # simbad_id = 'HD 89744b'
-        if wd_items[simbad_id] is not None:
-            info = json.loads(wd.api_call('wbgetentities', {'props': 'claims|info|labels', 'ids': wd_items[simbad_id]}))
-            if 'entities' not in info:
-                continue
-            item = info['entities'][wd_items[simbad_id]]
-        else:
-            # continue  # uncomment if we do not want to create new items
-            item = {}
-        wd.sync(simbad_id, item)
+        wd.sync(simbad_id, wd_items[simbad_id])

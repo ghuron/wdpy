@@ -1,5 +1,5 @@
 #!/usr/bin/python3
-from abc import ABC, abstractmethod
+from abc import ABC
 import csv
 import json
 import re
@@ -7,7 +7,7 @@ import sys
 import time
 import uuid
 from contextlib import closing
-from datetime import datetime
+from _datetime import datetime
 from decimal import Decimal, DecimalException
 
 import requests
@@ -35,10 +35,10 @@ class WikiData(ABC):
 
     @staticmethod
     def format_float(figure, digits=-1):
-        if 0 <= int(digits) < 20:
+        if 0 <= digits < 20:
             return ('{0:.' + str(digits) + 'f}').format(Decimal(figure))
         if amount := re.search('(?P<mantissa>\\d\\.\\d+)e-(?P<exponent>\\d+)', str(figure)):
-            return WikiData.format_float(figure, str(len(amount.group('mantissa')) + int(amount.group('exponent')) - 2))
+            return WikiData.format_float(figure, len(amount.group('mantissa')) + int(amount.group('exponent')) - 2)
         return str(Decimal(figure))
 
     @staticmethod
@@ -85,7 +85,7 @@ class WikiData(ABC):
             return None
 
         snak = {'datatype': self.types[property_id], 'property': property_id, 'snaktype': 'value',
-                'datavalue': {'value': str(value).strip(), 'type': self.types[property_id]}}
+                'datavalue': {'value': value, 'type': self.types[property_id]}}
         if snak['datatype'] == 'quantity':
             try:
                 snak['datavalue']['value'] = {'amount': self.format_float(value), 'unit': '1'}
@@ -136,6 +136,8 @@ class WikiData(ABC):
                 if isinstance(snak['datavalue']['value'], str):
                     if candidate['mainsnak']['datavalue']['value'] == snak['datavalue']['value']:
                         return candidate
+                elif snak['datavalue']['value'] == candidate['mainsnak']['datavalue']['value']:
+                    return candidate
                 elif 'id' in snak['datavalue']['value']:
                     if candidate['mainsnak']['datavalue']['value']['id'] == snak['datavalue']['value']['id']:
                         return candidate
@@ -191,7 +193,10 @@ class WikiData(ABC):
                             break
         return filtered
 
-    def update(self, entity, input_snaks):
+    def update(self, input_snaks, entity=None):
+        entity = {} if entity is None else entity
+        entity['claims'] = {} if 'claims' not in entity else entity['claims']
+
         affected_statements = {}
         for snak in input_snaks:
             claim = self.obtain_claim(entity, snak)
@@ -217,6 +222,8 @@ class WikiData(ABC):
                                 continue
                 else:  # there is always P248:db_ref, so if there are no other references -> delete statement
                     claim['remove'] = 1
+        self.post_process(entity)
+        return self.save(entity)
 
     def post_process(self, entity):
         if 'labels' not in entity:
@@ -225,24 +232,22 @@ class WikiData(ABC):
             entity['labels']['en'] = {'value': entity['claims'][self.db_property][0]['mainsnak']['datavalue']['value'],
                                       'language': 'en'}
 
-    @abstractmethod
     def get_snaks(self, external_id):
-        pass
+        return [self.create_snak(self.db_property, external_id)]
 
-    def sync(self, external_id, entity=None):
-        entity = {} if entity is None else entity
-        if input_rows := self.get_snaks(external_id):
-            if 'claims' not in entity:
-                entity['claims'] = {}
-            primary_id = self.obtain_claim(entity, self.create_snak(self.db_property, external_id))
-            primary_id['rank'] = 'normal'  # if we are here, id is actual
-            self.update(entity, input_rows)
-            self.post_process(entity)
-            return self.save(entity)
-        else:
-            entity['id'] = entity['id'] if 'id' in entity else ''
-            self.trace(entity, 'was not updated because ' + external_id + ' was not parsed')
-            return entity['id']
+    def sync(self, external_id, qid=None):
+        return self.update(self.get_snaks(external_id), self.get_items(qid))
+
+    def get_items(self, qid):
+        try:
+            if qid is not None:
+                info = json.loads(self.api_call('wbgetentities', {'props': 'claims|info|labels', 'ids': qid}))
+                if 'entities' in info:
+                    return info['entities'][qid]
+        except json.decoder.JSONDecodeError:
+            print('Cannot decode wbgetentities response')
+        except requests.exceptions.ConnectionError:
+            print('Connection error while calling wbgetentities')
 
     def trace(self, entity, message):
         print('https://www.wikidata.org/wiki/' + entity['id'] + '\t' + message)
