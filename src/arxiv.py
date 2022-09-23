@@ -46,7 +46,7 @@ class ArXiv(WikiData):
     def post_process(self, entity):
         if 'labels' not in entity:
             entity['labels'] = {}
-        if 'en' not in entity['labels']:
+        if 'en' not in entity['labels'] and 'P1476' in entity['claims']:
             entity['labels']['en'] = {'value': entity['claims']['P1476'][0]['mainsnak']['datavalue']['value']['text'],
                                       'language': 'en'}
         if 'P31' not in entity['claims']:
