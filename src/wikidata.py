@@ -194,6 +194,11 @@ class WikiData(ABC):
         return filtered
 
     def update(self, input_snaks, entity=None):
+        if input_snaks is None:
+            external_id = entity['claims'][self.db_property][0]['mainsnak']['datavalue']['value']
+            self.trace(entity, 'error while retrieving/parsing {}:"{}"'.format(self.db_property, external_id))
+            return
+
         entity = {} if entity is None else entity
         entity['claims'] = {} if 'claims' not in entity else entity['claims']
 
