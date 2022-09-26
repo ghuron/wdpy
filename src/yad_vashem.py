@@ -12,6 +12,7 @@ class YadVashem(WikiData):
         self.db_property = 'P1979'
         self.offset = 0
         self.pending = []
+        self.award_cleared_qualifiers = []
         self.yv_endpoint = requests.Session()
         self.yv_endpoint.headers.update({'Content-Type': 'application/json'})
         self.yv_endpoint.post('https://righteous.yadvashem.org/RighteousWS.asmx/BuildQuery',
@@ -37,16 +38,15 @@ class YadVashem(WikiData):
         if snak is not None:
             if snak['property'] in ['P585', 'P27']:  # date and nationality to qualifiers for award
                 award = super().obtain_claim(entity, self.create_snak('P166', 'Q112197'))
-                if snak['property'] not in award['qualifiers']:
+                if snak['property'] not in award['qualifiers'] or snak['property'] not in self.award_cleared_qualifiers:
+                    self.award_cleared_qualifiers.append(snak['property'])  # clear each qualifier only once
                     award['qualifiers'][snak['property']] = []
                 award['qualifiers'][snak['property']].append(snak)
                 return None
 
             claim = super().obtain_claim(entity, snak)
             if claim is not None:
-                if snak['property'] == 'P166' and snak['datavalue']['value']['id']:
-                    claim['qualifiers'] = {}  # rewrite nationality and recognition_date
-                elif snak['property'] in ['P569', 'P570']:  # birth/death date statement only
+                if snak['property'] in ['P569', 'P570']:  # birth/death date statement only
                     if 'rank' not in claim:  # unspecified rank means it was just created
                         if snak['datavalue']['value']['precision'] == 11:  # date precision on the day level
                             if snak['datavalue']['value']['time'].endswith('-01-01T00:00:00Z'):  # January 1
@@ -190,7 +190,7 @@ class YadVashem(WikiData):
             'WRITER': 36180, 'YUGOSLAVIA': 36704}
         properties = {'recognition_date': 'P585', 'nationality': 'P27', 'gender': 'P21', 'cause_of_death': 'P509',
                       'religion': 'P140', 'date_of_death': 'P570', 'date_of_birth': 'P569', 'profession': 'P106'}
-        result = [self.create_snak('P31', 'Q5'), self.create_snak('P166', 'Q112197')]
+        result = [self.create_snak('P31', 'Q5')]
         for element in input_item:
             if element['Title'] in properties:
                 if element['Value'] in mapping:
@@ -244,6 +244,7 @@ wd_items = wd.get_all_items(
     {**existing, new[0]: 2})
 
 for item_id in wd_items:
+    # item_id = '6658068'  # uncomment to debug specific group of people
     case = wd.yv_endpoint.post('https://righteous.yadvashem.org/RighteousWS.asmx/GetPersonDetailsBySession',
                                data='{bookId:"' + item_id + '",lang:"eng"}').json()['d']['Individuals']
 
@@ -273,8 +274,11 @@ for item_id in wd_items:
                 item = group[wd_items[item_id][row['Title']]]
                 del wd_items[item_id][row['Title']]  # consider it processed
 
-            wd.obtain_claim(item, wd.create_snak('P1979', item_id))['qualifiers'] = {
-                'P1810': [wd.create_snak('P1810', row['Title'])]}
+            yv_id = wd.obtain_claim(item, wd.create_snak('P1979', item_id))
+            if 'qualifiers' not in yv_id:
+                yv_id['qualifiers'] = {}
+            yv_id['qualifiers']['P1810'] = [wd.create_snak('P1810', row['Title'])]
+            wd.award_cleared_qualifiers = []
             wd.update(wd.load_snaks(row['Details']), item)
 
-    wd.create_pending(wd_items[item_id])
+            wd.create_pending(wd_items[item_id])
