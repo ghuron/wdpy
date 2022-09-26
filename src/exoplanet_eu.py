@@ -3,8 +3,10 @@ import json
 import re
 import sys
 import time
-from arxiv import ArXiv
+import urllib.parse
 import requests
+
+from arxiv import ArXiv
 from os.path import basename
 from simbad_dap import SimbadDAP
 from wikidata import WikiData
@@ -55,10 +57,10 @@ class ExoplanetEu(WikiData):
                 self.constellations = self.query('SELECT DISTINCT ?n ?i {?i wdt:P31/wdt:P279* wd:Q8928; wdt:P1813 ?n}')
             self.obtain_claim(entity, self.create_snak('P59', self.constellations[tla]))
 
-    def parse_sources(self, page):
+    def parse_url(self, url):
         patterns = {'https://doi.org/10.48550/arXiv.': 'haswbstatement:P818=',
                     '(http[s]?://)?(dx\\.)?doi\\.org/': 'haswbstatement:P356=',
-                    'http[s]?://(fr\\.)?arxiv\\.org/abs/': 'haswbstatement:P818=',
+                    '.*arxiv\\.org/abs/(\\d{4}.\\d+|[a-z\\-]+(\\.[A-Z]{2})?\\/\\d{7}).*': 'haswbstatement:P818=\\g<1>',
                     'http[s]?://www\\.journals\\.uchicago\\.edu/doi/abs/': 'haswbstatement:P356=',
                     'http://iopscience.iop.org/0004-637X/': 'haswbstatement:P356=10.1088/0004-637X/',
                     'http[s]?://(?:ui\\.)?adsabs.harvard.edu/abs/([^/]+).*': 'haswbstatement:P819=\\g<1>',
@@ -67,22 +69,25 @@ class ExoplanetEu(WikiData):
                     'http://online.liebertpub.com/doi/abs/([^\\?]+).*': 'haswbstatement:P356=\\g<1>,',
                     'isbn=(\\d{3})(\\d)(\\d{3})(\\d{5})(\\d)': 'haswbstatement:P212=\\g<1>-\\g<2>-\\g<3>-\\g<4>-\\g<5>',
                     '.+jstor\\.org/stable/(info/)?': 'haswbstatement:P356='}
+        for search_pattern in patterns:
+            query = re.sub(search_pattern, patterns[search_pattern], url)
+            if query.startswith('haswbstatement'):
+                if (ref_id := self.api_search(urllib.parse.unquote(query))) is None:
+                    if query.startswith('haswbstatement:P818='):
+                        self.arxiv = ArXiv(self.login, self.password) if self.arxiv is None else self.arxiv
+                        ref_id = self.arxiv.sync(query.replace('haswbstatement:P818=', ''))
+                if ref_id is not None:
+                    return ref_id
 
+    def parse_sources(self, page):
         publications = page.find_all('p', {'class': 'publication'})
         for p in publications:
             links = p.find_all('a', {'target': '_blank'})
             for a in links:
                 if p.get('id') not in self.source and a.get('href') is not None:
-                    for search_pattern in patterns:
-                        query = re.sub(search_pattern, patterns[search_pattern], a.get('href').strip())
-                        if query.startswith('haswbstatement'):
-                            if (ref_id := self.api_search(query)) is None:
-                                if query.startswith('haswbstatement:P818='):
-                                    self.arxiv = ArXiv(self.login, self.password) if self.arxiv is None else self.arxiv
-                                    ref_id = self.arxiv.sync(query.replace('haswbstatement:P818=', ''))
-                            if ref_id is not None:
-                                self.source[p.get('id')] = ref_id
-                                break
+                    if (ref_id := self.parse_url(a.get('href').strip())) is not None:
+                        self.source[p.get('id')] = ref_id
+                        break
 
     def parse_text(self, property_id, text):
         ids = {'Confirmed': 44559, 'MJ': 651336, 'AU': 1811, 'day': 573, 'deg': 28390, 'JD': 14267, 'TTV': 2945337,
