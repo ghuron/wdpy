@@ -184,4 +184,4 @@ if sys.argv[0].endswith(basename(__file__)):  # if not imported
     for ex_id in wd_items:
         # ex_id = 'Gaia-ASOI-031 b'
         wd.sync(ex_id, wd_items[ex_id])
-        time.sleep(5)
+        time.sleep(10)
