@@ -200,6 +200,7 @@ class WikiData(ABC):
             return
 
         entity = {} if entity is None else entity
+        original = json.dumps(entity)
         entity['claims'] = {} if 'claims' not in entity else entity['claims']
 
         affected_statements = {}
@@ -228,7 +229,8 @@ class WikiData(ABC):
                 else:  # there is always P248:db_ref, so if there are no other references -> delete statement
                     claim['remove'] = 1
         self.post_process(entity)
-        return self.save(entity)
+        if json.dumps(entity) != original:
+            return self.save(entity)
 
     def post_process(self, entity):
         if 'labels' not in entity:
