@@ -23,7 +23,7 @@ class SimbadDAP(WikiData):
     def get_next_chunk(self):
         if len(self.simbad) > 0:
             return []
-        wd.load('''otype IN ('Pl', 'Pl?')''')
+        self.load('''otype IN ('Pl', 'Pl?')''')
         return self.simbad.keys()
 
     def obtain_claim(self, entity, snak):
