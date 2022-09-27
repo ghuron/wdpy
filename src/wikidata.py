@@ -127,7 +127,10 @@ class WikiData(ABC):
 
     def obtain_claim(self, entity, snak):
         if snak is None:
-            return None
+            return
+
+        entity = {} if entity is None else entity
+        entity['claims'] = {} if 'claims' not in entity else entity['claims']
 
         if snak['property'] in entity['claims']:
             for candidate in entity['claims'][snak['property']]:
