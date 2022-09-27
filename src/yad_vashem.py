@@ -261,7 +261,7 @@ for item_id in wd_items:
             print('Connection error while calling wbgetentities: ' + ex.response)
             continue
 
-    wd.missing = []
+    wd.pending = []
     for row in case:
         if row['Title'] is not None:
             row['Title'] = ' '.join(row['Title'].split())
@@ -281,4 +281,4 @@ for item_id in wd_items:
             wd.award_cleared_qualifiers = []
             wd.update(wd.load_snaks(row['Details']), item)
 
-            wd.create_pending(wd_items[item_id])
+    wd.create_pending(wd_items[item_id])
