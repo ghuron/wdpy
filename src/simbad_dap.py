@@ -84,11 +84,10 @@ class SimbadDAP(WikiData):
             self.tap_query('https://simbad.u-strasbg.fr/simbad/sim-tap', query.format(condition), self.simbad)
 
     def get_snaks(self, identifier):
+        if identifier not in self.simbad:
+            self.load('main_id = \'' + identifier + '\'')  # attempt to load this specific object
         if identifier in self.simbad:
-            return self.parse_page(self.simbad[identifier])
-        self.load('main_id = \'' + identifier + '\'')  # attempt to load this specific object
-        if identifier in self.simbad:
-            return self.parse_page(self.simbad[identifier])
+            return self.parse_page(self.simbad[identifier]) + super().get_snaks(identifier)
 
     def post_process(self, entity):
         super().post_process(entity)
