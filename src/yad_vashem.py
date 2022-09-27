@@ -2,6 +2,7 @@
 import json
 import sys
 import requests
+from os.path import basename
 from wikidata import WikiData
 
 
@@ -235,31 +236,33 @@ class YadVashem(WikiData):
                 super().save(entity)
 
 
-wd = YadVashem(sys.argv[1], sys.argv[2])
-wd_items = wd.get_all_items(
-    'SELECT ?r ?n ?i { ?i wdt:P31 wd:Q5; p:P1979 ?s . ?s ps:P1979 ?r OPTIONAL {?s pq:P1810 ?n}}',
-    lambda new, existing: {new[0]: new[1]} if len(existing) == 0 else
-    {**existing, new[0]: new[1]} if new[0] not in existing else
-    {**existing, new[0]: existing[new[0]] + 1} if isinstance(existing[new[0]], int) else
-    {**existing, new[0]: 2})
+if sys.argv[0].endswith(basename(__file__)):  # if not imported
+    wd = YadVashem(sys.argv[1], sys.argv[2])
+    wd_items = wd.get_all_items(
+        'SELECT ?r ?n ?i { ?i wdt:P31 wd:Q5; p:P1979 ?s . ?s ps:P1979 ?r OPTIONAL {?s pq:P1810 ?n}}',
+        lambda new, existing: {new[0]: new[1]} if len(existing) == 0 else
+        {**existing, new[0]: new[1]} if new[0] not in existing else
+        {**existing, new[0]: existing[new[0]] + 1} if isinstance(existing[new[0]], int) else
+        {**existing, new[0]: 2})
 
-for item_id in wd_items:
-    # item_id = '6658068'  # uncomment to debug specific group of people
-    case = wd.yv_endpoint.post('https://righteous.yadvashem.org/RighteousWS.asmx/GetPersonDetailsBySession',
-                               data='{bookId:"' + item_id + '",lang:"eng"}').json()['d']['Individuals']
+    for item_id in wd_items:
+        # item_id = '6658068'  # uncomment to debug specific group of people
+        case = wd.yv_endpoint.post('https://righteous.yadvashem.org/RighteousWS.asmx/GetPersonDetailsBySession',
+                                   data='{bookId:"' + item_id + '",lang:"eng"}').json()['d']['Individuals']
 
-    group = {}
-    qids = '|'.join(list(
-        filter(lambda x: isinstance(x, str), wd_items[item_id].values() if wd_items[item_id] is not None else [])))
-    if len(qids) > 0:
-        try:
-            group = json.loads(wd.api_call('wbgetentities', {'props': 'claims|info|labels', 'ids': qids}))['entities']
-        except json.decoder.JSONDecodeError:
-            YadVashem.info(item_id, '', 'cannot decode wbgetentities response from:' + qids)
-            continue
-        except requests.exceptions.ConnectionError as ex:
-            print('Connection error while calling wbgetentities: ' + ex.response)
-            continue
+        group = {}
+        qids = '|'.join(list(
+            filter(lambda x: isinstance(x, str), wd_items[item_id].values() if wd_items[item_id] is not None else [])))
+        if len(qids) > 0:
+            try:
+                group = json.loads(wd.api_call('wbgetentities', {'props': 'claims|info|labels', 'ids': qids}))[
+                    'entities']
+            except json.decoder.JSONDecodeError:
+                YadVashem.info(item_id, '', 'cannot decode wbgetentities response from:' + qids)
+                continue
+            except requests.exceptions.ConnectionError as ex:
+                print('Connection error while calling wbgetentities: ' + ex.response)
+                continue
 
     wd.pending = []
     for row in case:
