@@ -39,6 +39,7 @@ class YadVashem(WikiData):
         if snak is not None:
             if snak['property'] in ['P585', 'P27']:  # date and nationality to qualifiers for award
                 award = super().obtain_claim(entity, self.create_snak('P166', 'Q112197'))
+                award['qualifiers']={} if 'qualifiers' not in award else award['qualifiers']
                 if snak['property'] not in award['qualifiers'] or snak['property'] not in self.award_cleared_qualifiers:
                     self.award_cleared_qualifiers.append(snak['property'])  # clear each qualifier only once
                     award['qualifiers'][snak['property']] = []
