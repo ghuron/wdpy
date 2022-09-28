@@ -169,21 +169,30 @@ class WikiData(ABC):
         entity['claims'][snak['property']].append(new_claim)
         return new_claim
 
-    def add_refs(self, claim, references):
+    def add_refs(self, claim, references=None, foreign_id=None):
         if 'references' not in claim:
             claim['references'] = []
+        default_ref_exists = False
         for ref in list(claim['references']):
             if 'P248' in ref['snaks']:
-                if ref['snaks']['P248'][0]['datavalue']['value']['id'] in references:
+                if ref['snaks']['P248'][0]['datavalue']['value']['id'] == self.db_ref:
                     # if 'P813' in ref['snaks']:  # update "retrieved" timestamp if one already exists
                     #     ref['snaks']['P813'] = [self.create_snak('P813', datetime.now().strftime('%d/%m/%Y'))]
-                    references.remove(ref['snaks']['P248'][0]['datavalue']['value']['id'])
+                    if foreign_id is not None:
+                        ref['snaks'][self.db_property] = [self.create_snak(self.db_property, foreign_id)]
+                    default_ref_exists = True
             elif 'P143' in ref['snaks'] or 'P4656' in ref['snaks']:
                 # Doesn't make sense to keep "imported from" if real source exists
                 claim['references'].remove(ref)
 
-        for ref in references:
-            claim['references'].append({'snaks': {'P248': [self.create_snak('P248', ref)]}})
+        if not default_ref_exists:
+            ref = {'snaks': {'P248': [self.create_snak('P248', self.db_ref)]}}
+            if foreign_id is not None:
+                ref['snaks'][self.db_property] = [self.create_snak(self.db_property, foreign_id)]
+            claim['references'].append(ref)
+        if references is not None:
+            for ref in references:
+                claim['references'].append({'snaks': {'P248': [self.create_snak('P248', ref)]}})
 
     def filter_by_ref(self, unfiltered):
         filtered = []
@@ -216,10 +225,7 @@ class WikiData(ABC):
                     affected_statements[snak['property']].remove(claim)
                 # noinspection PyTypeChecker
                 if claim['mainsnak']['datatype'] != 'external-id':
-                    if 'source' not in snak:
-                        snak['source'] = []
-                    snak['source'].append(self.db_ref)
-                    self.add_refs(claim, snak['source'])
+                    self.add_refs(claim, snak['source'] if 'source' in snak else None)
 
         for property_id in affected_statements:
             for claim in affected_statements[property_id]:

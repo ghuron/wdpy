@@ -41,7 +41,7 @@ class ExoplanetEu(WikiData):
         if snak is not None and snak['property'] in ['P6257', 'P6258']:
             if snak['property'] in entity['claims'] or float(snak['datavalue']['value']['amount']).is_integer():
                 return None  # do not update existing coordinates, do not put obviously wrong coordinates
-            self.add_refs(self.obtain_claim(entity, self.create_snak('P6259', 'Q1264450')), [self.db_ref])  # J2000
+            self.add_refs(self.obtain_claim(entity, self.create_snak('P6259', 'Q1264450')))  # J2000
         claim = super().obtain_claim(entity, snak)
         if claim is not None and snak['property'] in ['P4501']:
             claim['qualifiers'] = {'P4501': [self.create_snak('P1013', 'Q2832068')]}
@@ -93,7 +93,7 @@ class ExoplanetEu(WikiData):
         ids = {'Confirmed': 44559, 'MJ': 651336, 'AU': 1811, 'day': 573, 'deg': 28390, 'JD': 14267, 'TTV': 2945337,
                'Radial Velocity': 2273386, 'm/s': 182429, 'RJ': 3421309, 'Imaging': 15279026, 'Candidate': 18611609,
                'Primary Transit': 2069919, 'Microlensing': 1028022, 'Astrometry': 181505, 'Controversial': 18611609,
-               'Retracted': 7936582}
+               'Retracted': 7936582, 'pc': 12129}
         num = '\\d[-.e\\d]+'
         unit = '\\s*(?P<unit>[A-Za-z]\\S+)?'
         if reg := re.search(
@@ -124,7 +124,7 @@ class ExoplanetEu(WikiData):
             result['datavalue']['value']['unit'] = 'http://www.wikidata.org/entity/Q' + str(ids[reg.group('unit')])
         return result
 
-    def load_snaks(self, external_id, force_parent_creation):
+    def load_snaks(self, external_id, properties, force_parent_creation=False):
         try:
             response = requests.Session().get("http://exoplanet.eu/catalog/" + external_id)
             if response.status_code != 200:
@@ -136,12 +136,8 @@ class ExoplanetEu(WikiData):
 
         page = BeautifulSoup(response.content, 'html.parser')
         self.parse_sources(page)
-        properties = {'planet_planet_status_string_0': 'P31', 'planet_discovered_0': 'P575', 'planet_mass_0': 'P2067',
-                      'planet_mass_sini_0': 'P2051', 'planet_axis_0': 'P2233', 'planet_period_0': 'P2146',
-                      'planet_eccentricity_0': 'P1096', 'planet_omega_0': 'P2248', 'planet_radius_0': 'P2120',
-                      'planet_detection_type_0': 'P1046', 'planet_inclination_0': 'P2045', 'planet_albedo_0': 'P4501',
-                      'star_0_stars__ra_0': 'P6257', 'star_0_stars__dec_0': 'P6258'}
-        result = [self.create_snak(self.db_property, external_id)]
+        parsing_planet = 'P2067' in properties.values()
+        result = super().get_snaks(external_id) if parsing_planet else []
         current_snak = None
         for td in page.find_all('td'):
             if td.get('id') in properties and td.text != '—':
@@ -158,7 +154,7 @@ class ExoplanetEu(WikiData):
                 elif 'showAllPubs' not in str(td) and current_snak is not None:
                     result.append(current_snak)
                     current_snak = None
-            elif len(td.attrs) == 0 and td.parent.parent.get('id') == 'table_' + td.text:
+            elif len(td.attrs) == 0 and td.parent.parent.get('id') == 'table_' + td.text and parsing_planet:
                 ident = SimbadDAP.tap_query('https://simbad.u-strasbg.fr/simbad/sim-tap',
                                             'SELECT main_id FROM ident JOIN basic ON oid = oidref ' +
                                             'WHERE id=\'' + td.text + '\'')
@@ -179,8 +175,14 @@ class ExoplanetEu(WikiData):
         return result
 
     def sync(self, external_id, qid=None):
+        planet = {'planet_planet_status_string_0': 'P31', 'planet_discovered_0': 'P575', 'planet_mass_0': 'P2067',
+                  'planet_mass_sini_0': 'P2051', 'planet_axis_0': 'P2233', 'planet_period_0': 'P2146',
+                  'planet_eccentricity_0': 'P1096', 'planet_omega_0': 'P2248', 'planet_radius_0': 'P2120',
+                  'planet_detection_type_0': 'P1046', 'planet_inclination_0': 'P2045', 'planet_albedo_0': 'P4501',
+                  'star_0_stars__ra_0': 'P6257', 'star_0_stars__dec_0': 'P6258'}
         entity = self.get_items(qid)
-        return self.update(self.load_snaks(external_id, 'claims' in entity and 'P397' not in entity['claims']), entity)
+        force_parent_creation = 'claims' in entity and 'P397' not in entity['claims']
+        return self.update(self.load_snaks(external_id, planet, force_parent_creation), entity)
 
 
 if sys.argv[0].endswith(basename(__file__)):  # if not imported
@@ -188,6 +190,11 @@ if sys.argv[0].endswith(basename(__file__)):  # if not imported
     wd_items = wd.get_all_items('SELECT ?id ?item {?item p:P5653/ps:P5653 ?id}')
 
     for ex_id in wd_items:
-        # ex_id = 'Gaia-ASOI-031 b'
-        wd.sync(ex_id, wd_items[ex_id])
+        ex_id = '55 Cnc e'
+        qid = wd.sync(ex_id, wd_items[ex_id])
+        item = wd.get_items(qid if qid is not None else wd_items[ex_id])
+        if 'P397' in item['claims'] and len(item['claims']['P397']) == 1:
+            parent_id = item['claims']['P397'][0]['mainsnak']['datavalue']['value']['id']
+            star = {'star_0_stars__distance_0': 'P2583'}
+            wd.update(wd.load_snaks(ex_id, star), wd.get_items(parent_id))
         time.sleep(10)

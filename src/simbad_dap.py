@@ -36,7 +36,7 @@ class SimbadDAP(WikiData):
                         candidate['remove'] = 1
             epoch = self.obtain_claim(entity, self.create_snak('P6259', 'Q1264450'))  # J2000
             epoch['references'] = []
-            self.add_refs(epoch, [self.db_ref])
+            self.add_refs(epoch)
         if 'rank' not in claim and 'mespos' in snak and int(snak['mespos']) > min_pos:
             claim['rank'] = 'deprecated'
         return claim
