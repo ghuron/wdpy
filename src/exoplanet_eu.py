@@ -125,9 +125,15 @@ class ExoplanetEu(WikiData):
         return result
 
     def load_snaks(self, external_id, force_parent_creation):
-        response = requests.Session().get("http://exoplanet.eu/catalog/" + external_id)
-        if response.status_code != 200:
-            return None
+        try:
+            response = requests.Session().get("http://exoplanet.eu/catalog/" + external_id)
+            if response.status_code != 200:
+                print ('Error {} while retrieving "{}", skipping it'.format(response.status_code, external_id))
+                return
+        except ConnectionError as e:
+            print('Error {} while retrieving "{}", skipping it'.format(e, external_id))
+            return
+
         page = BeautifulSoup(response.content, 'html.parser')
         self.parse_sources(page)
         properties = {'planet_planet_status_string_0': 'P31', 'planet_discovered_0': 'P575', 'planet_mass_0': 'P2067',
