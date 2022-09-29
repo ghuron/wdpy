@@ -212,7 +212,7 @@ class WikiData(ABC):
         self.entity['claims'][snak['property']].append(new_claim)
         return new_claim
 
-    def add_refs(self, claim, references=None, foreign_id=None):
+    def add_refs(self, claim, references=None):
         references = [] if references is None else references
         if 'references' not in claim:
             claim['references'] = []
@@ -222,8 +222,8 @@ class WikiData(ABC):
                 if ref['snaks']['P248'][0]['datavalue']['value']['id'] == self.db_ref:
                     # if 'P813' in ref['snaks']:  # update "retrieved" timestamp if one already exists
                     #     ref['snaks']['P813'] = [self.create_snak('P813', datetime.now().strftime('%d/%m/%Y'))]
-                    if foreign_id is not None:
-                        ref['snaks'][self.db_property] = [self.create_snak(self.db_property, foreign_id)]
+                    if self.db_property not in self.entity['claims']:
+                        ref['snaks'][self.db_property] = [self.create_snak(self.db_property, self.external_id)]
                     default_ref_exists = True
                 elif ref['snaks']['P248'][0]['datavalue']['value']['id'] in references:
                     references.remove(ref['snaks']['P248'][0]['datavalue']['value']['id'])
@@ -233,8 +233,8 @@ class WikiData(ABC):
 
         if not default_ref_exists:
             ref = {'snaks': {'P248': [self.create_snak('P248', self.db_ref)]}}
-            if foreign_id is not None:
-                ref['snaks'][self.db_property] = [self.create_snak(self.db_property, foreign_id)]
+            if self.db_property not in self.entity['claims']:
+                ref['snaks'][self.db_property] = [self.create_snak(self.db_property, self.external_id)]
             claim['references'].append(ref)
         for ref in references:
             claim['references'].append({'snaks': {'P248': [self.create_snak('P248', ref)]}})
