@@ -184,10 +184,10 @@ if sys.argv[0].endswith(basename(__file__)):  # if not imported
     for ex_id in wd_items:
         # ex_id = '55 Cnc e'
         item = ExoplanetEu(ex_id)
-        item.get_items(wd_items[ex_id])
+        item.get_item(wd_items[ex_id])
         item.update(item.load_snaks(PLANET, 'claims' in item.entity and 'P397' not in item.entity['claims']))
         if 'P397' in item.entity['claims'] and len(item.entity['claims']['P397']) == 1:
             parent = ExoplanetEu(ex_id)
-            parent.get_items(item.entity['claims']['P397'][0]['mainsnak']['datavalue']['value']['id'])
+            parent.get_item(item.entity['claims']['P397'][0]['mainsnak']['datavalue']['value']['id'])
             parent.update(parent.load_snaks(STAR))
         time.sleep(10)

@@ -1,14 +1,15 @@
 #!/usr/bin/python3
-import json
 import sys
 import requests
 from os.path import basename
 from wikidata import WikiData
 
+URL_ENDPOINT = 'https://righteous.yadvashem.org/RighteousWS.asmx/'
+
 
 class YadVashem(WikiData):
-    yv_endpoint = requests.Session()
-    yv_endpoint.headers.update({'Content-Type': 'application/json'})
+    endpoint = requests.Session()
+    endpoint.headers.update({'Content-Type': 'application/json'})
     pending = []
 
     def __init__(self, group_id, named_as):
@@ -23,9 +24,9 @@ class YadVashem(WikiData):
     def get_next_chunk(offset):
         result = []
         offset = 0 if offset is None else offset
-        page = YadVashem.yv_endpoint.post('https://righteous.yadvashem.org/RighteousWS.asmx/GetRighteousList',
-                                          data='{uniqueId:"16475",lang:"eng",searchType:"righteous_only",rowNum:' +
-                                               str(offset) + ',sort:{dir:"",field:""}}').json()
+        page = YadVashem.endpoint.post(URL_ENDPOINT + 'GetRighteousList',
+                                       data='{uniqueId:"16475",lang:"eng",searchType:"righteous_only",rowNum:' +
+                                            str(offset) + ',sort:{dir:"",field:""}}').json()
         for case_item in page['d']:
             result.append(str(case_item['BookId']))
         return result, offset + len(result)
@@ -227,8 +228,8 @@ class YadVashem(WikiData):
                 if isinstance(remaining[name], int):
                     YadVashem.info(item_id, name, ' is ambiguous: ' + str(remaining[name]))
                 else:
-                    items_absent_in_yv = True
                     YadVashem.info(item_id, name, 'https://wikidata.org/wiki/' + remaining[name] + ' is missing')
+                    items_absent_in_yv = True
 
         for new_item in YadVashem.pending:
             if items_absent_in_yv:
@@ -239,9 +240,8 @@ class YadVashem(WikiData):
 
 if sys.argv[0].endswith(basename(__file__)):  # if not imported
     YadVashem.logon(sys.argv[1], sys.argv[2])
-    YadVashem.yv_endpoint.post('https://righteous.yadvashem.org/RighteousWS.asmx/BuildQuery',
-                               data='{uniqueId:"16475",lang:"eng",strSearch:"",newSearch:true,' +
-                                    'clearFilter:true,searchType:"righteous_only"}')
+    YadVashem.endpoint.post(URL_ENDPOINT + 'BuildQuery', data='{uniqueId:"16475",lang:"eng",strSearch:"",newSearch:' +
+                                                              'true,clearFilter:true,searchType:"righteous_only"}')
     wd_items = YadVashem.get_all_items(
         'SELECT ?r ?n ?i { ?i wdt:P31 wd:Q5; p:P1979 ?s . ?s ps:P1979 ?r OPTIONAL {?s pq:P1810 ?n}}',
         lambda new, existing: {new[0]: new[1]} if len(existing) == 0 else
@@ -251,25 +251,13 @@ if sys.argv[0].endswith(basename(__file__)):  # if not imported
 
     for item_id in wd_items:
         # item_id = '6658068'  # uncomment to debug specific group of people
-        case = YadVashem.yv_endpoint.post('https://righteous.yadvashem.org/RighteousWS.asmx/GetPersonDetailsBySession',
-                                          data='{bookId:"' + item_id + '",lang:"eng"}').json()['d']['Individuals']
-
-        group = {}
-        qids = '|'.join(list(
-            filter(lambda x: isinstance(x, str), wd_items[item_id].values() if wd_items[item_id] is not None else [])))
-        if len(qids) > 0:
-            try:
-                group = json.loads(YadVashem.api_call('wbgetentities', {'props': 'claims|info|labels', 'ids': qids}))[
-                    'entities']
-            except json.decoder.JSONDecodeError:
-                YadVashem.info(item_id, '', 'cannot decode wbgetentities response from:' + qids)
-                continue
-            except requests.exceptions.ConnectionError as ex:
-                print('Connection error while calling wbgetentities: ' + ex.response)
-                continue
-
+        qids = wd_items[item_id].values() if wd_items[item_id] is not None else []
+        if (group := YadVashem.load_items(list(filter(lambda x: isinstance(x, str), qids)))) is None:
+            continue
         YadVashem.pending = []
-        for row in case:
+        case = YadVashem.endpoint.post(URL_ENDPOINT + 'GetPersonDetailsBySession',
+                                       data='{bookId:"' + item_id + '",lang:"eng"}').json()
+        for row in case['d']['Individuals']:
             if row['Title'] is not None:
                 row['Title'] = ' '.join(row['Title'].split())
                 if row['Title'] in wd_items[item_id] and isinstance(wd_items[item_id][row['Title']], int):

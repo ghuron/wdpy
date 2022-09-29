@@ -95,7 +95,7 @@ class ArXiv(WikiData):
 
     def load_article(self, qid, doi):
         if qid is not None or (doi is not None) and (qid := self.api_search('haswbstatement:"P356={}"'.format(doi))):
-            self.entity = self.get_items(qid)
+            self.entity = self.get_item(qid)
 
     def sync(self, qid=None):
         self.load_article(qid, self.get_doi(input_data := self.get_snaks()))

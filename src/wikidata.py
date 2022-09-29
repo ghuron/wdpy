@@ -149,17 +149,21 @@ class WikiData(ABC):
         self.db_property = property_id
         self.db_ref = ref_id
 
-    def get_items(self, qid):
+    @staticmethod
+    def load_items(ids):
+        if len(ids) == 0:
+            return []
         try:
-            if qid is not None:
-                info = json.loads(self.api_call('wbgetentities', {'props': 'claims|info|labels', 'ids': qid}))
-                if 'entities' in info:
-                    self.entity = info['entities'][qid]
-                    return self.entity
+            response = WikiData.api_call('wbgetentities', {'props': 'claims|info|labels', 'ids': '|'.join(ids)})
+            return json.loads(response)['entities']
         except json.decoder.JSONDecodeError:
-            print('Cannot decode wbgetentities response')
+            print('Cannot decode wbgetentities response for entities ' + '|'.join(ids))
         except requests.exceptions.ConnectionError:
-            print('Connection error while calling wbgetentities')
+            print('Connection error while calling wbgetentities for entities ' + '|'.join(ids))
+
+    def get_item(self, qid):
+        self.entity = WikiData.load_items([qid])[qid]
+        return self.entity
 
     def get_snaks(self):
         return [self.create_snak(self.db_property, self.external_id)]
@@ -326,5 +330,5 @@ class WikiData(ABC):
             return self.save()
 
     def sync(self, qid=None):
-        self.get_items(qid)
+        self.get_item(qid)
         return self.update(self.get_snaks())
