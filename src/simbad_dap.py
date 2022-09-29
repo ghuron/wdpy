@@ -1,47 +1,47 @@
 #!/usr/bin/python3
 import csv
+import os.path
 import re
+import requests
 import sys
+from astropy import coordinates
 from contextlib import closing
 from decimal import InvalidOperation
-import os.path
-import requests
-from astropy import coordinates as coord
-
 from wikidata import WikiData
 
 
 class SimbadDAP(WikiData):
-    def __init__(self, login, password):
-        super().__init__(login, password)
-        self.db_ref = 'Q654724'
-        self.db_property = 'P3083'
-        self.constellations = self.query('SELECT DISTINCT ?n ?i {?i wdt:P31/wdt:P279* wd:Q8928; wdt:P1813 ?n}')
-        self.ads_articles = self.query('SELECT ?id ?item {?item wdt:P819 ?id}')
-        self.simbad = {}
+    constellations = None
+    ads_articles = None
+    simbad = {}
 
-    def get_next_chunk(self):
-        if len(self.simbad) > 0:
-            return []
-        self.load('''otype IN ('Pl', 'Pl?')''')
-        return self.simbad.keys()
+    def __init__(self, external_id, property_id='P3083'):
+        super().__init__(external_id, property_id, 'Q654724')
 
-    def obtain_claim(self, entity, snak):
-        min_pos = self.get_min_position(entity, snak['property'])
-        claim = super().obtain_claim(entity, snak)
+    @staticmethod
+    def get_next_chunk(offset):
+        if len(SimbadDAP.simbad) > 0:
+            return [], None
+        SimbadDAP.load('''otype IN ('Pl', 'Pl?')''')
+        return SimbadDAP.simbad.keys(), None
+
+    def obtain_claim(self, snak):
+        min_pos = self.get_min_position(snak['property'])
+        claim = super().obtain_claim(snak)
         if snak is not None and snak['property'] in ['P6257', 'P6258']:
-            if snak['property'] in entity['claims']:
-                for candidate in entity['claims'][snak['property']]:
+            if snak['property'] in self.entity['claims']:
+                for candidate in self.entity['claims'][snak['property']]:
                     if claim != candidate:
                         candidate['remove'] = 1
-            epoch = self.obtain_claim(entity, self.create_snak('P6259', 'Q1264450'))  # J2000
+            epoch = self.obtain_claim(self.create_snak('P6259', 'Q1264450'))  # J2000
             epoch['references'] = []
             self.add_refs(epoch)
         if 'rank' not in claim and 'mespos' in snak and int(snak['mespos']) > min_pos:
             claim['rank'] = 'deprecated'
         return claim
 
-    def load(self, condition):
+    @staticmethod
+    def load(condition):
         for query in [  # p: precision, h: +error, l: -error, u: unit, r: reference
             '''SELECT main_id, otype AS P31, morph_type AS P223, morph_bibcode AS P223r, 
                     ra AS P6257, ra_prec AS P6257p, 'Q28390' AS P6257u, coo_bibcode AS P6257r, 
@@ -81,25 +81,27 @@ class SimbadDAP(WikiData):
                 FROM (SELECT main_id AS id, oid FROM basic WHERE {} ORDER BY oid) b
                 JOIN mesPlx ON oidref = oid'''
         ]:
-            self.tap_query('https://simbad.u-strasbg.fr/simbad/sim-tap', query.format(condition), self.simbad)
+            SimbadDAP.tap_query('https://simbad.u-strasbg.fr/simbad/sim-tap', query.format(condition), SimbadDAP.simbad)
 
-    def get_snaks(self, identifier):
-        if identifier not in self.simbad:
-            self.load('main_id = \'' + identifier + '\'')  # attempt to load this specific object
-        if identifier in self.simbad:
-            return self.parse_page(self.simbad[identifier]) + super().get_snaks(identifier)
+    def get_snaks(self):
+        if self.external_id not in self.simbad:
+            self.load('main_id = \'' + self.external_id + '\'')  # attempt to load this specific object
+        if self.external_id in self.simbad:
+            return self.parse_page(self.simbad[self.external_id]) + super().get_snaks()
 
-    def post_process(self, entity):
-        super().post_process(entity)
-        if 'P59' not in entity['claims'] and 'P6257' in entity['claims'] and 'P6258' in entity['claims']:
-            p = coord.SkyCoord(entity['claims']['P6257'][0]['mainsnak']['datavalue']['value']['amount'],
-                               entity['claims']['P6258'][0]['mainsnak']['datavalue']['value']['amount'], frame='icrs',
-                               unit='deg')
-            const = self.constellations[p.get_constellation(short_name=True)]
-            self.obtain_claim(entity, self.create_snak('P59', const if isinstance(const, str) else const[0]))
+    def post_process(self):
+        super().post_process()
+        if 'P59' not in self.entity['claims'] and 'P6257' in self.entity['claims'] and 'P6258' in self.entity['claims']:
+            ra = self.entity['claims']['P6257'][0]['mainsnak']['datavalue']['value']['amount']
+            dec = self.entity['claims']['P6258'][0]['mainsnak']['datavalue']['value']['amount']
+            tla = coordinates.SkyCoord(ra, dec, frame='icrs', unit='deg').get_constellation(short_name=True)
+            if self.constellations is None:
+                self.constellations = self.query('SELECT DISTINCT ?n ?i {?i wdt:P31/wdt:P279* wd:Q8928; wdt:P1813 ?n}')
+            self.obtain_claim(WikiData.create_snak('P59', self.constellations[tla]))
+
         for property_id in ['P2214', 'P2215', 'P10751', 'P10752']:
-            if property_id in entity['claims']:
-                for claim in entity['claims'][property_id]:
+            if property_id in self.entity['claims']:
+                for claim in self.entity['claims'][property_id]:
                     try:
                         for ref in claim['references']:
                             if 'P248' in ref['snaks']:
@@ -208,17 +210,18 @@ class SimbadDAP(WikiData):
                         if column + 'r' in row and row[column + 'r'] != '':
                             if ads_bibcode := re.search('bibcode=(\\d{4}[\\dA-Za-z.&]+)', row[column + 'r']):
                                 row[column + 'r'] = ads_bibcode.group(1)
+                            if self.ads_articles is None:
+                                self.ads_articles = self.query('SELECT ?id ?item {?item wdt:P819 ?id}')
                             if row[column + 'r'] in self.ads_articles:
                                 snak['source'] = [self.ads_articles[row[column + 'r']]]
                         snak['mespos'] = row['mespos']
                         result.append(snak)
         return result
 
-    @staticmethod
-    def get_min_position(entity, property_id):
+    def get_min_position(self, property_id):
         result = 999
-        if property_id in entity['claims']:
-            for claim in entity['claims'][property_id]:
+        if property_id in self.entity['claims']:
+            for claim in self.entity['claims'][property_id]:
                 if 'rank' not in claim or claim['rank'] == 'normal':
                     result = 0
                 elif claim['rank'] == 'deprecated' and 'mespos' in claim['mainsnak']:
@@ -228,10 +231,10 @@ class SimbadDAP(WikiData):
 
 
 if sys.argv[0].endswith(os.path.basename(__file__)):  # if not imported
-    wd = SimbadDAP(sys.argv[1], sys.argv[2])
-    wd_items = wd.get_all_items('SELECT DISTINCT ?id ?item {?item wdt:P3083 ?id; wdt:P31/wdt:P279* wd:Q44559}')
+    SimbadDAP.logon(sys.argv[1], sys.argv[2])
+    wd_items = SimbadDAP.get_all_items('SELECT DISTINCT ?id ?item {?item wdt:P3083 ?id; wdt:P31/wdt:P279* wd:Q44559}')
     # wd_items= {}
     # wd_items['SDSS J003906.37+250601.3'] = None
     for simbad_id in wd_items:
         # simbad_id = 'HD 89744b'
-        wd.sync(simbad_id, wd_items[simbad_id])
+        SimbadDAP(simbad_id).sync(wd_items[simbad_id])

@@ -16,8 +16,33 @@ from requests.structures import CaseInsensitiveDict
 
 class WikiData(ABC):
     USER_AGENT = 'automated import by https://www.wikidata.org/wiki/User:Ghuron)'
-    db_ref = None
-    db_property = None
+    api = requests.Session()
+    api.headers.update({'User-Agent': USER_AGENT})
+    login = None
+    password = None
+    token = 'bad token'
+    types = None
+
+    @staticmethod
+    def api_call(action, params):
+        return WikiData.api.post('https://www.wikidata.org/w/api.php',
+                                 data={**params, 'format': 'json', 'action': action}).content.decode('utf-8')
+
+    @staticmethod
+    def logon(login=None, password=None):
+        WikiData.login = login if login is not None else WikiData.login
+        WikiData.password = password if password is not None else WikiData.password
+        t = json.loads(WikiData.api_call('query', {'meta': 'tokens', 'type': 'login'}))['query']['tokens']['logintoken']
+        WikiData.api_call('login', {'lgname': WikiData.login, 'lgpassword': WikiData.password, 'lgtoken': t})
+
+    @staticmethod
+    def api_search(query):
+        response = json.loads(WikiData.api_call('query', {'list': 'search', 'srsearch': query}))
+        if 'query' in response:
+            if len(response['query']['search']) != 1:
+                print(query + ' returned ' + str(len(response['query']['search'])) + ' results')
+            if len(response['query']['search']) > 0:
+                return response['query']['search'][0]['title']
 
     @staticmethod
     def query(query, process=lambda new, existing: new[0]):
@@ -32,6 +57,23 @@ class WikiData(ABC):
                     if len(line) > 1:
                         result[line[0]] = process(line[1:], result[line[0]] if line[0] in result else [])
         return result
+
+    @staticmethod
+    def get_next_chunk(offset):
+        return [], None
+
+    @classmethod
+    def get_all_items(cls, sparql, process=lambda new, existing: new[0]):
+        results = WikiData.query(sparql, process)
+        offset = None
+        while True:
+            chunk, offset = cls.get_next_chunk(offset)
+            if len(chunk) == 0:
+                break
+            for external_id in chunk:
+                if external_id not in results:
+                    results[external_id] = None
+        return results
 
     @staticmethod
     def format_float(figure, digits=-1):
@@ -49,57 +91,33 @@ class WikiData(ABC):
         else:
             return WikiData.format_float(re.sub('^000+\\d$', '', figure))
 
-    def __init__(self, login, password):
-        self.api = requests.Session()
-        self.api.headers.update({'User-Agent': WikiData.USER_AGENT})
+    @staticmethod
+    def create_snak(property_id, value, lower=None, upper=None):
+        if WikiData.types is None:
+            WikiData.types = WikiData.query('SELECT ?prop ?type { ?prop wikibase:propertyType ?type }')
+            for prop in WikiData.types:
+                WikiData.types[prop] = WikiData.types[prop].replace('http://wikiba.se/ontology#', ''). \
+                    replace('WikibaseItem', 'wikibase-item').replace('ExternalId', 'external-id').lower()
 
-        self.login = login
-        self.password = password
-        if login != '':
-            self.logon()
-
-        self.token = 'bad token'
-        self.types = WikiData.query('SELECT ?prop ?type { ?prop wikibase:propertyType ?type }')
-        for prop in self.types:
-            self.types[prop] = self.types[prop].replace('http://wikiba.se/ontology#', ''). \
-                replace('WikibaseItem', 'wikibase-item').replace('ExternalId', 'external-id').lower()
-
-    def api_call(self, action, params):
-        return self.api.post('https://www.wikidata.org/w/api.php',
-                             data={**params, 'format': 'json', 'action': action}).content.decode('utf-8')
-
-    def logon(self):
-        token = json.loads(self.api_call('query', {'meta': 'tokens', 'type': 'login'}))['query']['tokens']['logintoken']
-        self.api_call('login', {'lgname': self.login, 'lgpassword': self.password, 'lgtoken': token})
-
-    def api_search(self, query):
-        response = json.loads(self.api_call('query', {'list': 'search', 'srsearch': query}))
-        if 'query' in response:
-            if len(response['query']['search']) != 1:
-                print(query + ' returned ' + str(len(response['query']['search'])) + ' results')
-            if len(response['query']['search']) > 0:
-                return response['query']['search'][0]['title']
-
-    def create_snak(self, property_id, value, lower=None, upper=None):
-        if property_id not in self.types or value == '' or value == 'NaN':
+        if property_id not in WikiData.types or value == '' or value == 'NaN':
             return None
 
-        snak = {'datatype': self.types[property_id], 'property': property_id, 'snaktype': 'value',
-                'datavalue': {'value': value, 'type': self.types[property_id]}}
+        snak = {'datatype': WikiData.types[property_id], 'property': property_id, 'snaktype': 'value',
+                'datavalue': {'value': value, 'type': WikiData.types[property_id]}}
         if snak['datatype'] == 'quantity':
             try:
-                snak['datavalue']['value'] = {'amount': self.format_float(value), 'unit': '1'}
+                snak['datavalue']['value'] = {'amount': WikiData.format_float(value), 'unit': '1'}
                 if upper is not None and lower is not None:
-                    min_bound = Decimal(self.fix_error(lower))
+                    min_bound = Decimal(WikiData.fix_error(lower))
                     if min_bound < 0:
                         min_bound = -min_bound
                     amount = Decimal(value)
-                    max_bound = Decimal(self.fix_error(upper))
+                    max_bound = Decimal(WikiData.fix_error(upper))
 
                     if min_bound > 0 or max_bound > 0:  # +/- 0 can be skipped
                         if max_bound != Decimal('Infinity'):
-                            snak['datavalue']['value']['lowerBound'] = self.format_float(amount - min_bound)
-                            snak['datavalue']['value']['upperBound'] = self.format_float(amount + max_bound)
+                            snak['datavalue']['value']['lowerBound'] = WikiData.format_float(amount - min_bound)
+                            snak['datavalue']['value']['upperBound'] = WikiData.format_float(amount + max_bound)
             except (ValueError, DecimalException, KeyError):
                 return None
         elif snak['datatype'] == 'wikibase-item':
@@ -125,15 +143,36 @@ class WikiData(ABC):
             snak['datavalue']['type'] = 'string'
         return snak
 
-    def obtain_claim(self, entity, snak):
+    def __init__(self, external_id, property_id, ref_id):
+        self.external_id = external_id
+        self.entity = None
+        self.db_property = property_id
+        self.db_ref = ref_id
+
+    def get_items(self, qid):
+        try:
+            if qid is not None:
+                info = json.loads(self.api_call('wbgetentities', {'props': 'claims|info|labels', 'ids': qid}))
+                if 'entities' in info:
+                    self.entity = info['entities'][qid]
+                    return self.entity
+        except json.decoder.JSONDecodeError:
+            print('Cannot decode wbgetentities response')
+        except requests.exceptions.ConnectionError:
+            print('Connection error while calling wbgetentities')
+
+    def get_snaks(self):
+        return [self.create_snak(self.db_property, self.external_id)]
+
+    def obtain_claim(self, snak):
         if snak is None:
             return
 
-        entity = {} if entity is None else entity
-        entity['claims'] = {} if 'claims' not in entity else entity['claims']
+        self.entity = {} if self.entity is None else self.entity
+        self.entity['claims'] = {} if 'claims' not in self.entity else self.entity['claims']
 
-        if snak['property'] in entity['claims']:
-            for candidate in entity['claims'][snak['property']]:
+        if snak['property'] in self.entity['claims']:
+            for candidate in self.entity['claims'][snak['property']]:
                 if 'datavalue' not in candidate['mainsnak']:
                     continue
                 if isinstance(snak['datavalue']['value'], str):
@@ -162,11 +201,11 @@ class WikiData(ABC):
                             return candidate
 
         new_claim = {'type': 'statement', 'mainsnak': snak}
-        if 'id' in entity:
-            new_claim['id'] = entity['id'] + '$' + str(uuid.uuid4())
-        if snak['property'] not in entity['claims']:
-            entity['claims'][snak['property']] = []
-        entity['claims'][snak['property']].append(new_claim)
+        if 'id' in self.entity:
+            new_claim['id'] = self.entity['id'] + '$' + str(uuid.uuid4())
+        if snak['property'] not in self.entity['claims']:
+            self.entity['claims'][snak['property']] = []
+        self.entity['claims'][snak['property']].append(new_claim)
         return new_claim
 
     def add_refs(self, claim, references=None, foreign_id=None):
@@ -207,22 +246,65 @@ class WikiData(ABC):
                             break
         return filtered
 
-    def update(self, input_snaks, entity=None):
+    def post_process(self):
+        if 'labels' not in self.entity:
+            self.entity['labels'] = {}
+        if 'en' not in self.entity['labels']:
+            self.entity['labels']['en'] = {
+                'value': self.entity['claims'][self.db_property][0]['mainsnak']['datavalue']['value'], 'language': 'en'}
+
+    def trace(self, message):
+        print('https://www.wikidata.org/wiki/' + self.entity['id'] + '\t' + message)
+
+    def get_summary(self):
+        return 'batch import from [[' + self.db_ref + ']] for object ' + self.external_id
+
+    def save(self):
+        data = {'maxlag': '15', 'data': json.dumps(self.entity), 'summary': self.get_summary()}
+        if 'id' in self.entity:
+            data['id'] = self.entity['id']
+            data['baserevid'] = self.entity['lastrevid']
+        else:
+            data['new'] = 'item'
+
+        for retries in range(1, 3):
+            try:
+                data['token'] = self.token
+                response = self.api_call('wbeditentity', data)
+                if 'error' not in response.lower() or 'editconflict' in response.lower():  # succesful save
+                    time.sleep(0.5)
+                    if 'nochange' not in response.lower():
+                        self.entity = json.loads(response)['entity']
+                        self.trace('modified' if 'id' in self.entity else 'created')
+                        return json.loads(response)['entity']['id']
+                    return None
+
+                if 'badtoken' in response.lower():
+                    self.token = json.loads(self.api_call('query', {'meta': 'tokens'}))['query']['tokens']['csrftoken']
+                    continue
+
+                print(datetime.now().strftime('%Y-%m-%d %H:%M:%S') + ':' + response, file=sys.stderr)
+            except requests.exceptions.RequestException:
+                pass
+            time.sleep(10)
+            self.logon()  # just in case - re-authenticate
+        return ''
+
+    def update(self, input_snaks):
         if input_snaks is None:
-            external_id = entity['claims'][self.db_property][0]['mainsnak']['datavalue']['value']
-            self.trace(entity, 'error while retrieving/parsing {}:"{}"'.format(self.db_property, external_id))
+            self.trace('error while retrieving/parsing {}:"{}"'.format(self.db_property, self.external_id))
             return
 
-        entity = {} if entity is None else entity
-        original = json.dumps(entity)
-        entity['claims'] = {} if 'claims' not in entity else entity['claims']
+        self.entity = {} if self.entity is None else self.entity
+        original = json.dumps(self.entity)
+        self.entity['claims'] = {} if 'claims' not in self.entity else self.entity['claims']
 
         affected_statements = {}
         for snak in input_snaks:
-            claim = self.obtain_claim(entity, snak)
+            claim = self.obtain_claim(snak)
             if claim:
-                if snak['property'] not in affected_statements and snak['property'] in entity['claims']:
-                    affected_statements[snak['property']] = self.filter_by_ref(entity['claims'][snak['property']])
+                if snak['property'] not in affected_statements and snak['property'] in self.entity['claims']:
+                    affected_statements[snak['property']] = self.filter_by_ref(self.entity['claims'][snak['property']])
                 if claim in affected_statements[snak['property']]:
                     affected_statements[snak['property']].remove(claim)
                 # noinspection PyTypeChecker
@@ -239,81 +321,10 @@ class WikiData(ABC):
                                 continue
                 else:  # there is always P248:db_ref, so if there are no other references -> delete statement
                     claim['remove'] = 1
-        self.post_process(entity)
-        if json.dumps(entity) != original:
-            return self.save(entity)
+        self.post_process()
+        if json.dumps(self.entity) != original:
+            return self.save()
 
-    def post_process(self, entity):
-        if 'labels' not in entity:
-            entity['labels'] = {}
-        if 'en' not in entity['labels']:
-            entity['labels']['en'] = {'value': entity['claims'][self.db_property][0]['mainsnak']['datavalue']['value'],
-                                      'language': 'en'}
-
-    def get_snaks(self, external_id):
-        return [self.create_snak(self.db_property, external_id)]
-
-    def sync(self, external_id, qid=None):
-        return self.update(self.get_snaks(external_id), self.get_items(qid))
-
-    def get_items(self, qid):
-        try:
-            if qid is not None:
-                info = json.loads(self.api_call('wbgetentities', {'props': 'claims|info|labels', 'ids': qid}))
-                if 'entities' in info:
-                    return info['entities'][qid]
-        except json.decoder.JSONDecodeError:
-            print('Cannot decode wbgetentities response')
-        except requests.exceptions.ConnectionError:
-            print('Connection error while calling wbgetentities')
-
-    def trace(self, entity, message):
-        print('https://www.wikidata.org/wiki/' + entity['id'] + '\t' + message)
-
-    def get_summary(self, entity):
-        return 'batch import from [[' + self.db_ref + ']] for object ' + \
-               entity['claims'][self.db_property][0]['mainsnak']['datavalue']['value']
-
-    def save(self, entity):
-        data = {'maxlag': '15', 'data': json.dumps(entity), 'summary': self.get_summary(entity)}
-        if 'id' in entity:
-            data['id'] = entity['id']
-            data['baserevid'] = entity['lastrevid']
-        else:
-            data['new'] = 'item'
-
-        for retries in range(1, 3):
-            try:
-                data['token'] = self.token
-                response = self.api_call('wbeditentity', data)
-                if 'error' not in response.lower() or 'editconflict' in response.lower():  # succesful save
-                    time.sleep(0.5)
-                    if 'nochange' not in response.lower():
-                        self.trace(json.loads(response)['entity'], 'modified' if 'id' in entity else 'created')
-                        return json.loads(response)['entity']['id']
-                    return None
-
-                if 'badtoken' in response.lower():
-                    self.token = json.loads(self.api_call('query', {'meta': 'tokens'}))['query']['tokens']['csrftoken']
-                    continue
-
-                print(datetime.now().strftime('%Y-%m-%d %H:%M:%S') + ':' + response, file=sys.stderr)
-            except requests.exceptions.RequestException:
-                pass
-            time.sleep(10)
-            self.logon()  # just in case - re-authenticate
-        return ''
-
-    def get_next_chunk(self):
-        return []
-
-    def get_all_items(self, sparql, process=lambda new, existing: new[0]):
-        results = self.query(sparql, process)
-        while True:
-            chunk = self.get_next_chunk()
-            if len(chunk) == 0:
-                break
-            for external_id in chunk:
-                if external_id not in results:
-                    results[external_id] = None
-        return results
+    def sync(self, qid=None):
+        self.get_items(qid)
+        return self.update(self.get_snaks())

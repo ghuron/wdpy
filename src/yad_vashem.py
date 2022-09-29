@@ -7,46 +7,41 @@ from wikidata import WikiData
 
 
 class YadVashem(WikiData):
-    def __init__(self, login, password):
-        super().__init__(login, password)
-        self.db_ref = 'Q77598447'
-        self.db_property = 'P1979'
-        self.offset = 0
-        self.pending = []
+    yv_endpoint = requests.Session()
+    yv_endpoint.headers.update({'Content-Type': 'application/json'})
+    pending = []
+
+    def __init__(self, group_id, named_as):
+        super().__init__(group_id, 'P1979', 'Q77598447')
+        self.named_as = named_as
         self.award_cleared_qualifiers = []
-        self.yv_endpoint = requests.Session()
-        self.yv_endpoint.headers.update({'Content-Type': 'application/json'})
-        self.yv_endpoint.post('https://righteous.yadvashem.org/RighteousWS.asmx/BuildQuery',
-                              data='{uniqueId:"16475",lang:"eng",strSearch:"",newSearch:true,' +
-                                   'clearFilter:true,searchType:"righteous_only"}')
 
-    def get_summary(self, entity):
-        named_as = entity['claims']['P1979'][0]['qualifiers']['P1810'][0]['datavalue']['value']
-        code = entity['claims']['P1979'][0]['mainsnak']['datavalue']['value']
-        return 'basic facts about: ' + named_as + ' from Yad Vashem database entry ' + code
+    def get_summary(self):
+        return 'basic facts about: ' + self.named_as + ' from Yad Vashem database entry ' + self.external_id
 
-    def get_next_chunk(self):
+    @staticmethod
+    def get_next_chunk(offset):
         result = []
-        page = self.yv_endpoint.post('https://righteous.yadvashem.org/RighteousWS.asmx/GetRighteousList',
-                                     data='{uniqueId:"16475",lang:"eng",searchType:"righteous_only",rowNum:' +
-                                          str(self.offset) + ',sort:{dir:"",field:""}}').json()['d']
-        for case_item in page:
+        offset = 0 if offset is None else offset
+        page = YadVashem.yv_endpoint.post('https://righteous.yadvashem.org/RighteousWS.asmx/GetRighteousList',
+                                          data='{uniqueId:"16475",lang:"eng",searchType:"righteous_only",rowNum:' +
+                                               str(offset) + ',sort:{dir:"",field:""}}').json()
+        for case_item in page['d']:
             result.append(str(case_item['BookId']))
-        self.offset += len(result)
-        return result
+        return result, offset + len(result)
 
-    def obtain_claim(self, entity, snak):
+    def obtain_claim(self, snak):
         if snak is not None:
             if snak['property'] in ['P585', 'P27']:  # date and nationality to qualifiers for award
-                award = super().obtain_claim(entity, self.create_snak('P166', 'Q112197'))
-                award['qualifiers']={} if 'qualifiers' not in award else award['qualifiers']
+                award = super().obtain_claim(self.create_snak('P166', 'Q112197'))
+                award['qualifiers'] = {} if 'qualifiers' not in award else award['qualifiers']
                 if snak['property'] not in award['qualifiers'] or snak['property'] not in self.award_cleared_qualifiers:
                     self.award_cleared_qualifiers.append(snak['property'])  # clear each qualifier only once
                     award['qualifiers'][snak['property']] = []
                 award['qualifiers'][snak['property']].append(snak)
                 return None
 
-            claim = super().obtain_claim(entity, snak)
+            claim = super().obtain_claim(snak)
             if claim is not None:
                 if snak['property'] in ['P569', 'P570']:  # birth/death date statement only
                     if 'rank' not in claim:  # unspecified rank means it was just created
@@ -56,13 +51,10 @@ class YadVashem(WikiData):
                                 claim['qualifiers'] = {'P2241': [self.create_snak('P2241', 'Q41755623')]}
             return claim
 
-    def trace(self, entity, message):
-        try:
-            named_as = entity['claims']['P1979'][0]['qualifiers']['P1810'][0]['datavalue']['value']
-            code = entity['claims']['P1979'][0]['mainsnak']['datavalue']['value']
-            YadVashem.info(code, named_as, 'https://www.wikidata.org/wiki/' + entity['id'] + '\t' + message)
-        except KeyError:
-            print(json.dumps(entity))
+    def trace(self, message):
+        if self.entity is not None:
+            message = 'https://www.wikidata.org/wiki/' + self.entity['id'] + '\t' + message
+        YadVashem.info(self.external_id, self.named_as, message)
 
     @staticmethod
     def info(book_id, named_as, message):
@@ -196,30 +188,39 @@ class YadVashem(WikiData):
         for element in input_item:
             if element['Title'] in properties:
                 if element['Value'] in mapping:
-                    result.append(wd.create_snak(properties[element['Title']], 'Q' + str(mapping[element['Value']])))
+                    result.append(self.create_snak(properties[element['Title']], 'Q' + str(mapping[element['Value']])))
                 else:
-                    result.append(wd.create_snak(properties[element['Title']], element['Value']))
+                    result.append(self.create_snak(properties[element['Title']], element['Value']))
         return result
 
-    def post_process(self, entity):
-        if 'labels' not in entity:
-            entity['labels'] = {}
-        if 'en' not in entity['labels']:
-            title = entity['claims']['P1979'][0]['qualifiers']['P1810'][0]['datavalue']['value']
+    def post_process(self):
+        if 'labels' not in self.entity:
+            self.entity['labels'] = {}
+        if 'en' not in self.entity['labels']:
+            title = self.entity['claims']['P1979'][0]['qualifiers']['P1810'][0]['datavalue']['value']
             words = title.split('(')[0].split()
             if words[0].lower() in ['dalla', 'de', 'del', 'della', 'di', 'du', 'Im', 'le', 'te', 'van', 'von']:
                 label = ' '.join([words[-1]] + words[:-1])  # van Allen John -> John van Allen
             else:
                 label = ' '.join([words[-1]] + words[1:-1] + [words[0]])  # Pol van de John -> John van de Pol
-            entity['labels']['en'] = {'value': label, 'language': 'en'}
+            self.entity['labels']['en'] = {'value': label, 'language': 'en'}
 
-    def save(self, entity):
-        if 'id' in entity:
-            super().save(entity)
+        yv_id = self.obtain_claim(self.create_snak('P1979', item_id))
+        if 'qualifiers' not in yv_id:
+            yv_id['qualifiers'] = {}
+        yv_id['qualifiers']['P1810'] = [self.create_snak('P1810', row['Title'])]
+
+    def save(self):
+        if 'id' in self.entity:
+            super().save()
         else:
-            self.pending.append(entity)
+            self.pending.append(self)
 
-    def create_pending(self, remaining):
+    def create(self):
+        super().save()
+
+    @staticmethod
+    def create_pending(remaining):
         items_absent_in_yv = False
         if remaining is not None:
             for name in list(remaining):
@@ -229,17 +230,19 @@ class YadVashem(WikiData):
                     items_absent_in_yv = True
                     YadVashem.info(item_id, name, 'https://wikidata.org/wiki/' + remaining[name] + ' is missing')
 
-        for entity in self.pending:
+        for new_item in YadVashem.pending:
             if items_absent_in_yv:
-                name = entity['claims']['P1979'][0]['qualifiers']['P1810'][0]['datavalue']['value']
-                YadVashem.info(item_id, name, ' was not created (see above)')
+                new_item.trace(' was not created (see above)')
             else:
-                super().save(entity)
+                new_item.create()
 
 
 if sys.argv[0].endswith(basename(__file__)):  # if not imported
-    wd = YadVashem(sys.argv[1], sys.argv[2])
-    wd_items = wd.get_all_items(
+    YadVashem.logon(sys.argv[1], sys.argv[2])
+    YadVashem.yv_endpoint.post('https://righteous.yadvashem.org/RighteousWS.asmx/BuildQuery',
+                               data='{uniqueId:"16475",lang:"eng",strSearch:"",newSearch:true,' +
+                                    'clearFilter:true,searchType:"righteous_only"}')
+    wd_items = YadVashem.get_all_items(
         'SELECT ?r ?n ?i { ?i wdt:P31 wd:Q5; p:P1979 ?s . ?s ps:P1979 ?r OPTIONAL {?s pq:P1810 ?n}}',
         lambda new, existing: {new[0]: new[1]} if len(existing) == 0 else
         {**existing, new[0]: new[1]} if new[0] not in existing else
@@ -248,15 +251,15 @@ if sys.argv[0].endswith(basename(__file__)):  # if not imported
 
     for item_id in wd_items:
         # item_id = '6658068'  # uncomment to debug specific group of people
-        case = wd.yv_endpoint.post('https://righteous.yadvashem.org/RighteousWS.asmx/GetPersonDetailsBySession',
-                                   data='{bookId:"' + item_id + '",lang:"eng"}').json()['d']['Individuals']
+        case = YadVashem.yv_endpoint.post('https://righteous.yadvashem.org/RighteousWS.asmx/GetPersonDetailsBySession',
+                                          data='{bookId:"' + item_id + '",lang:"eng"}').json()['d']['Individuals']
 
         group = {}
         qids = '|'.join(list(
             filter(lambda x: isinstance(x, str), wd_items[item_id].values() if wd_items[item_id] is not None else [])))
         if len(qids) > 0:
             try:
-                group = json.loads(wd.api_call('wbgetentities', {'props': 'claims|info|labels', 'ids': qids}))[
+                group = json.loads(YadVashem.api_call('wbgetentities', {'props': 'claims|info|labels', 'ids': qids}))[
                     'entities']
             except json.decoder.JSONDecodeError:
                 YadVashem.info(item_id, '', 'cannot decode wbgetentities response from:' + qids)
@@ -265,24 +268,19 @@ if sys.argv[0].endswith(basename(__file__)):  # if not imported
                 print('Connection error while calling wbgetentities: ' + ex.response)
                 continue
 
-    wd.pending = []
-    for row in case:
-        if row['Title'] is not None:
-            row['Title'] = ' '.join(row['Title'].split())
-            if row['Title'] in wd_items[item_id] and isinstance(wd_items[item_id][row['Title']], int):
-                wd_items[item_id][row['Title']] -= 1
-                continue  # multiple values for the same key - skipping updates
+        YadVashem.pending = []
+        for row in case:
+            if row['Title'] is not None:
+                row['Title'] = ' '.join(row['Title'].split())
+                if row['Title'] in wd_items[item_id] and isinstance(wd_items[item_id][row['Title']], int):
+                    wd_items[item_id][row['Title']] -= 1
+                    continue  # multiple values for the same key - skipping updates
 
-            item = None
-            if row['Title'] in wd_items[item_id] and wd_items[item_id][row['Title']] in group:
-                item = group[wd_items[item_id][row['Title']]]
-                del wd_items[item_id][row['Title']]  # consider it processed
+                item = YadVashem(item_id, row['Title'])
+                if row['Title'] in wd_items[item_id] and wd_items[item_id][row['Title']] in group:
+                    item.entity = group[wd_items[item_id][row['Title']]]
+                    del wd_items[item_id][row['Title']]  # consider it processed
 
-            yv_id = wd.obtain_claim(item, wd.create_snak('P1979', item_id))
-            if 'qualifiers' not in yv_id:
-                yv_id['qualifiers'] = {}
-            yv_id['qualifiers']['P1810'] = [wd.create_snak('P1810', row['Title'])]
-            wd.award_cleared_qualifiers = []
-            wd.update(wd.load_snaks(row['Details']), item)
+                item.update(item.load_snaks(row['Details']))
 
-    wd.create_pending(wd_items[item_id])
+        YadVashem.create_pending(wd_items[item_id])
