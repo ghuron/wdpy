@@ -170,6 +170,7 @@ class WikiData(ABC):
         return new_claim
 
     def add_refs(self, claim, references=None, foreign_id=None):
+        references = [] if references is None else references
         if 'references' not in claim:
             claim['references'] = []
         default_ref_exists = False
@@ -181,6 +182,8 @@ class WikiData(ABC):
                     if foreign_id is not None:
                         ref['snaks'][self.db_property] = [self.create_snak(self.db_property, foreign_id)]
                     default_ref_exists = True
+                elif ref['snaks']['P248'][0]['datavalue']['value']['id'] in references:
+                    references.remove(ref['snaks']['P248'][0]['datavalue']['value']['id'])
             elif 'P143' in ref['snaks'] or 'P4656' in ref['snaks']:
                 # Doesn't make sense to keep "imported from" if real source exists
                 claim['references'].remove(ref)
@@ -190,9 +193,8 @@ class WikiData(ABC):
             if foreign_id is not None:
                 ref['snaks'][self.db_property] = [self.create_snak(self.db_property, foreign_id)]
             claim['references'].append(ref)
-        if references is not None:
-            for ref in references:
-                claim['references'].append({'snaks': {'P248': [self.create_snak('P248', ref)]}})
+        for ref in references:
+            claim['references'].append({'snaks': {'P248': [self.create_snak('P248', ref)]}})
 
     def filter_by_ref(self, unfiltered):
         filtered = []
