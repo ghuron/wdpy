@@ -36,24 +36,41 @@ class ExoplanetEu(WikiData):
         return result, offset
 
     def obtain_claim(self, snak):
-        if snak is not None and snak['property'] in ['P6257', 'P6258']:
-            if snak['property'] in self.entity['claims'] or float(snak['datavalue']['value']['amount']).is_integer():
-                return None  # do not update existing coordinates, do not put obviously wrong coordinates
-            self.add_refs(self.obtain_claim(WikiData.create_snak('P6259', 'Q1264450')))  # J2000
+        if snak is None:
+            return
+        if snak['property'] in ['P6257', 'P6258'] and float(snak['datavalue']['value']['amount']).is_integer():
+            return  # do not put obviously wrong coordinates
+        if self.entity is not None and 'claims' in self.entity and snak['property'] in self.entity['claims']:
+            if snak['property'] in ['P6257', 'P6258']:
+                return # do not update coordinates, because exoplanets.eu ra/dec is usually low precision
+            if self.db_property not in self.entity['claims']: # if updating star
+                if snak['property'] in STAR.values():
+                    return
+                if snak['property'] == 'P1215':
+                    for claim in self.entity['claims']['P1215']:
+                        if 'qualifiers' in claim and 'P1227' in claim['qualifiers']:
+                            if claim['qualifiers']['P1227'][0]['datavalue']['value']['id'] == 'Q4892529':
+                                return
         claim = super().obtain_claim(snak)
-        if claim is not None and snak['property'] in ['P4501']:
-            claim['qualifiers'] = {'P4501': [self.create_snak('P1013', 'Q2832068')]}
+        if claim is not None:
+            if snak['property'] in ['P4501']:
+                claim['qualifiers'] = {'P4501': [self.create_snak('P1013', 'Q2832068')]}
+            elif snak['property'] == 'P1215':
+                claim['qualifiers'] = {'P1227': [self.create_snak('P1227', 'Q4892529')]}
+                claim['rank'] = 'preferred'  # V-magnitude is always preferred
         return claim
 
     def post_process(self):
         super().post_process()
-        if 'P59' not in self.entity['claims'] and 'P6257' in self.entity['claims'] and 'P6258' in self.entity['claims']:
-            ra = self.entity['claims']['P6257'][0]['mainsnak']['datavalue']['value']['amount']
-            dec = self.entity['claims']['P6258'][0]['mainsnak']['datavalue']['value']['amount']
-            tla = coordinates.SkyCoord(ra, dec, frame='icrs', unit='deg').get_constellation(short_name=True)
-            if self.constellations is None:
-                self.constellations = self.query('SELECT DISTINCT ?n ?i {?i wdt:P31/wdt:P279* wd:Q8928; wdt:P1813 ?n}')
-            self.obtain_claim(WikiData.create_snak('P59', self.constellations[tla]))
+        if 'P6257' in self.entity['claims'] and 'P6258' in self.entity['claims']:
+            self.obtain_claim(WikiData.create_snak('P6259', 'Q1264450'))  # J2000
+            if 'P59' not in self.entity['claims']:
+                ra = self.entity['claims']['P6257'][0]['mainsnak']['datavalue']['value']['amount']
+                dec = self.entity['claims']['P6258'][0]['mainsnak']['datavalue']['value']['amount']
+                tla = coordinates.SkyCoord(ra, dec, frame='icrs', unit='deg').get_constellation(short_name=True)
+                SPARQL = 'SELECT DISTINCT ?n ?i {?i wdt:P31/wdt:P279* wd:Q8928; wdt:P1813 ?n}'
+                self.constellations = self.query(SPARQL) if self.constellations is None else self.constellations
+                self.obtain_claim(WikiData.create_snak('P59', self.constellations[tla]))
 
     def parse_url(self, url):
         patterns = {'https://doi.org/10.48550/arXiv.': 'haswbstatement:P818=',
@@ -90,11 +107,11 @@ class ExoplanetEu(WikiData):
         ids = {'Confirmed': 44559, 'MJ': 651336, 'AU': 1811, 'day': 573, 'deg': 28390, 'JD': 14267, 'TTV': 2945337,
                'Radial Velocity': 2273386, 'm/s': 182429, 'RJ': 3421309, 'Imaging': 15279026, 'Candidate': 18611609,
                'Primary Transit': 2069919, 'Microlensing': 1028022, 'Astrometry': 181505, 'Controversial': 18611609,
-               'Retracted': 7936582, 'pc': 12129}
+               'Retracted': 7936582, 'pc': 12129, 'Gyr': 524410, 'RSun': 48440, 'K': 11579, 'MSun': 180892}
         num = '\\d[-.e\\d]+'
-        unit = '\\s*(?P<unit>[A-Za-z]\\S+)?'
+        unit = '\\s*(?P<unit>[A-Za-z]\\S*)?'
         if reg := re.search(
-                '(?P<value>' + num + ')\\s*\\(\\s*(?P<min>-' + num + ')\\s+(?P<max>\\+' + num + ')\\s*\\)' + unit,
+                '(?P<value>' + num + ')\\s*\\(\\s*-+(?P<min>' + num + ')\\s+(?P<max>\\+' + num + ')\\s*\\)' + unit,
                 text):
             result = self.create_snak(property_id, reg.group('value'), reg.group('min'), reg.group('max'))
         elif reg := re.search(
@@ -133,7 +150,7 @@ class ExoplanetEu(WikiData):
 
         page = BeautifulSoup(response.content, 'html.parser')
         self.parse_sources(page)
-        parsing_planet = 'P2067' in properties.values()
+        parsing_planet = 'P1046' in properties.values()
         result = super().get_snaks() if parsing_planet else []
         current_snak = None
         for td in page.find_all('td'):
@@ -175,7 +192,9 @@ PLANET = {'planet_planet_status_string_0': 'P31', 'planet_detection_type_0': 'P1
           'planet_omega_0': 'P2248', 'planet_radius_0': 'P2120', 'planet_albedo_0': 'P4501',
           'planet_mass_sini_0': 'P2051', 'planet_inclination_0': 'P2045',
           'star_0_stars__ra_0': 'P6257', 'star_0_stars__dec_0': 'P6258'}
-STAR = {'star_0_stars__distance_0': 'P2583'}
+STAR = {'star_0_stars__distance_0': 'P2583', 'star_0_stars__spec_type_0': 'P215', 'star_0_stars__age_0': 'P7584',
+        'star_0_stars__magnitude_v_0': 'P1215', 'star_0_stars__teff_0': 'P6879', 'star_0_stars__radius_0': 'P2120',
+        'star_0_stars__metallicity_0': 'P2227', 'star_0_stars__mass_0': 'P2067'}
 
 if sys.argv[0].endswith(basename(__file__)):  # if not imported
     ExoplanetEu.logon(sys.argv[1], sys.argv[2])

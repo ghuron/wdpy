@@ -212,30 +212,38 @@ class WikiData(ABC):
         self.entity['claims'][snak['property']].append(new_claim)
         return new_claim
 
+    def process_own_reference(self, only_default_sources, ref = None):
+        if ref is None:
+            ref = {'snaks': {'P248': [self.create_snak('P248', self.db_ref)]}}
+        if self.db_property in ref['snaks']:
+            if self.db_property in self.entity['claims'] or not only_default_sources:
+                ref['snaks'].pop(self.db_property, 0)
+        elif self.db_property not in self.entity['claims'] and only_default_sources:
+            ref['snaks'][self.db_property] = [self.create_snak(self.db_property, self.external_id)]
+        # if 'P813' in ref['snaks']:  # update "retrieved" timestamp if one already exists
+        #     ref['snaks']['P813'] = [self.create_snak('P813', datetime.now().strftime('%d/%m/%Y'))]
+        return ref
+
     def add_refs(self, claim, references=None):
         references = [] if references is None else references
         if 'references' not in claim:
             claim['references'] = []
         default_ref_exists = False
+        only_default_sources = (len(references) == 0)
         for ref in list(claim['references']):
             if 'P248' in ref['snaks']:
                 if ref['snaks']['P248'][0]['datavalue']['value']['id'] == self.db_ref:
-                    # if 'P813' in ref['snaks']:  # update "retrieved" timestamp if one already exists
-                    #     ref['snaks']['P813'] = [self.create_snak('P813', datetime.now().strftime('%d/%m/%Y'))]
-                    if self.db_property not in self.entity['claims']:
-                        ref['snaks'][self.db_property] = [self.create_snak(self.db_property, self.external_id)]
                     default_ref_exists = True
+                    self.process_own_reference(only_default_sources, ref)
                 elif ref['snaks']['P248'][0]['datavalue']['value']['id'] in references:
                     references.remove(ref['snaks']['P248'][0]['datavalue']['value']['id'])
-            elif 'P143' in ref['snaks'] or 'P4656' in ref['snaks']:
-                # Doesn't make sense to keep "imported from" if real source exists
+            ref['snaks'].pop('P143', 0)  # Doesn't make sense to keep "imported from" if real source exists
+            ref['snaks'].pop('P4656', 0)
+            if len(ref['snaks']) == 0:
                 claim['references'].remove(ref)
 
         if not default_ref_exists:
-            ref = {'snaks': {'P248': [self.create_snak('P248', self.db_ref)]}}
-            if self.db_property not in self.entity['claims']:
-                ref['snaks'][self.db_property] = [self.create_snak(self.db_property, self.external_id)]
-            claim['references'].append(ref)
+            claim['references'].append(self.process_own_reference(only_default_sources))
         for ref in references:
             claim['references'].append({'snaks': {'P248': [self.create_snak('P248', ref)]}})
 
