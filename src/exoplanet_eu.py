@@ -86,7 +86,7 @@ class ExoplanetEu(WikiData):
                     'isbn=(\\d{3})(\\d)(\\d{3})(\\d{5})(\\d)': 'haswbstatement:P212=\\g<1>-\\g<2>-\\g<3>-\\g<4>-\\g<5>',
                     '.+jstor\\.org/stable/(info/)?': 'haswbstatement:P356='}
         for search_pattern in patterns:
-            query = re.sub(search_pattern, patterns[search_pattern], url)
+            query = re.sub(search_pattern, patterns[search_pattern], url, flags=re.S)
             if query.startswith('haswbstatement'):
                 if (ref_id := self.api_search(urllib.parse.unquote(query))) is None:
                     if query.startswith('haswbstatement:P818='):
