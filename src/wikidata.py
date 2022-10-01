@@ -25,8 +25,8 @@ class WikiData(ABC):
 
     @staticmethod
     def api_call(action, params):
-        return WikiData.api.post('https://www.wikidata.org/w/api.php',
-                                 data={**params, 'format': 'json', 'action': action}).content.decode('utf-8')
+        WD_API = 'https://www.wikidata.org/w/api.php'
+        return WikiData.api.post(WD_API, data={**params, 'format': 'json', 'action': action}).content.decode('utf-8')
 
     @staticmethod
     def logon(login=None, password=None):
@@ -36,7 +36,7 @@ class WikiData(ABC):
         WikiData.api_call('login', {'lgname': WikiData.login, 'lgpassword': WikiData.password, 'lgtoken': t})
 
     @staticmethod
-    def api_search(query):
+    def api_search(query: str):
         response = json.loads(WikiData.api_call('query', {'list': 'search', 'srsearch': query}))
         if 'query' in response:
             if len(response['query']['search']) != 1:
@@ -143,11 +143,20 @@ class WikiData(ABC):
             snak['datavalue']['type'] = 'string'
         return snak
 
-    def __init__(self, external_id, property_id, ref_id):
+    @classmethod
+    def get_by_id(cls, external_id, create=False):
+        instance = cls(external_id)
+        if qid := WikiData.api_search('haswbstatement:"{}={}"'.format(instance.db_property, external_id)):
+            return qid
+        if create:
+            instance.load()
+            return instance.save()
+
+    def __init__(self, external_id):
         self.external_id = external_id
         self.entity = None
-        self.db_property = property_id
-        self.db_ref = ref_id
+        self.db_property = None
+        self.db_ref = None
 
     @staticmethod
     def load_items(ids):
@@ -161,12 +170,17 @@ class WikiData(ABC):
         except requests.exceptions.ConnectionError:
             print('Connection error while calling wbgetentities for entities ' + '|'.join(ids))
 
-    def get_item(self, qid):
-        self.entity = WikiData.load_items([qid])[qid]
-        return self.entity
+    # def get_item(self, qid):
+    #     self.entity = WikiData.load_items([qid])[qid]
+    #     return self.entity
 
     def get_snaks(self):
         return [self.create_snak(self.db_property, self.external_id)]
+
+    def load(self, qid=None):
+        if qid is not None:
+            self.entity = WikiData.load_items([qid])[qid]
+        self.get_snaks()
 
     def obtain_claim(self, snak):
         if snak is None:
@@ -212,7 +226,7 @@ class WikiData(ABC):
         self.entity['claims'][snak['property']].append(new_claim)
         return new_claim
 
-    def process_own_reference(self, only_default_sources, ref = None):
+    def process_own_reference(self, only_default_sources, ref=None):
         if ref is None:
             ref = {'snaks': {'P248': [self.create_snak('P248', self.db_ref)]}}
         if self.db_property in ref['snaks']:

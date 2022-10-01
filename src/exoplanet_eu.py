@@ -45,12 +45,13 @@ class ExoplanetEu(WikiData):
                 return # do not update coordinates, because exoplanets.eu ra/dec is usually low precision
             if self.db_property not in self.entity['claims']: # if updating star
                 if snak['property'] in STAR.values():
-                    return
-                if snak['property'] == 'P1215':
-                    for claim in self.entity['claims']['P1215']:
-                        if 'qualifiers' in claim and 'P1227' in claim['qualifiers']:
-                            if claim['qualifiers']['P1227'][0]['datavalue']['value']['id'] == 'Q4892529':
-                                return
+                    if snak['property'] == 'P1215':
+                        for claim in self.entity['claims']['P1215']:
+                            if 'qualifiers' in claim and 'P1227' in claim['qualifiers']:
+                                if claim['qualifiers']['P1227'][0]['datavalue']['value']['id'] == 'Q4892529':
+                                    return
+                    else:
+                        return
         claim = super().obtain_claim(snak)
         if claim is not None:
             if snak['property'] in ['P4501']:
