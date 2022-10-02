@@ -144,13 +144,13 @@ class WikiData(ABC):
         return snak
 
     @classmethod
-    def get_by_id(cls, external_id, create=False):
+    def get_by_id(cls, external_id, create=True):
         instance = cls(external_id)
         if qid := WikiData.api_search('haswbstatement:"{}={}"'.format(instance.db_property, external_id)):
             return qid
         if create:
             instance.load()
-            return instance.save()
+            return instance.update()
 
     def __init__(self, external_id):
         self.external_id = external_id
