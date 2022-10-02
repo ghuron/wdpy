@@ -98,12 +98,6 @@ class ArXiv(WikiData):
         elif qid := ArXiv.api_search('haswbstatement:"P356={}"'.format(self.doi)):
             self.entity = ArXiv.load_items([qid])[qid]
 
-    def doi(self):
-        if self.input_snaks is not None:
-            for snak in self.input_snaks:
-                if snak['property'] == 'P356':
-                    return snak['datavalue']['value']
-
 
 if sys.argv[0].endswith(os.path.basename(__file__)):  # if not imported
     ArXiv.logon(sys.argv[1], sys.argv[2])
