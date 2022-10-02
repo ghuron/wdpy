@@ -12,7 +12,10 @@ class ArXiv(WikiData):
     arxiv = {}
 
     def __init__(self, external_id):
-        super().__init__(external_id, 'P818', 'Q118398')
+        super().__init__(external_id)
+        self.db_property = 'P818'
+        self.db_ref = 'Q118398'
+        self.doi = None
         self.author_num = 0
 
     @staticmethod
@@ -28,15 +31,15 @@ class ArXiv(WikiData):
 
     @staticmethod
     def get_next_chunk(suffix):
-        suffix = '&metadataPrefix=arXiv' if suffix is None else suffix
-        if len(ArXiv.arxiv) > 100:
-            return [], 0
+        # if len(ArXiv.arxiv) > 100:
+        #     return [], 0
         result = {}
+        suffix = '&metadataPrefix=arXiv' if suffix is None else suffix
         if (tree := ArXiv.get_xml('http://export.arxiv.org/oai2?verb=ListRecords' + suffix)) is not None:
             ns = {'oa': 'http://arxiv.org/OAI/arXiv/', 'oai': 'http://www.openarchives.org/OAI/2.0/'}
             for preprint in tree.findall('.//oa:arXiv', ns):
                 if len(doi := preprint.findall('oa:doi', ns)) > 0:
-                    result[preprint.find('oa:id', ns).text] = doi[0].text.upper().split()[0].replace('\\', '')
+                    result[preprint.find('oa:id', ns).text] = doi[0].text.split()[0].replace('\\', '')
                 else:
                     result[preprint.find('oa:id', ns).text] = None
             ArXiv.arxiv = ArXiv.arxiv | result
@@ -70,36 +73,36 @@ class ArXiv(WikiData):
             claim['qualifiers'] = {'P1545': [self.create_snak('P1545', str(self.author_num))]}
         return claim
 
-    def get_snaks(self):
-        result = super().get_snaks()
+    def load_snaks(self):
         if self.external_id in self.arxiv:
+            super().load_snaks()
             if self.arxiv[self.external_id] is not None:
-                result.append(self.create_snak('P356', self.arxiv[self.external_id]))
+                self.doi = self.arxiv[self.external_id].upper()
+                self.input_snaks.append(self.create_snak('P356', self.doi))
         elif tree := self.get_xml('https://export.arxiv.org/api/query?id_list=' + self.external_id):
+            super().load_snaks()
             ns = {'w3': 'http://www.w3.org/2005/Atom', 'arxiv': 'http://arxiv.org/schemas/atom'}
-            if len(doi := tree.findall('*/arxiv:doi', ns)) == 1:
-                result.append(self.create_snak('P356', doi[0].text.upper()))
-            result.append(self.create_snak('P1476', {'text': ' '.join(tree.findall('*/w3:title', ns)[0].text.split()),
-                                                     'language': 'en'}))
+            title = ' '.join(tree.findall('*/w3:title', ns)[0].text.split())
+            self.input_snaks.append(self.create_snak('P1476', {'text': title, 'language': 'en'}))
             self.author_num = 0
             for author in tree.findall('*/*/w3:name', ns):
-                result.append(self.create_snak('P2093', author.text))
-        return result
+                self.input_snaks.append(self.create_snak('P2093', author.text))
+            if len(doi := tree.findall('*/arxiv:doi', ns)) == 1:
+                self.doi = doi[0].text.upper()
+                self.input_snaks.append(self.create_snak('P356', self.doi))
 
-    @staticmethod
-    def get_doi(input_data):
-        if input_data is not None:
-            for snak in input_data:
+    def load(self, qid=None):
+        self.load_snaks()
+        if qid:
+            self.entity = ArXiv.load_items([qid])[qid]
+        elif qid := ArXiv.api_search('haswbstatement:"P356={}"'.format(self.doi)):
+            self.entity = ArXiv.load_items([qid])[qid]
+
+    def doi(self):
+        if self.input_snaks is not None:
+            for snak in self.input_snaks:
                 if snak['property'] == 'P356':
                     return snak['datavalue']['value']
-
-    def load_article(self, qid, doi):
-        if qid is not None or (doi is not None) and (qid := self.api_search('haswbstatement:"P356={}"'.format(doi))):
-            self.entity = self.get_item(qid)
-
-    def sync(self, qid=None):
-        self.load_article(qid, self.get_doi(input_data := self.get_snaks()))
-        return self.update(input_data)
 
 
 if sys.argv[0].endswith(os.path.basename(__file__)):  # if not imported
@@ -110,8 +113,7 @@ if sys.argv[0].endswith(os.path.basename(__file__)):  # if not imported
         if arxiv_id not in ArXiv.arxiv:  # if it not comes from OAI, it must come from sparql
             print(wd_items[arxiv_id] + 'contains arxiv value ' + arxiv_id + ' that is not found in batch OAI')
         else:
-            new_doi = item.get_doi(snaks := item.get_snaks())
-            item.load_article(wd_items[arxiv_id], new_doi)
+            item.load(wd_items[arxiv_id])
             if item.entity is not None:
-                if 'P818' not in item.entity['claims'] or new_doi is not None and 'P356' not in item.entity['claims']:
-                    item.update(snaks)
+                if 'P818' not in item.entity['claims'] or item.doi is not None and 'P356' not in item.entity['claims']:
+                    item.update()

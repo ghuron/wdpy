@@ -4,16 +4,15 @@ import requests
 from os.path import basename
 from wikidata import WikiData
 
-URL_ENDPOINT = 'https://righteous.yadvashem.org/RighteousWS.asmx/'
-
-
 class YadVashem(WikiData):
     endpoint = requests.Session()
     endpoint.headers.update({'Content-Type': 'application/json'})
     pending = []
 
     def __init__(self, group_id, named_as):
-        super().__init__(group_id, 'P1979', 'Q77598447')
+        super().__init__(group_id)
+        self.db_property = 'P1979'
+        self.db_ref = 'Q77598447'
         self.named_as = named_as
         self.award_cleared_qualifiers = []
 
@@ -21,15 +20,19 @@ class YadVashem(WikiData):
         return 'basic facts about: ' + self.named_as + ' from Yad Vashem database entry ' + self.external_id
 
     @staticmethod
-    def get_next_chunk(offset):
+    def post(method, params):
+        return YadVashem.endpoint.post('https://righteous.yadvashem.org/RighteousWS.asmx/' + method,
+                                       data='{lang:"eng",' + params + '}').json()
+
+    @staticmethod
+    def get_next_chunk(o):
+        o = 0 if o is None else o
+        page = YadVashem.post('GetRighteousList',
+                              'uniqueId:"987",searchType:"righteous_only",rowNum:' + str(o) + ',sort:{dir:"",field:""}')
         result = []
-        offset = 0 if offset is None else offset
-        page = YadVashem.endpoint.post(URL_ENDPOINT + 'GetRighteousList',
-                                       data='{uniqueId:"16475",lang:"eng",searchType:"righteous_only",rowNum:' +
-                                            str(offset) + ',sort:{dir:"",field:""}}').json()
         for case_item in page['d']:
             result.append(str(case_item['BookId']))
-        return result, offset + len(result)
+        return result, o + len(result)
 
     def obtain_claim(self, snak):
         if snak is not None:
@@ -40,17 +43,18 @@ class YadVashem(WikiData):
                     self.award_cleared_qualifiers.append(snak['property'])  # clear each qualifier only once
                     award['qualifiers'][snak['property']] = []
                 award['qualifiers'][snak['property']].append(snak)
-                return None
-
-            claim = super().obtain_claim(snak)
-            if claim is not None:
+            elif claim := super().obtain_claim(snak):
                 if snak['property'] in ['P569', 'P570']:  # birth/death date statement only
                     if 'rank' not in claim:  # unspecified rank means it was just created
                         if snak['datavalue']['value']['precision'] == 11:  # date precision on the day level
                             if snak['datavalue']['value']['time'].endswith('-01-01T00:00:00Z'):  # January 1
                                 claim['rank'] = 'deprecated'  # db artefact, only year known for sure
                                 claim['qualifiers'] = {'P2241': [self.create_snak('P2241', 'Q41755623')]}
-            return claim
+                elif snak['property'] == 'P1979':
+                    if 'qualifiers' not in claim:
+                        claim['qualifiers'] = {}
+                    claim['qualifiers']['P1810'] = [self.create_snak('P1810', self.named_as)]
+                return claim
 
     def trace(self, message):
         if self.entity is not None:
@@ -61,7 +65,7 @@ class YadVashem(WikiData):
     def info(book_id, named_as, message):
         print('https://righteous.yadvashem.org/?itemId=' + book_id + '\t"' + named_as + '"\t' + message)
 
-    def load_snaks(self, input_item):
+    def transform_snaks(self, input_item):
         mapping = {
             'ACCOUNTANT': 326653, 'ACTIVIST': 15253558, 'ACTOR': 33999, 'ACTRESS': 33999, 'ADMINISTRATOR': 16532929,
             'ADVISOR': 2994387, 'AGENT': 109555060, 'AGRICULTEUR': 131512, 'AGRICULTURAL ENGINEER': 10272925,
@@ -185,31 +189,24 @@ class YadVashem(WikiData):
             'WRITER': 36180, 'YUGOSLAVIA': 36704}
         properties = {'recognition_date': 'P585', 'nationality': 'P27', 'gender': 'P21', 'cause_of_death': 'P509',
                       'religion': 'P140', 'date_of_death': 'P570', 'date_of_birth': 'P569', 'profession': 'P106'}
-        result = [self.create_snak('P31', 'Q5')]
+
+        self.load_snaks()
+        self.input_snaks.append(self.create_snak('P31', 'Q5'))
         for element in input_item:
             if element['Title'] in properties:
-                if element['Value'] in mapping:
-                    result.append(self.create_snak(properties[element['Title']], 'Q' + str(mapping[element['Value']])))
-                else:
-                    result.append(self.create_snak(properties[element['Title']], element['Value']))
-        return result
+                value = 'Q' + str(mapping[element['Value']]) if element['Value'] in mapping else element['Value']
+                self.input_snaks.append(self.create_snak(properties[element['Title']], value))
 
     def post_process(self):
         if 'labels' not in self.entity:
             self.entity['labels'] = {}
         if 'en' not in self.entity['labels']:
-            title = self.entity['claims']['P1979'][0]['qualifiers']['P1810'][0]['datavalue']['value']
-            words = title.split('(')[0].split()
+            words = self.named_as.split('(')[0].split()
             if words[0].lower() in ['dalla', 'de', 'del', 'della', 'di', 'du', 'Im', 'le', 'te', 'van', 'von']:
                 label = ' '.join([words[-1]] + words[:-1])  # van Allen John -> John van Allen
             else:
                 label = ' '.join([words[-1]] + words[1:-1] + [words[0]])  # Pol van de John -> John van de Pol
             self.entity['labels']['en'] = {'value': label, 'language': 'en'}
-
-        yv_id = self.obtain_claim(self.create_snak('P1979', item_id))
-        if 'qualifiers' not in yv_id:
-            yv_id['qualifiers'] = {}
-        yv_id['qualifiers']['P1810'] = [self.create_snak('P1810', row['Title'])]
 
     def save(self):
         if 'id' in self.entity:
@@ -240,8 +237,8 @@ class YadVashem(WikiData):
 
 if sys.argv[0].endswith(basename(__file__)):  # if not imported
     YadVashem.logon(sys.argv[1], sys.argv[2])
-    YadVashem.endpoint.post(URL_ENDPOINT + 'BuildQuery', data='{uniqueId:"16475",lang:"eng",strSearch:"",newSearch:' +
-                                                              'true,clearFilter:true,searchType:"righteous_only"}')
+    YadVashem.post('BuildQuery',
+                   'uniqueId:"987",strSearch:"",newSearch:true,clearFilter:true,searchType:"righteous_only"')
     wd_items = YadVashem.get_all_items(
         'SELECT ?r ?n ?i { ?i wdt:P31 wd:Q5; p:P1979 ?s . ?s ps:P1979 ?r OPTIONAL {?s pq:P1810 ?n}}',
         lambda new, existing: {new[0]: new[1]} if len(existing) == 0 else
@@ -255,8 +252,7 @@ if sys.argv[0].endswith(basename(__file__)):  # if not imported
         if (group := YadVashem.load_items(list(filter(lambda x: isinstance(x, str), qids)))) is None:
             continue
         YadVashem.pending = []
-        case = YadVashem.endpoint.post(URL_ENDPOINT + 'GetPersonDetailsBySession',
-                                       data='{bookId:"' + item_id + '",lang:"eng"}').json()
+        case = YadVashem.post('GetPersonDetailsBySession','bookId:"' + item_id + '"')
         for row in case['d']['Individuals']:
             if row['Title'] is not None:
                 row['Title'] = ' '.join(row['Title'].split())
@@ -269,6 +265,7 @@ if sys.argv[0].endswith(basename(__file__)):  # if not imported
                     item.entity = group[wd_items[item_id][row['Title']]]
                     del wd_items[item_id][row['Title']]  # consider it processed
 
-                item.update(item.load_snaks(row['Details']))
+                item.transform_snaks(row['Details'])
+                item.update()
 
         YadVashem.create_pending(wd_items[item_id])
