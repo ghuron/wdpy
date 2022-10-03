@@ -93,11 +93,11 @@ class ExoplanetEu(WikiData):
                     'isbn=(\\d{3})(\\d)(\\d{3})(\\d{5})(\\d)': 'haswbstatement:P212=\\g<1>-\\g<2>-\\g<3>-\\g<4>-\\g<5>',
                     '.+jstor\\.org/stable/(info/)?': 'haswbstatement:P356='}
         for search_pattern in patterns:
-            query = re.sub(urllib.parse.unquote(search_pattern), patterns[search_pattern], url, flags=re.S)
+            query = urllib.parse.unquote(re.sub(search_pattern, patterns[search_pattern], url, flags=re.S))
             if query.startswith('haswbstatement:P818='):
                 if ref_id := ArXiv.get_by_id(query.replace('haswbstatement:P818=', '')):
                     return ref_id
-            elif query.startswith('haswbstatement') and (ref_id := self.api_search(query)):
+            elif query.startswith('haswbstatement') and (ref_id := WikiData.api_search(query)):
                 return ref_id
 
     def parse_sources(self, page):
