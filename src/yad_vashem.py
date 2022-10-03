@@ -57,7 +57,7 @@ class YadVashem(WikiData):
                 return claim
 
     def trace(self, message):
-        if self.entity is not None:
+        if self.entity is not None and 'id' in self.entity:
             message = 'https://www.wikidata.org/wiki/' + self.entity['id'] + '\t' + message
         YadVashem.info(self.external_id, self.named_as, message)
 
@@ -230,7 +230,7 @@ class YadVashem(WikiData):
 
         for new_item in YadVashem.pending:
             if items_absent_in_yv:
-                new_item.trace(' was not created (see above)')
+                new_item.trace('was not created (see above)')
             else:
                 new_item.create()
 
