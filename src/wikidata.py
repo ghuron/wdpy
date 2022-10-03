@@ -143,15 +143,6 @@ class WikiData(ABC):
             snak['datavalue']['type'] = 'string'
         return snak
 
-    @classmethod
-    def get_by_id(cls, external_id, create=True):
-        instance = cls(external_id)
-        if qid := WikiData.api_search('haswbstatement:"{}={}"'.format(instance.db_property, external_id)):
-            return qid
-        if create:
-            instance.load()
-            return instance.update()
-
     def __init__(self, external_id):
         self.external_id = external_id
         self.entity = None
@@ -273,8 +264,7 @@ class WikiData(ABC):
         if 'labels' not in self.entity:
             self.entity['labels'] = {}
         if 'en' not in self.entity['labels']:
-            self.entity['labels']['en'] = {
-                'value': self.entity['claims'][self.db_property][0]['mainsnak']['datavalue']['value'], 'language': 'en'}
+            self.entity['labels']['en'] = {'value': self.external_id, 'language': 'en'}
 
     def trace(self, message):
         print('https://www.wikidata.org/wiki/' + self.entity['id'] + '\t' + message)
@@ -347,3 +337,12 @@ class WikiData(ABC):
         self.post_process()
         if json.dumps(self.entity) != original:
             return self.save()
+
+    @classmethod
+    def get_by_id(cls, external_id, create=True):
+        instance = cls(external_id)
+        if qid := WikiData.api_search('haswbstatement:"{}={}"'.format(instance.db_property, external_id)):
+            return qid
+        if create:
+            instance.load()
+            return instance.update()
