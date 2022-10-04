@@ -244,7 +244,7 @@ if sys.argv[0].endswith(os.path.basename(__file__)):  # if not imported
     # wd_items= {}
     # wd_items['SDSS J003906.37+250601.3'] = None
     for simbad_id in wd_items:
-        simbad_id = '* 51 Eri b'
+        # simbad_id = '* 51 Eri b'
         item = SimbadDAP(simbad_id)
         item.load(wd_items[simbad_id])
         item.update()
