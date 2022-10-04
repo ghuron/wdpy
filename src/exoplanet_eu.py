@@ -4,14 +4,15 @@ import re
 import sys
 import time
 import urllib.parse
+from os.path import basename
+
 import requests
+from astropy import coordinates
+from bs4 import BeautifulSoup
 
 from arxiv import ArXiv
-from os.path import basename
 from simbad_dap import SimbadDAP
 from wikidata import WikiData
-from bs4 import BeautifulSoup
-from astropy import coordinates
 
 
 class ExoplanetEu(WikiData):
@@ -158,7 +159,7 @@ class ExoplanetEu(WikiData):
             if response.status_code != 200:
                 print('Error {} while retrieving "{}", skipping it'.format(response.status_code, self.external_id))
                 return
-        except ConnectionError as e:
+        except requests.exceptions.ConnectionError as e:
             print('Error {} while retrieving "{}", skipping it'.format(e, self.external_id))
             return
 
