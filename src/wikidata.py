@@ -267,7 +267,9 @@ class WikiData(ABC):
             self.entity['labels']['en'] = {'value': self.external_id, 'language': 'en'}
 
     def trace(self, message):
-        print('https://www.wikidata.org/wiki/' + self.entity['id'] + '\t' + message)
+        if self.entity is not None and 'id' in self.entity:
+            message = 'https://www.wikidata.org/wiki/' + self.entity['id'] + '\t' + message
+        print(message)
 
     def get_summary(self):
         return 'batch import from [[' + self.db_ref + ']] for object ' + self.external_id

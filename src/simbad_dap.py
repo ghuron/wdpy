@@ -81,7 +81,11 @@ class SimbadDAP(WikiData):
             '''SELECT id, plx AS P2214, plx_prec AS P2214p, plx_err AS P2214h, plx_err AS P2214l, 
                     'Q21500224' AS P2214u, bibcode AS P2214r, mespos
                 FROM (SELECT main_id AS id, oid FROM basic WHERE {} ORDER BY oid) b
-                JOIN mesPlx ON oidref = oid'''
+                JOIN mesPlx ON oidref = oid''',
+            '''SELECT id, flux AS P1215, flux_prec AS P1215p, flux_err AS P1215h, flux_err_prec AS P1215hp,
+                    flux_err AS P1215l, flux_err_prec AS P1215lp, bibcode AS P1215r, 0 AS mespos, filter
+                FROM (SELECT main_id AS id, oid FROM basic WHERE {} ORDER BY oid) b
+                JOIN flux ON oidref = oid'''
         ]:
             SimbadDAP.tap_query('https://simbad.u-strasbg.fr/simbad/sim-tap', query.format(condition), SimbadDAP.simbad)
 
@@ -215,6 +219,11 @@ class SimbadDAP(WikiData):
                         if row[column + 'r'] in self.ads_articles:
                             snak['source'] = [self.ads_articles[row[column + 'r']]]
                     snak['mespos'] = row['mespos']
+                    if 'filter' in row:
+                        band = {'K': 2520419, 'V': 4892529, 'B': 6746395, 'R': 15977411, 'U': 15977921,
+                                'I': 15987557, 'J': 15991308, 'H': 16556693, 'G': 66659648,
+                                'u': 72675509, 'g': 72675633, 'r': 72675737, 'i': 72675868, 'z': 72675951}
+                        snak['qualifiers'] = {'P1227': 'Q' + str(band[row['filter']])}
                     self.input_snaks.append(snak)
 
     def get_min_position(self, property_id):
@@ -235,7 +244,7 @@ if sys.argv[0].endswith(os.path.basename(__file__)):  # if not imported
     # wd_items= {}
     # wd_items['SDSS J003906.37+250601.3'] = None
     for simbad_id in wd_items:
-        # simbad_id = 'HD 89744b'
+        simbad_id = '* 51 Eri b'
         item = SimbadDAP(simbad_id)
         item.load(wd_items[simbad_id])
         item.update()
