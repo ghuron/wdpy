@@ -24,7 +24,7 @@ class ExoplanetEu(WikiData):
         self.db_ref = 'Q1385430'
         self.properties = {'planet_planet_status_string_0': 'P31', 'planet_axis_0': 'P2233', 'planet_mass_0': 'P2067',
                            'planet_eccentricity_0': 'P1096', 'planet_period_0': 'P2146', 'planet_discovered_0': 'P575',
-                           'planet_omega_0': 'P2248', 'planet_radius_0': 'P2120',  'planet_detection_type_0': 'P1046',
+                           'planet_omega_0': 'P2248', 'planet_radius_0': 'P2120', 'planet_detection_type_0': 'P1046',
                            'planet_albedo_0': 'P4501', 'planet_mass_sini_0': 'P2051', 'planet_inclination_0': 'P2045',
                            'star_0_stars__ra_0': 'P6257', 'star_0_stars__dec_0': 'P6258'}
 
@@ -81,18 +81,23 @@ class ExoplanetEu(WikiData):
                 self.obtain_claim(WikiData.create_snak('P59', self.constellations[tla]))
 
     @staticmethod
-    def parse_url(url):
+    def parse_url(url: str):
+        if not url:
+            return
+
         patterns = {'.*48550/arXiv\\.(\\d{4}.\\d+|[a-z\\-]+(\\.[A-Z]{2})?\\/\\d{7}).*': 'haswbstatement:P818=\\g<1>',
                     '(http[s]?://)?(dx\\.)?doi\\.org/': 'haswbstatement:P356=',
                     '.*arxiv\\.org/abs/(\\d{4}.\\d+|[a-z\\-]+(\\.[A-Z]{2})?\\/\\d{7}).*': 'haswbstatement:P818=\\g<1>',
                     'http[s]?://www\\.journals\\.uchicago\\.edu/doi/abs/': 'haswbstatement:P356=',
-                    'http://iopscience.iop.org/0004-637X/': 'haswbstatement:P356=10.1088/0004-637X/',
+                    '.*iopscience.iop.org/1538-3881/(.+\\d)/?$': 'haswbstatement:P356=10.1088/0004-6256/\\g<1>',
+                    '.*iopscience.iop.org/(.+\\d)/?$': 'haswbstatement:P356=10.1088/\\g<1>',
                     'http[s]?://(?:ui\\.)?adsabs.harvard.edu/abs/([^/]+).*': 'haswbstatement:P819=\\g<1>',
                     'adsabs\\.harvard\\.edu/cgi-bin/nph-bib_query\\?bibcode=([^\\&]+).*': 'haswbstatement:P819=\\g<1>',
                     'http://onlinelibrary.wiley.com/doi/([^x]+x).*': 'haswbstatement:P356=\\g<1>',
-                    'http://online.liebertpub.com/doi/abs/([^\\?]+).*': 'haswbstatement:P356=\\g<1>,',
-                    'isbn=(\\d{3})(\\d)(\\d{3})(\\d{5})(\\d)': 'haswbstatement:P212=\\g<1>-\\g<2>-\\g<3>-\\g<4>-\\g<5>',
-                    '.+jstor\\.org/stable/(info/)?': 'haswbstatement:P356='}
+                    'http://online.liebertpub.com/doi/abs/([^\\?]+).*': 'haswbstatement:P356=\\g<1>',
+                    '.*bn=(\\d{3})(\\d)(\\d{3})(\\d{5})(\\d)': 'haswbstatement:P212=\\g<1>-\\g<2>-\\g<3>-\\g<4>-\\g<5>',
+                    '.+jstor\\.org/stable/(info/)?': 'haswbstatement:P356=',
+                    '.*doi=([^&]+)(&.+)?$': 'haswbstatement:P356=\\g<1>'}
         for search_pattern in patterns:
             query = urllib.parse.unquote(re.sub(search_pattern, patterns[search_pattern], url, flags=re.S))
             if query.startswith('haswbstatement:P818='):
@@ -100,6 +105,7 @@ class ExoplanetEu(WikiData):
                     return ref_id
             elif query.startswith('haswbstatement') and (ref_id := WikiData.api_search(query)):
                 return ref_id
+        print('Could not parse url: ' + url)
 
     def parse_sources(self, page):
         publications = page.find_all('p', {'class': 'publication'})
@@ -207,7 +213,7 @@ if sys.argv[0].endswith(basename(__file__)):  # if not imported
         item.load(wd_items[ex_id])
         item.update()
         if 'P397' in item.entity['claims'] and len(item.entity['claims']['P397']) == 1:
-            if 'datavalue' in item.entity['claims']['P397'][0]['mainsnak']:  # check for novalue
+            if 'datavalue' in item.entity['claims']['P397'][0]['mainsnak']:  # parent != "novalue"
                 parent = ExoplanetEu(ex_id)
                 parent.properties = STAR
                 parent.load(item.entity['claims']['P397'][0]['mainsnak']['datavalue']['value']['id'])
