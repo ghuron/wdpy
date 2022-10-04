@@ -17,9 +17,7 @@ class WikiData(ABC):
     USER_AGENT = 'automated import by https://www.wikidata.org/wiki/User:Ghuron)'
     api = requests.Session()
     api.headers.update({'User-Agent': USER_AGENT})
-    login: str = None
-    password: str = None
-    token: str = 'bad token'
+    login, password, token = '', '', 'bad'
     types: dict[str, str] = None
 
     @staticmethod
@@ -38,11 +36,10 @@ class WikiData(ABC):
         """Wikidata logon, see https://wikidata.org/w/api.php?action=help&modules=login
         and store credentials for future use. Performs wikidata re-logon if called subsequently without parameters.
         All further API calls will be performed on behalf on logged user"""
-        WikiData.login = login if login is not None else WikiData.login
-        WikiData.password = password if password is not None else WikiData.password
+        WikiData.login = login if login else WikiData.login
+        WikiData.password = password if password else WikiData.password
         token = WikiData.api_call('query', {'meta': 'tokens', 'type': 'login'})['query']['tokens']['logintoken']
-        return 'Success' == WikiData.api_call('login', {'lgtoken': token, 'lgname': WikiData.login,
-                                                        'lgpassword': WikiData.password})['login']['result']
+        WikiData.api_call('login', {'lgtoken': token, 'lgname': WikiData.login, 'lgpassword': WikiData.password})
 
     @staticmethod
     def api_search(query: str) -> str:
@@ -333,7 +330,6 @@ class WikiData(ABC):
                     affected_statements[snak['property']] = self.filter_by_ref(self.entity['claims'][snak['property']])
                 if claim in affected_statements[snak['property']]:
                     affected_statements[snak['property']].remove(claim)
-                # noinspection PyTypeChecker
                 if claim['mainsnak']['datatype'] != 'external-id':
                     self.add_refs(claim, snak['source'] if 'source' in snak else None)
 
