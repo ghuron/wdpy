@@ -80,7 +80,8 @@ class ExoplanetEu(WikiData):
                 self.constellations = self.query(SPARQL) if self.constellations is None else self.constellations
                 self.obtain_claim(WikiData.create_snak('P59', self.constellations[tla]))
 
-    def parse_url(self, url):
+    @staticmethod
+    def parse_url(url):
         patterns = {'.*48550/arXiv\\.(\\d{4}.\\d+|[a-z\\-]+(\\.[A-Z]{2})?\\/\\d{7}).*': 'haswbstatement:P818=\\g<1>',
                     '(http[s]?://)?(dx\\.)?doi\\.org/': 'haswbstatement:P356=',
                     '.*arxiv\\.org/abs/(\\d{4}.\\d+|[a-z\\-]+(\\.[A-Z]{2})?\\/\\d{7}).*': 'haswbstatement:P818=\\g<1>',
