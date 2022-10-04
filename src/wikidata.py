@@ -1,13 +1,12 @@
 #!/usr/bin/python3
-from abc import ABC
 import csv
 import json
 import re
-import sys
 import time
 import uuid
-from contextlib import closing
 from _datetime import datetime
+from abc import ABC
+from contextlib import closing
 from decimal import Decimal, DecimalException
 
 import requests
@@ -18,26 +17,37 @@ class WikiData(ABC):
     USER_AGENT = 'automated import by https://www.wikidata.org/wiki/User:Ghuron)'
     api = requests.Session()
     api.headers.update({'User-Agent': USER_AGENT})
-    login = None
-    password = None
-    token = 'bad token'
-    types = None
+    login: str = None
+    password: str = None
+    token: str = 'bad token'
+    types: dict[str, str] = None
 
     @staticmethod
-    def api_call(action, params):
+    def api_call(action: str, params: dict[str, str]) -> dict:
+        """Wikidata API call with JSON format, see https://wikidata.org/w/api.php"""
         WD_API = 'https://www.wikidata.org/w/api.php'
-        return WikiData.api.post(WD_API, data={**params, 'format': 'json', 'action': action}).content.decode('utf-8')
+        try:
+            return WikiData.api.post(WD_API, data={**params, 'format': 'json', 'action': action}).json()
+        except json.decoder.JSONDecodeError:
+            print('Cannot decode {} response for {}'.format(action, params))
+        except requests.exceptions.ConnectionError:
+            print('Connection error while calling {} for {}'.format(action, params))
 
     @staticmethod
-    def logon(login=None, password=None):
+    def logon(login: str = None, password: str = None):
+        """Wikidata logon, see https://wikidata.org/w/api.php?action=help&modules=login
+        and store credentials for future use. Performs wikidata re-logon if called subsequently without parameters.
+        All further API calls will be performed on behalf on logged user"""
         WikiData.login = login if login is not None else WikiData.login
         WikiData.password = password if password is not None else WikiData.password
-        t = json.loads(WikiData.api_call('query', {'meta': 'tokens', 'type': 'login'}))['query']['tokens']['logintoken']
-        WikiData.api_call('login', {'lgname': WikiData.login, 'lgpassword': WikiData.password, 'lgtoken': t})
+        token = WikiData.api_call('query', {'meta': 'tokens', 'type': 'login'})['query']['tokens']['logintoken']
+        return 'Success' == WikiData.api_call('login', {'lgtoken': token, 'lgname': WikiData.login,
+                                                        'lgpassword': WikiData.password})['login']['result']
 
     @staticmethod
-    def api_search(query: str):
-        response = json.loads(WikiData.api_call('query', {'list': 'search', 'srsearch': query}))
+    def api_search(query: str) -> str:
+        """CirrusSearch query, returns first found element, warns if zero or more than one found"""
+        response = WikiData.api_call('query', {'list': 'search', 'srsearch': query})
         if 'query' in response:
             if len(response['query']['search']) != 1:
                 print(query + ' returned ' + str(len(response['query']['search'])) + ' results')
@@ -45,7 +55,7 @@ class WikiData(ABC):
                 return response['query']['search'][0]['title']
 
     @staticmethod
-    def query(query, process=lambda new, existing: new[0]):
+    def query(query: str, process=lambda new, existing: new[0]):
         result = CaseInsensitiveDict()
         with requests.Session() as session:
             session.headers.update({'Accept': 'text/csv', 'User-Agent': WikiData.USER_AGENT})
@@ -63,7 +73,7 @@ class WikiData(ABC):
         return [], None
 
     @classmethod
-    def get_all_items(cls, sparql, process=lambda new, existing: new[0]):
+    def get_all_items(cls, sparql: str, process=lambda new, existing: new[0]):
         results = WikiData.query(sparql, process)
         offset = None
         while True:
@@ -76,12 +86,15 @@ class WikiData(ABC):
         return results
 
     @staticmethod
-    def format_float(figure, digits=-1):
+    def format_float(figure, digits: int = -1):
         if 0 <= digits < 20:
             return ('{0:.' + str(digits) + 'f}').format(Decimal(figure))
         if amount := re.search('(?P<mantissa>\\d\\.\\d+)e-(?P<exponent>\\d+)', str(figure)):
             return WikiData.format_float(figure, len(amount.group('mantissa')) + int(amount.group('exponent')) - 2)
-        return str(Decimal(figure))
+        try:
+            return str(Decimal(figure))
+        except DecimalException:
+            return
 
     @staticmethod
     def fix_error(figure):
@@ -92,7 +105,7 @@ class WikiData(ABC):
             return WikiData.format_float(re.sub('^000+\\d$', '', figure))
 
     @staticmethod
-    def create_snak(property_id, value, lower=None, upper=None):
+    def create_snak(property_id: str, value, lower=None, upper=None):
         if WikiData.types is None:
             WikiData.types = WikiData.query('SELECT ?prop ?type { ?prop wikibase:propertyType ?type }')
             for prop in WikiData.types:
@@ -143,7 +156,7 @@ class WikiData(ABC):
             snak['datavalue']['type'] = 'string'
         return snak
 
-    def __init__(self, external_id):
+    def __init__(self, external_id: str):
         self.external_id = external_id
         self.entity = None
         self.input_snaks = None
@@ -151,26 +164,20 @@ class WikiData(ABC):
         self.db_ref = None
 
     @staticmethod
-    def load_items(ids):
+    def load_items(ids: list) -> dict[str, dict]:
         if len(ids) == 0:
-            return []
-        try:
-            response = WikiData.api_call('wbgetentities', {'props': 'claims|info|labels', 'ids': '|'.join(ids)})
-            return json.loads(response)['entities']
-        except json.decoder.JSONDecodeError:
-            print('Cannot decode wbgetentities response for entities ' + '|'.join(ids))
-        except requests.exceptions.ConnectionError:
-            print('Connection error while calling wbgetentities for entities ' + '|'.join(ids))
+            return {}
+        return WikiData.api_call('wbgetentities', {'props': 'claims|info|labels', 'ids': '|'.join(ids)})['entities']
 
     def load_snaks(self):
         self.input_snaks = [self.create_snak(self.db_property, self.external_id)]
 
-    def load(self, qid=None):
+    def load(self, qid: str = None):
         if qid is not None:
             self.entity = WikiData.load_items([qid])[qid]
         self.load_snaks()
 
-    def obtain_claim(self, snak):
+    def obtain_claim(self, snak: dict):
         if snak is None:
             return
 
@@ -209,6 +216,11 @@ class WikiData(ABC):
         new_claim = {'type': 'statement', 'mainsnak': snak}
         if 'id' in self.entity:
             new_claim['id'] = self.entity['id'] + '$' + str(uuid.uuid4())
+        if 'qualifiers' in snak:
+            new_claim['qualifiers'] = {}
+            for property_id in snak['qualifiers']:
+                new_claim['qualifiers'][property_id] = [self.create_snak(property_id, snak['qualifiers'][property_id])]
+
         if snak['property'] not in self.entity['claims']:
             self.entity['claims'][snak['property']] = []
         self.entity['claims'][snak['property']].append(new_claim)
@@ -284,21 +296,20 @@ class WikiData(ABC):
 
         for retries in range(1, 3):
             try:
-                data['token'] = self.token
-                response = self.api_call('wbeditentity', data)
-                if 'error' not in response.lower() or 'editconflict' in response.lower():  # succesful save
+                data['token'] = WikiData.token
+                response = WikiData.api_call('wbeditentity', data)
+                if 'error' in response:
+                    if response['error']['code'] == 'badtoken':
+                        WikiData.token = WikiData.api_call('query', {'meta': 'tokens'})['query']['tokens']['csrftoken']
+                        continue
+                    self.trace('error while saving: ' + response['error']['info'])
+                else:
                     time.sleep(0.5)
-                    if 'nochange' not in response.lower():
-                        self.entity = json.loads(response)['entity']
-                        self.trace('modified' if 'id' in self.entity else 'created')
-                        return json.loads(response)['entity']['id']
-                    return None
-
-                if 'badtoken' in response.lower():
-                    self.token = json.loads(self.api_call('query', {'meta': 'tokens'}))['query']['tokens']['csrftoken']
-                    continue
-
-                print(datetime.now().strftime('%Y-%m-%d %H:%M:%S') + ':' + response, file=sys.stderr)
+                    if 'nochange' not in response['entity']:
+                        self.trace('modified' if 'id' in data else 'created')
+                        self.entity = response['entity']
+                        return self.entity['id']
+                    return
             except requests.exceptions.RequestException:
                 pass
             time.sleep(10)
