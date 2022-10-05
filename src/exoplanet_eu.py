@@ -4,6 +4,7 @@ import re
 import sys
 import time
 import urllib.parse
+from decimal import DecimalException
 from os.path import basename
 
 import requests
@@ -136,14 +137,17 @@ class ExoplanetEu(WikiData):
             else:
                 result = self.create_snak(property_id, reg.group('value'))
         elif len(deg := text.split(':')) == 3:
-            digits = 3 + (len(text) - text.find('.') - 1 if text.find('.') > 0 else 0)
-            mult = 15 if property_id == 'P6257' else 1
-            if deg[0].startswith('-'):
-                angle = -((float(deg[2]) / 60 + float(deg[1])) / 60 - float(deg[0]))
-            else:
-                angle = +((float(deg[2]) / 60 + float(deg[1])) / 60 + float(deg[0]))
-            result = self.create_snak(property_id, self.format_float(angle * mult, digits))
-            result['datavalue']['value']['unit'] = 'http://www.wikidata.org/entity/Q28390'
+            try:
+                digits = 3 + (len(text) - text.find('.') - 1 if text.find('.') > 0 else 0)
+                mult = 15 if property_id == 'P6257' else 1
+                if deg[0].startswith('-'):
+                    angle = -((float(deg[2]) / 60 + float(deg[1])) / 60 - float(deg[0]))
+                else:
+                    angle = +((float(deg[2]) / 60 + float(deg[1])) / 60 + float(deg[0]))
+                result = self.create_snak(property_id, self.format_float(angle * mult, digits))
+                result['datavalue']['value']['unit'] = 'http://www.wikidata.org/entity/Q28390'
+            except (ValueError, DecimalException):
+                return self.create_snak(property_id, text)
         elif text in ids:
             return self.create_snak(property_id, 'Q' + str(ids[text]))
         else:
