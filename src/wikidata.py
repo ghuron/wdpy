@@ -162,7 +162,8 @@ class WikiData(ABC):
     def load_items(ids: list) -> dict[str, dict]:
         if len(ids) == 0:
             return {}
-        return WikiData.api_call('wbgetentities', {'props': 'claims|info|labels', 'ids': '|'.join(ids)})['entities']
+        result = WikiData.api_call('wbgetentities', {'props': 'claims|info|labels', 'ids': '|'.join(ids)})
+        return result['entities'] if result is not None and 'entities' in result else None
 
     def load_snaks(self):
         self.input_snaks = [self.create_snak(self.db_property, self.external_id)]
