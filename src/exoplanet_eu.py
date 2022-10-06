@@ -86,7 +86,6 @@ class ExoplanetEu(WikiData):
     def parse_url(url: str):
         if not url:
             return
-
         patterns = {'.*48550/arXiv\\.(\\d{4}.\\d+|[a-z\\-]+(\\.[A-Z]{2})?\\/\\d{7}).*': 'P818=\\g<1>',
                     '(http[s]?://)?(dx\\.)?doi\\.org/': 'P356=',
                     '.*arxiv\\.org/abs/(\\d{4}.\\d+|[a-z\\-]+(\\.[A-Z]{2})?\\/\\d{7}).*': 'P818=\\g<1>',
@@ -96,8 +95,9 @@ class ExoplanetEu(WikiData):
                     '.*iop.org/EJ/abstract/1402-4896/(.+\\d)/?$': 'P356=10.1088/0031-8949/\\g<1>',
                     '.*iop.org/EJ/abstract/1538-4357/(.+\\d)/?$': 'P356=10.1088/0004-637X/\\g<1>',
                     '.*iop.org/EJ/abstract/(.+\\d)/?$': 'P356=10.1088/\\g<1>',
-                    '.*aanda.org/articles/aa/abs/.+/.+/aa(\\d+)-(\\d+).*': 'P356=10.1051/0004-6361/20\\g<2>\\g<1>',
-                    '.*sciences.org/articles/aa/abs/.+/.+/aa(\\d+)-(\\d+).*': 'P356=10.1051/0004-6361:20\\g<2>\\g<1>',
+                    '.*/aa(\\d+)-(0[0-7])\\.(html|pdf)': 'P356=10.1051/0004-6361:20\\g<2>\\g<1>',
+                    '.*/aa(\\d+)-(0[8-9])\\.(html|pdf)': 'P356=10.1051/0004-6361/20\\g<2>\\g<1>',
+                    '.*/aa(\\d+)-([1-2]\\d)\\.(html|pdf)': 'P356=10.1051/0004-6361/20\\g<2>\\g<1>',
                     'http[s]?://(?:ui\\.)?adsabs.harvard.edu/abs/([^/]+).*': 'P819=\\g<1>',
                     'adsabs\\.harvard\\.edu/cgi-bin/nph-bib_query\\?bibcode=([^\\&]+).*': 'P819=\\g<1>',
                     'http://onlinelibrary.wiley.com/doi/([^x]+x).*': 'P356=\\g<1>',
