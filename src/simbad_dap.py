@@ -2,11 +2,13 @@
 import csv
 import os.path
 import re
-import requests
 import sys
-from astropy import coordinates
 from contextlib import closing
 from decimal import InvalidOperation
+
+import requests
+from astropy import coordinates
+
 from wikidata import WikiData
 
 
@@ -122,20 +124,23 @@ class SimbadDAP(WikiData):
     @staticmethod
     def tap_query(url, sql, result=None):
         result = {} if result is None else result
-        with closing(requests.post(url + '/sync', params={'request': 'doQuery', 'lang': 'adql', 'format': 'csv',
-                                                          'maxrec': -1, 'query': sql, }, stream=True)) as r:
-            reader = csv.reader(r.iter_lines(decode_unicode='utf-8'), delimiter=',', quotechar='"')
-            header = next(reader)
-            for line in reader:
-                if len(line) > 0:
-                    row = {}
-                    for i in range(1, len(line)):
-                        row[header[i]] = ' '.join(line[i].split()) if isinstance(line[i], str) else line[i]
-                    object_id = ' '.join(line[0].split())
-                    if object_id in result:
-                        result[object_id].append(row)
-                    else:
-                        result[object_id] = [row]
+        try:
+            with closing(requests.post(url + '/sync', params={'request': 'doQuery', 'lang': 'adql', 'format': 'csv',
+                                                              'maxrec': -1, 'query': sql, }, stream=True)) as r:
+                reader = csv.reader(r.iter_lines(decode_unicode='utf-8'), delimiter=',', quotechar='"')
+                header = next(reader)
+                for line in reader:
+                    if len(line) > 0:
+                        row = {}
+                        for i in range(1, len(line)):
+                            row[header[i]] = ' '.join(line[i].split()) if isinstance(line[i], str) else line[i]
+                        object_id = ' '.join(line[0].split())
+                        if object_id in result:
+                            result[object_id].append(row)
+                        else:
+                            result[object_id] = [row]
+        except requests.exceptions.ConnectionError:
+            print('Error while retrieving results of the query: ' + sql)
         return result
 
     @staticmethod
