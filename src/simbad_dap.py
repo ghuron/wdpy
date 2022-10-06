@@ -91,14 +91,6 @@ class SimbadDAP(WikiData):
         ]:
             SimbadDAP.tap_query('https://simbad.u-strasbg.fr/simbad/sim-tap', query.format(condition), SimbadDAP.simbad)
 
-    def load_snaks(self):
-        if self.external_id not in self.simbad:
-            self.load_tap('main_id = \'' + self.external_id + '\'')  # attempt to load this specific object
-        if self.external_id in self.simbad:
-            super().load_snaks()
-            for row in self.simbad[self.external_id]:
-                self.parse_row(row)
-
     def post_process(self):
         super().post_process()
         if 'P59' not in self.entity['claims'] and 'P6257' in self.entity['claims'] and 'P6258' in self.entity['claims']:
@@ -147,7 +139,7 @@ class SimbadDAP(WikiData):
     def format_figure(row, col):
         return WikiData.format_float(row[col], int(row[col + 'p']) if col + 'p' in row and row[col + 'p'] != '' else -1)
 
-    def parse_row(self, row):
+    def parse_input(self, source=None):
         mapping = {'?': 6999, 'ev': 2680861, 'Rad': 1931185, 'mR': 67201491, 'cm': 67201524, 'mm': 67201561,
                    'smm': 67201574, 'HI': 67201586, 'rB': 15809070, 'Mas': 1341811, 'IR': 67206691, 'FIR': 67206701,
                    'NIR': 67206785, 'red': 71797619, 'ERO': 71797766, 'blu': 71798532, 'UV': 71798788, 'X': 2154519,
@@ -182,54 +174,59 @@ class SimbadDAP(WikiData):
                    'H2G': 318, 'LSB': 115518, 'AG?': 318, 'Q?': 318, 'Bz?': 318, 'BL?': 318, 'EmG': 72802508,
                    'SBG': 726611, 'bCG': 318, 'AGN': 46587, 'LIN': 2557101, 'SyG': 213930, 'Sy1': 71965429,
                    'Sy2': 71965638, 'Bla': 221221, 'BLL': 195385, 'OVV': 7073158, 'QSO': 83373}
-        for column in row:
-            if re.search('p\\d+$', column) and row[column] != '':
-                snak = None
-                if row[column] in mapping:
-                    snak = self.create_snak(column.upper(), 'Q' + str(mapping[row[column]]))
-                elif column == 'p397':
-                    if parent_id := SimbadDAP.get_by_id(row[column]):
-                        if row['parent_type'] in ['As*', 'Cl*', 'ClG', 'Cld', 'DNe', 'G', 'HII',
-                                                  'LSB', 'MGr', 'MoC', 'OpC', 'PaG', 'PN']:
-                            snak = self.create_snak('P361', parent_id)
+        if item.external_id not in item.simbad:
+            SimbadDAP.load_tap('main_id = \'' + item.external_id + '\'')  # attempt to load this specific object
+        if item.external_id in item.simbad:
+            super().parse_input()
+            for row in item.simbad[item.external_id]:
+                for col in row:
+                    if re.search('p\\d+$', col) and row[col] != '':
+                        snak = None
+                        if row[col] in mapping:
+                            snak = self.create_snak(col.upper(), 'Q' + str(mapping[row[col]]))
+                        elif col == 'p397':
+                            if parent_id := SimbadDAP.get_by_id(row[col]):
+                                if row['parent_type'] in ['As*', 'Cl*', 'ClG', 'Cld', 'DNe', 'G', 'HII',
+                                                          'LSB', 'MGr', 'MoC', 'OpC', 'PaG', 'PN']:
+                                    snak = self.create_snak('P361', parent_id)
+                                else:
+                                    snak = self.create_snak('P397', parent_id)
+                        elif col == 'p215':
+                            snak = self.create_snak('P215', row[col].replace(' ', ''))
                         else:
-                            snak = self.create_snak('P397', parent_id)
-                elif column == 'p215':
-                    snak = self.create_snak('P215', row[column].replace(' ', ''))
-                else:
-                    if column == 'p2216' and row['p2216t'] != 'v':
-                        continue
-                    if column + 'h' not in row:
-                        try:
-                            snak = self.create_snak(column.upper(), SimbadDAP.format_figure(row, column))
-                        except InvalidOperation:
-                            continue
-                    else:
-                        try:
-                            high = SimbadDAP.format_figure(row, column + 'h')
-                            low = SimbadDAP.format_figure(row, column + 'l')
-                            figure = SimbadDAP.format_figure(row, column)
-                            snak = self.create_snak(column.upper(), figure, low, high)
-                        except InvalidOperation:
-                            continue
+                            if col == 'p2216' and row['p2216t'] != 'v':
+                                continue
+                            if col + 'h' not in row:
+                                try:
+                                    snak = self.create_snak(col.upper(), SimbadDAP.format_figure(row, col))
+                                except InvalidOperation:
+                                    continue
+                            else:
+                                try:
+                                    high = SimbadDAP.format_figure(row, col + 'h')
+                                    low = SimbadDAP.format_figure(row, col + 'l')
+                                    figure = SimbadDAP.format_figure(row, col)
+                                    snak = self.create_snak(col.upper(), figure, low, high)
+                                except InvalidOperation:
+                                    continue
 
-                if snak is not None:
-                    if column + 'u' in row:
-                        snak['datavalue']['value']['unit'] = 'http://www.wikidata.org/entity/' + row[column + 'u']
-                    if column + 'r' in row and row[column + 'r'] != '':
-                        if ads_bibcode := re.search('bibcode=(\\d{4}[\\dA-Za-z.&]+)', row[column + 'r']):
-                            row[column + 'r'] = ads_bibcode.group(1)
-                        if self.ads_articles is None:
-                            self.ads_articles = self.query('SELECT ?id ?item {?item wdt:P819 ?id}')
-                        if row[column + 'r'] in self.ads_articles:
-                            snak['source'] = [self.ads_articles[row[column + 'r']]]
-                    snak['mespos'] = row['mespos']
-                    if 'filter' in row:
-                        band = {'K': 2520419, 'V': 4892529, 'B': 6746395, 'R': 15977411, 'U': 15977921,
-                                'I': 15987557, 'J': 15991308, 'H': 16556693, 'G': 66659648,
-                                'u': 72675509, 'g': 72675633, 'r': 72675737, 'i': 72675868, 'z': 72675951}
-                        snak['qualifiers'] = {'P1227': 'Q' + str(band[row['filter']])}
-                    self.input_snaks.append(snak)
+                        if snak is not None:
+                            if col + 'u' in row:
+                                snak['datavalue']['value']['unit'] = 'http://www.wikidata.org/entity/' + row[col + 'u']
+                            if col + 'r' in row and row[col + 'r'] != '':
+                                if ads_bibcode := re.search('bibcode=(\\d{4}[\\dA-Za-z.&]+)', row[col + 'r']):
+                                    row[col + 'r'] = ads_bibcode.group(1)
+                                if self.ads_articles is None:
+                                    self.ads_articles = self.query('SELECT ?id ?item {?item wdt:P819 ?id}')
+                                if row[col + 'r'] in self.ads_articles:
+                                    snak['source'] = [self.ads_articles[row[col + 'r']]]
+                            snak['mespos'] = row['mespos']
+                            if 'filter' in row:
+                                band = {'K': 2520419, 'V': 4892529, 'B': 6746395, 'R': 15977411, 'U': 15977921,
+                                        'I': 15987557, 'J': 15991308, 'H': 16556693, 'G': 66659648,
+                                        'u': 72675509, 'g': 72675633, 'r': 72675737, 'i': 72675868, 'z': 72675951}
+                                snak['qualifiers'] = {'P1227': 'Q' + str(band[row['filter']])}
+                            self.input_snaks.append(snak)
 
     def get_min_position(self, property_id):
         result = 999
@@ -251,5 +248,7 @@ if sys.argv[0].endswith(os.path.basename(__file__)):  # if not imported
     for simbad_id in wd_items:
         # simbad_id = '* 51 Eri b'
         item = SimbadDAP(simbad_id)
-        item.load(wd_items[simbad_id])
+        if wd_items[simbad_id] is not None:
+            item.entity = WikiData.load_items([wd_items[simbad_id]])[wd_items[simbad_id]]
+        item.parse_input()
         item.update()

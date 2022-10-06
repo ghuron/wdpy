@@ -18,7 +18,7 @@ from wikidata import WikiData
 
 class ExoplanetEu(WikiData):
     constellations = None
-    source = {}
+    sources = {}
 
     def __init__(self, external_id):
         super().__init__(external_id)
@@ -32,17 +32,17 @@ class ExoplanetEu(WikiData):
 
     @staticmethod
     def get_next_chunk(offset):
-        result = []
+        identifiers = []
         offset = 0 if offset is None else offset
-        response = requests.post('http://exoplanet.eu/catalog/json/',
-                                 {'sSearch': '', 'iSortCol_0': 9, 'iDisplayStart': offset, 'sEcho': 1,
-                                  'iDisplayLength': 1000, 'sSortDir_0': 'desc'})
-        if response.status_code == 200:
-            aa_data = json.loads(response.content)['aaData']
+        result = requests.post('http://exoplanet.eu/catalog/json/',
+                               {'sSearch': '', 'iSortCol_0': 9, 'iDisplayStart': offset, 'sEcho': 1,
+                                'iDisplayLength': 1000, 'sSortDir_0': 'desc'})
+        if result.status_code == 200:
+            aa_data = json.loads(result.content)['aaData']
             for record in aa_data:
-                result.append(re.sub('<[^<]+?>', '', record[0]))
-            offset += len(result)
-        return result, offset
+                identifiers.append(re.sub('<[^<]+?>', '', record[0]))
+            offset += len(identifiers)
+        return identifiers, offset
 
     def obtain_claim(self, snak):
         if snak is None:
@@ -115,14 +115,14 @@ class ExoplanetEu(WikiData):
                 return ref_id
         print('Could not parse url: ' + url)
 
-    def parse_sources(self, page):
-        publications = page.find_all('p', {'class': 'publication'})
+    def parse_sources(self, source):
+        publications = source.find_all('p', {'class': 'publication'})
         for p in publications:
             links = p.find_all('a', {'target': '_blank'})
             for a in links:
-                if p.get('id') not in self.source and a.get('href') is not None:
+                if p.get('id') not in self.sources and a.get('href') is not None:
                     if (ref_id := self.parse_url(a.get('href').strip())) is not None:
-                        self.source[p.get('id')] = ref_id
+                        self.sources[p.get('id')] = ref_id
                         break
 
     def parse_text(self, property_id, text):
@@ -163,24 +163,14 @@ class ExoplanetEu(WikiData):
             result['datavalue']['value']['unit'] = 'http://www.wikidata.org/entity/Q' + str(ids[reg.group('unit')])
         return result
 
-    def load_snaks(self):
-        try:
-            response = requests.Session().get("http://exoplanet.eu/catalog/" + self.external_id)
-            if response.status_code != 200:
-                print('Error {} while retrieving "{}", skipping it'.format(response.status_code, self.external_id))
-                return
-        except requests.exceptions.ConnectionError as e:
-            print('Error {} while retrieving "{}", skipping it'.format(e, self.external_id))
-            return
-
-        page = BeautifulSoup(response.content, 'html.parser')
-        self.parse_sources(page)
-        if parsing_planet := 'P1046' in self.properties.values():
-            super().load_snaks()
+    def parse_input(self, source=None):
+        if parsing_planet := ('P1046' in self.properties.values()):
+            super().parse_input()
         else:
-            self.input_snaks = []
+            self.input_snaks = []  # do not write P5356:exoplanet_id for the host star
+        self.parse_sources(source)
         current_snak = None
-        for td in page.find_all('td'):
+        for td in source.find_all('td'):
             if td.get('id') in self.properties and td.text != '—':
                 if current_snak is not None:
                     self.input_snaks.append(current_snak)
@@ -188,10 +178,10 @@ class ExoplanetEu(WikiData):
             elif current_snak is not None:
                 if 'showArticle' in str(td):
                     ref_id = re.sub('.+\'(\\d+)\'.+', '\\g<1>', str(td))
-                    if ref_id in self.source:
+                    if ref_id in self.sources:
                         if 'source' not in current_snak:
                             current_snak['source'] = []
-                        current_snak['source'].append(self.source[ref_id])
+                        current_snak['source'].append(self.sources[ref_id])
                 elif 'showAllPubs' not in str(td) and current_snak is not None:
                     self.input_snaks.append(current_snak)
                     current_snak = None
@@ -202,10 +192,8 @@ class ExoplanetEu(WikiData):
                 if len(ident) != 1:
                     continue
                 force_create = parsing_planet and 'claims' in self.entity and 'P397' not in self.entity['claims']
-                if parent_id := SimbadDAP.get_by_id(list(ident.keys())[0], force_create):
-                    current_snak = self.create_snak('P397', parent_id)
-
-        page.decompose()
+                if host_id := SimbadDAP.get_by_id(list(ident.keys())[0], force_create):
+                    current_snak = self.create_snak('P397', host_id)
         if current_snak is not None:
             self.input_snaks.append(current_snak)
 
@@ -221,12 +209,26 @@ if sys.argv[0].endswith(basename(__file__)):  # if not imported
     for ex_id in wd_items:
         # ex_id = '55 Cnc e'
         item = ExoplanetEu(ex_id)
-        item.load(wd_items[ex_id])
+        if wd_items[ex_id] is not None:
+            item.entity = ExoplanetEu.load_items([wd_items[ex_id]])[wd_items[ex_id]]
+        try:
+            response = requests.Session().get("http://exoplanet.eu/catalog/" + ex_id)
+            if response.status_code != 200:
+                print('Error {} while retrieving "{}", skipping it'.format(response.status_code, ex_id))
+                continue
+        except (requests.exceptions.ConnectionError, requests.exceptions.ReadTimeout) as e:
+            print('Error {} while retrieving "{}", skipping it'.format(e, ex_id))
+            continue
+        page = BeautifulSoup(response.content, 'html.parser')
+        item.parse_input(page)
         item.update()
-        if 'P397' in item.entity['claims'] and len(item.entity['claims']['P397']) == 1:
+        if 'P397' in item.ent['claims'] and len(item.entity['claims']['P397']) == 1:
             if 'datavalue' in item.entity['claims']['P397'][0]['mainsnak']:  # parent != "novalue"
                 parent = ExoplanetEu(ex_id)
+                parent_id = item.entity['claims']['P397'][0]['mainsnak']['datavalue']['value']['id']
+                parent.entity = ExoplanetEu.load_items([parent_id])[parent_id]
                 parent.properties = STAR
-                parent.load(item.entity['claims']['P397'][0]['mainsnak']['datavalue']['value']['id'])
+                parent.parse_input(page)
                 parent.update()
+        page.decompose()
         time.sleep(10)

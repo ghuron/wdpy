@@ -5,7 +5,7 @@ import re
 import time
 import uuid
 from _datetime import datetime
-from abc import ABC
+from abc import ABC, abstractmethod
 from contextlib import closing
 from decimal import Decimal, DecimalException
 
@@ -165,13 +165,9 @@ class WikiData(ABC):
         result = WikiData.api_call('wbgetentities', {'props': 'claims|info|labels', 'ids': '|'.join(ids)})
         return result['entities'] if result is not None and 'entities' in result else None
 
-    def load_snaks(self):
+    @abstractmethod
+    def parse_input(self, source=None):
         self.input_snaks = [self.create_snak(self.db_property, self.external_id)]
-
-    def load(self, qid: str = None):
-        if qid is not None:
-            self.entity = WikiData.load_items([qid])[qid]
-        self.load_snaks()
 
     def obtain_claim(self, snak: dict):
         if snak is None:
@@ -352,5 +348,5 @@ class WikiData(ABC):
         if qid := WikiData.api_search('haswbstatement:"{}={}"'.format(instance.db_property, external_id)):
             return qid
         if create:
-            instance.load()
+            instance.parse_input()
             return instance.update()

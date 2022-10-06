@@ -1,8 +1,11 @@
 #!/usr/bin/python3
 import sys
-import requests
 from os.path import basename
+
+import requests
+
 from wikidata import WikiData
+
 
 class YadVashem(WikiData):
     endpoint = requests.Session()
@@ -65,7 +68,7 @@ class YadVashem(WikiData):
     def info(book_id, named_as, message):
         print('https://righteous.yadvashem.org/?itemId=' + book_id + '\t"' + named_as + '"\t' + message)
 
-    def transform_snaks(self, input_item):
+    def parse_input(self, source=None):
         mapping = {
             'ACCOUNTANT': 326653, 'ACTIVIST': 15253558, 'ACTOR': 33999, 'ACTRESS': 33999, 'ADMINISTRATOR': 16532929,
             'ADVISOR': 2994387, 'AGENT': 109555060, 'AGRICULTEUR': 131512, 'AGRICULTURAL ENGINEER': 10272925,
@@ -190,9 +193,9 @@ class YadVashem(WikiData):
         properties = {'recognition_date': 'P585', 'nationality': 'P27', 'gender': 'P21', 'cause_of_death': 'P509',
                       'religion': 'P140', 'date_of_death': 'P570', 'date_of_birth': 'P569', 'profession': 'P106'}
 
-        self.load_snaks()
+        super().parse_input()
         self.input_snaks.append(self.create_snak('P31', 'Q5'))
-        for element in input_item:
+        for element in source:
             if element['Title'] in properties:
                 value = 'Q' + str(mapping[element['Value']]) if element['Value'] in mapping else element['Value']
                 self.input_snaks.append(self.create_snak(properties[element['Title']], value))
@@ -252,7 +255,7 @@ if sys.argv[0].endswith(basename(__file__)):  # if not imported
         if (group := YadVashem.load_items(list(filter(lambda x: isinstance(x, str), qids)))) is None:
             continue
         YadVashem.pending = []
-        case = YadVashem.post('GetPersonDetailsBySession','bookId:"' + item_id + '"')
+        case = YadVashem.post('GetPersonDetailsBySession', 'bookId:"' + item_id + '"')
         for row in case['d']['Individuals']:
             if row['Title'] is not None:
                 row['Title'] = ' '.join(row['Title'].split())
@@ -265,7 +268,7 @@ if sys.argv[0].endswith(basename(__file__)):  # if not imported
                     item.entity = group[wd_items[item_id][row['Title']]]
                     del wd_items[item_id][row['Title']]  # consider it processed
 
-                item.transform_snaks(row['Details'])
+                item.parse_input(row['Details'])
                 item.update()
 
         YadVashem.create_pending(wd_items[item_id])
