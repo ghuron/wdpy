@@ -222,7 +222,7 @@ if sys.argv[0].endswith(basename(__file__)):  # if not imported
         page = BeautifulSoup(response.content, 'html.parser')
         item.parse_input(page)
         item.update()
-        if 'P397' in item.ent['claims'] and len(item.entity['claims']['P397']) == 1:
+        if 'P397' in item.entity['claims'] and len(item.entity['claims']['P397']) == 1:
             if 'datavalue' in item.entity['claims']['P397'][0]['mainsnak']:  # parent != "novalue"
                 parent = ExoplanetEu(ex_id)
                 parent_id = item.entity['claims']['P397'][0]['mainsnak']['datavalue']['value']['id']
