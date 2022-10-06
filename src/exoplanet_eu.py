@@ -87,29 +87,31 @@ class ExoplanetEu(WikiData):
         if not url:
             return
 
-        patterns = {'.*48550/arXiv\\.(\\d{4}.\\d+|[a-z\\-]+(\\.[A-Z]{2})?\\/\\d{7}).*': 'haswbstatement:P818=\\g<1>',
-                    '(http[s]?://)?(dx\\.)?doi\\.org/': 'haswbstatement:P356=',
-                    '.*arxiv\\.org/abs/(\\d{4}.\\d+|[a-z\\-]+(\\.[A-Z]{2})?\\/\\d{7}).*': 'haswbstatement:P818=\\g<1>',
-                    'http[s]?://www\\.journals\\.uchicago\\.edu/doi/abs/': 'haswbstatement:P356=',
-                    '.*iopscience.iop.org/1538-3881/(.+\\d)/?$': 'haswbstatement:P356=10.1088/0004-6256/\\g<1>',
-                    '.*iopscience.iop.org/(.+\\d)/?$': 'haswbstatement:P356=10.1088/\\g<1>',
-                    '.*iop.org/EJ/abstract/1402-4896/(.+\\d)/?$': 'haswbstatement:P356=10.1088/0031-8949/\\g<1>',
-                    '.*iop.org/EJ/abstract/1538-4357/(.+\\d)/?$': 'haswbstatement:P356=10.1088/0004-637X/\\g<1>',
-                    '.*iop.org/EJ/abstract/(.+\\d)/?$': 'haswbstatement:P356=10.1088/\\g<1>',
-                    '.*aa/abs/\\d+/\\d+/aa(\\d+)-(\\d\\d).*': 'haswbstatement:P356=10.1088/\\g<1>',
-                    'http[s]?://(?:ui\\.)?adsabs.harvard.edu/abs/([^/]+).*': 'haswbstatement:P819=\\g<1>',
-                    'adsabs\\.harvard\\.edu/cgi-bin/nph-bib_query\\?bibcode=([^\\&]+).*': 'haswbstatement:P819=\\g<1>',
-                    'http://onlinelibrary.wiley.com/doi/([^x]+x).*': 'haswbstatement:P356=\\g<1>',
-                    'http://online.liebertpub.com/doi/abs/([^\\?]+).*': 'haswbstatement:P356=\\g<1>',
-                    '.*bn=(\\d{3})(\\d)(\\d{3})(\\d{5})(\\d)': 'haswbstatement:P212=\\g<1>-\\g<2>-\\g<3>-\\g<4>-\\g<5>',
-                    '.+jstor\\.org/stable/(info/)?': 'haswbstatement:P356=',
-                    '.*doi=([^&]+)(&.+)?$': 'haswbstatement:P356=\\g<1>'}
+        patterns = {'.*48550/arXiv\\.(\\d{4}.\\d+|[a-z\\-]+(\\.[A-Z]{2})?\\/\\d{7}).*': 'P818=\\g<1>',
+                    '(http[s]?://)?(dx\\.)?doi\\.org/': 'P356=',
+                    '.*arxiv\\.org/abs/(\\d{4}.\\d+|[a-z\\-]+(\\.[A-Z]{2})?\\/\\d{7}).*': 'P818=\\g<1>',
+                    'http[s]?://www\\.journals\\.uchicago\\.edu/doi/abs/': 'P356=',
+                    '.*iopscience.iop.org/1538-3881/(.+\\d)/?$': 'P356=10.1088/0004-6256/\\g<1>',
+                    '.*iopscience.iop.org/(.+\\d)/?$': 'P356=10.1088/\\g<1>',
+                    '.*iop.org/EJ/abstract/1402-4896/(.+\\d)/?$': 'P356=10.1088/0031-8949/\\g<1>',
+                    '.*iop.org/EJ/abstract/1538-4357/(.+\\d)/?$': 'P356=10.1088/0004-637X/\\g<1>',
+                    '.*iop.org/EJ/abstract/(.+\\d)/?$': 'P356=10.1088/\\g<1>',
+                    '.*aanda.org/articles/aa/abs/.+/.+/aa(\\d+)-(\\d+).*': 'P356=10.1051/0004-6361/20\\g<2>\\g<1>',
+                    '.*sciences.org/articles/aa/abs/.+/.+/aa(\\d+)-(\\d+).*': 'P356=10.1051/0004-6361:20\\g<2>\\g<1>',
+                    'http[s]?://(?:ui\\.)?adsabs.harvard.edu/abs/([^/]+).*': 'P819=\\g<1>',
+                    'adsabs\\.harvard\\.edu/cgi-bin/nph-bib_query\\?bibcode=([^\\&]+).*': 'P819=\\g<1>',
+                    'http://onlinelibrary.wiley.com/doi/([^x]+x).*': 'P356=\\g<1>',
+                    'http://online.liebertpub.com/doi/abs/([^\\?]+).*': 'P356=\\g<1>',
+                    '.*bn=(\\d{3})(\\d)(\\d{3})(\\d{5})(\\d)': 'P212=\\g<1>-\\g<2>-\\g<3>-\\g<4>-\\g<5>',
+                    '.+jstor\\.org/stable/(info/)?': 'P356=',
+                    '.*doi=([^&]+)(&.+)?$': 'P356=\\g<1>',
+                    '.*/(nature\\d+).html': 'P356=10.1038/\\g<1>'}
         for search_pattern in patterns:
             query = urllib.parse.unquote(re.sub(search_pattern, patterns[search_pattern], url, flags=re.S))
-            if query.startswith('haswbstatement:P818='):
-                if ref_id := ArXiv.get_by_id(query.replace('haswbstatement:P818=', '')):
+            if query.startswith('P818='):
+                if ref_id := ArXiv.get_by_id(query.replace('P818=', '')):
                     return ref_id
-            elif query.startswith('haswbstatement') and (ref_id := WikiData.api_search(query)):
+            elif query.startswith('P') and (ref_id := WikiData.api_search('haswbstatement:' + query)):
                 return ref_id
         print('Could not parse url: ' + url)
 
