@@ -43,6 +43,14 @@ class WikiData(ABC):
         WikiData.api_call('login', {'lgtoken': token, 'lgname': WikiData.login, 'lgpassword': WikiData.password})
 
     @staticmethod
+    def load_items(ids: list[str]):
+        """Load up to 50 wikidata entities, returns None in case of error"""
+        if len(ids) == 0:
+            return {}
+        result = WikiData.api_call('wbgetentities', {'props': 'claims|info|labels', 'ids': '|'.join(ids)})
+        return result['entities'] if result is not None and 'entities' in result else None
+
+    @staticmethod
     def api_search(query: str) -> str | None:
         """CirrusSearch query, returns first found element, warns if zero or more than one found"""
         if (response := WikiData.api_call('query', {'list': 'search', 'srsearch': query})) and 'query' in response:
@@ -156,16 +164,9 @@ class WikiData(ABC):
         self.entity = None
         self.input_snaks = None
 
-    @staticmethod
-    def load_items(ids: list) -> dict[str, dict]:
-        if len(ids) == 0:
-            return {}
-        result = WikiData.api_call('wbgetentities', {'props': 'claims|info|labels', 'ids': '|'.join(ids)})
-        return result['entities'] if result is not None and 'entities' in result else None
-
     @abstractmethod
     def parse_input(self, source=None):
-        self.input_snaks = [self.create_snak(self.db_property, self.external_id)]
+        self.input_snaks = [WikiData.create_snak(self.db_property, self.external_id)]
 
     def obtain_claim(self, snak: dict):
         if snak is None:
@@ -249,7 +250,7 @@ class WikiData(ABC):
         if not default_ref_exists:
             claim['references'].append(self.process_own_reference(only_default_sources))
         for ref in references:
-            claim['references'].append({'snaks': {'P248': [self.create_snak('P248', ref)]}})
+            claim['references'].append({'snaks': {'P248': [WikiData.create_snak('P248', ref)]}})
 
     def filter_by_ref(self, unfiltered: list):
         filtered = []
@@ -342,9 +343,9 @@ class WikiData(ABC):
 
     @classmethod
     def get_by_id(cls, external_id, create=True):
-        instance = cls(external_id)
-        if qid := WikiData.api_search('haswbstatement:"{}={}"'.format(instance.db_property, external_id)):
+        if qid := WikiData.api_search('haswbstatement:"{}={}"'.format(cls.db_property, external_id)):
             return qid
         if create:
+            instance = cls(external_id)
             instance.parse_input()
             return instance.update()
