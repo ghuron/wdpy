@@ -43,10 +43,9 @@ class WikiData(ABC):
         WikiData.api_call('login', {'lgtoken': token, 'lgname': WikiData.login, 'lgpassword': WikiData.password})
 
     @staticmethod
-    def api_search(query: str) -> str:
+    def api_search(query: str) -> str | None:
         """CirrusSearch query, returns first found element, warns if zero or more than one found"""
-        response = WikiData.api_call('query', {'list': 'search', 'srsearch': query})
-        if 'query' in response:
+        if (response := WikiData.api_call('query', {'list': 'search', 'srsearch': query})) and 'query' in response:
             if len(response['query']['search']) != 1:
                 print(query + ' returned ' + str(len(response['query']['search'])) + ' results')
             if len(response['query']['search']) > 0:
