@@ -16,11 +16,8 @@ class SimbadDAP(WikiData):
     constellations = None
     ads_articles = None
     simbad = {}
-
-    def __init__(self, external_id):
-        super().__init__(external_id)
-        self.db_property = 'P3083'
-        self.db_ref = 'Q654724'
+    db_property = 'P3083'
+    db_ref = 'Q654724'
 
     @staticmethod
     def get_next_chunk(offset):

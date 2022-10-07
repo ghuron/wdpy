@@ -8,14 +8,14 @@ from wikidata import WikiData
 
 
 class YadVashem(WikiData):
+    db_property = 'P1979'
+    db_ref = 'Q77598447'
     endpoint = requests.Session()
     endpoint.headers.update({'Content-Type': 'application/json'})
     pending = []
 
     def __init__(self, group_id, named_as):
         super().__init__(group_id)
-        self.db_property = 'P1979'
-        self.db_ref = 'Q77598447'
         self.named_as = named_as
         self.award_cleared_qualifiers = []
 

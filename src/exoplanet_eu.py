@@ -19,11 +19,11 @@ from wikidata import WikiData
 class ExoplanetEu(WikiData):
     constellations = None
     sources = {}
+    db_property = 'P5653'
+    db_ref = 'Q1385430'
 
     def __init__(self, external_id):
         super().__init__(external_id)
-        self.db_property = 'P5653'
-        self.db_ref = 'Q1385430'
         self.properties = {'planet_planet_status_string_0': 'P31', 'planet_axis_0': 'P2233', 'planet_mass_0': 'P2067',
                            'planet_eccentricity_0': 'P1096', 'planet_period_0': 'P2146', 'planet_discovered_0': 'P575',
                            'planet_omega_0': 'P2248', 'planet_radius_0': 'P2120', 'planet_detection_type_0': 'P1046',

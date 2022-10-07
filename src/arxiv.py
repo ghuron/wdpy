@@ -11,11 +11,11 @@ from wikidata import WikiData
 
 class ArXiv(WikiData):
     arxiv = {}
+    db_property = 'P818'
+    db_ref = 'Q118398'
 
     def __init__(self, external_id):
         super().__init__(external_id)
-        self.db_property = 'P818'
-        self.db_ref = 'Q118398'
         self.doi = None
         self.author_num = 0
 

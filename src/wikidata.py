@@ -17,6 +17,7 @@ class WikiData(ABC):
     USER_AGENT = 'automated import by https://www.wikidata.org/wiki/User:Ghuron)'
     api = requests.Session()
     api.headers.update({'User-Agent': USER_AGENT})
+    db_property, db_ref = None, None
     login, password, token = '', '', 'bad'
     types: dict[str, str] = None
 
@@ -92,7 +93,7 @@ class WikiData(ABC):
         return str(Decimal(figure))
 
     @staticmethod
-    def fix_error(figure):
+    def fix_error(figure: str) -> str:
         if re.search('999+\\d$', figure):
             n = Decimal(999999999999999999999999)
             return WikiData.format_float(n - Decimal(WikiData.fix_error(WikiData.format_float(n - Decimal(figure)))))
@@ -155,8 +156,6 @@ class WikiData(ABC):
         self.external_id = external_id
         self.entity = None
         self.input_snaks = None
-        self.db_property = None
-        self.db_ref = None
 
     @staticmethod
     def load_items(ids: list) -> dict[str, dict]:
@@ -218,7 +217,7 @@ class WikiData(ABC):
         self.entity['claims'][snak['property']].append(new_claim)
         return new_claim
 
-    def process_own_reference(self, only_default_sources, ref=None):
+    def process_own_reference(self, only_default_sources: bool, ref: dict = None) -> dict:
         if ref is None:
             ref = {'snaks': {'P248': [self.create_snak('P248', self.db_ref)]}}
         if self.db_property in ref['snaks']:
@@ -230,7 +229,7 @@ class WikiData(ABC):
         #     ref['snaks']['P813'] = [self.create_snak('P813', datetime.now().strftime('%d/%m/%Y'))]
         return ref
 
-    def add_refs(self, claim, references=None):
+    def add_refs(self, claim: dict, references: list = None):
         references = [] if references is None else references
         if 'references' not in claim:
             claim['references'] = []
@@ -253,7 +252,7 @@ class WikiData(ABC):
         for ref in references:
             claim['references'].append({'snaks': {'P248': [self.create_snak('P248', ref)]}})
 
-    def filter_by_ref(self, unfiltered):
+    def filter_by_ref(self, unfiltered: list):
         filtered = []
         for statement in unfiltered:
             if 'references' in statement:
@@ -270,7 +269,7 @@ class WikiData(ABC):
         if 'en' not in self.entity['labels']:
             self.entity['labels']['en'] = {'value': self.external_id, 'language': 'en'}
 
-    def trace(self, message):
+    def trace(self, message: str):
         if self.entity is not None and 'id' in self.entity:
             message = 'https://www.wikidata.org/wiki/' + self.entity['id'] + '\t' + message
         print(message)
