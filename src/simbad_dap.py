@@ -174,11 +174,11 @@ class SimbadDAP(WikiData):
                    'H2G': 318, 'LSB': 115518, 'AG?': 318, 'Q?': 318, 'Bz?': 318, 'BL?': 318, 'EmG': 72802508,
                    'SBG': 726611, 'bCG': 318, 'AGN': 46587, 'LIN': 2557101, 'SyG': 213930, 'Sy1': 71965429,
                    'Sy2': 71965638, 'Bla': 221221, 'BLL': 195385, 'OVV': 7073158, 'QSO': 83373}
-        if item.external_id not in item.simbad:
-            SimbadDAP.load_tap('main_id = \'' + item.external_id + '\'')  # attempt to load this specific object
-        if item.external_id in item.simbad:
+        if self.external_id not in self.simbad:
+            SimbadDAP.load_tap('main_id = \'' + self.external_id + '\'')  # attempt to load this specific object
+        if self.external_id in self.simbad:
             super().parse_input()
-            for row in item.simbad[item.external_id]:
+            for row in self.simbad[self.external_id]:
                 for col in row:
                     if re.search('p\\d+$', col) and row[col] != '':
                         snak = None
