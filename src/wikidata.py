@@ -52,7 +52,7 @@ class WikiData(ABC):
         return result['entities'] if result is not None and 'entities' in result else None
 
     @staticmethod
-    def api_search(query: str) -> str | None:
+    def api_search(query: str):
         """CirrusSearch query, returns first found element, warns if zero or more than one found"""
         if (response := WikiData.api_call('query', {'list': 'search', 'srsearch': query})) and 'query' in response:
             if len(response['query']['search']) != 1:
@@ -162,7 +162,7 @@ class WikiData(ABC):
         return snak
 
     @staticmethod
-    def find_claim(value: dict, claims: list) -> dict | None:
+    def find_claim(value: dict, claims: list):
         for candidate_claim in claims:
             if 'datavalue' not in candidate_claim['mainsnak']:
                 continue
