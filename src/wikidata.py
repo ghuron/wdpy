@@ -161,7 +161,28 @@ class WikiData(ABC):
             snak['datavalue']['type'] = 'string'
         return snak
 
-    def __init__(self, external_id: str):
+    @staticmethod
+    def find_claim(value: dict, claims: list) -> dict | None:
+        for candidate_claim in claims:
+            if 'datavalue' not in candidate_claim['mainsnak']:
+                continue
+            candidate = candidate_claim['mainsnak']['datavalue']['value']
+            if candidate == value:
+                return candidate_claim
+            elif 'id' in value and candidate['id'] == value['id']:
+                return candidate_claim
+            elif 'time' in value and candidate['precision'] == value['precision']:
+                if candidate['time'] == value['time']:
+                    return candidate_claim
+                if candidate['precision'] == 9 and candidate['time'][0:5] == value['time'][0:5]:
+                    return candidate_claim
+            elif 'amount' in value and float(candidate['amount']) == float(value['amount']):
+                if 'lowerBound' not in value:
+                    return candidate_claim
+                if 'lowerBound' in candidate and float(candidate['lowerBound']) == float(value['lowerBound']):
+                    return candidate_claim
+
+    def __init__(self, external_id: str, qid: str = None):
         self.external_id = external_id
         self.entity = None
         self.input_snaks = None
@@ -176,48 +197,20 @@ class WikiData(ABC):
 
         self.entity = {} if self.entity is None else self.entity
         self.entity['claims'] = {} if 'claims' not in self.entity else self.entity['claims']
-
-        if snak['property'] in self.entity['claims']:
-            for candidate in self.entity['claims'][snak['property']]:
-                if 'datavalue' not in candidate['mainsnak']:
-                    continue
-                if isinstance(snak['datavalue']['value'], str):
-                    if candidate['mainsnak']['datavalue']['value'] == snak['datavalue']['value']:
-                        return candidate
-                elif snak['datavalue']['value'] == candidate['mainsnak']['datavalue']['value']:
-                    return candidate
-                elif 'id' in snak['datavalue']['value']:
-                    if candidate['mainsnak']['datavalue']['value']['id'] == snak['datavalue']['value']['id']:
-                        return candidate
-                elif 'time' in snak['datavalue']['value']:
-                    value1 = candidate['mainsnak']['datavalue']['value']
-                    value2 = snak['datavalue']['value']
-                    if value1['precision'] == value2['precision']:
-                        if value1['precision'] == 9 and value1['time'][0:5] == value2['time'][0:5]:
-                            return candidate
-                        if value1['time'] == value2['time'] and value1['precision'] == value2['precision']:
-                            return candidate
-                elif 'amount' in snak['datavalue']['value']:
-                    source = candidate['mainsnak']['datavalue']['value']
-                    if float(source['amount']) == float(snak['datavalue']['value']['amount']):
-                        if 'lowerBound' in source and 'lowerBound' in snak['datavalue']['value']:
-                            if float(source['lowerBound']) == float(snak['datavalue']['value']['lowerBound']):
-                                return candidate
-                        if 'lowerBound' not in snak['datavalue']['value']:
-                            return candidate
-
-        new_claim = {'type': 'statement', 'mainsnak': snak}
-        if 'id' in self.entity:
-            new_claim['id'] = self.entity['id'] + '$' + str(uuid.uuid4())
-        if 'qualifiers' in snak:
-            new_claim['qualifiers'] = {}
-            for property_id in snak['qualifiers']:
-                new_claim['qualifiers'][property_id] = [self.create_snak(property_id, snak['qualifiers'][property_id])]
-
         if snak['property'] not in self.entity['claims']:
             self.entity['claims'][snak['property']] = []
-        self.entity['claims'][snak['property']].append(new_claim)
-        return new_claim
+
+        if (claim := WikiData.find_claim(snak['datavalue']['value'], self.entity['claims'][snak['property']])) is None:
+            claim = {'type': 'statement', 'mainsnak': snak}
+            if 'id' in self.entity:
+                claim['id'] = self.entity['id'] + '$' + str(uuid.uuid4())
+            self.entity['claims'][snak['property']].append(claim)
+
+        if 'qualifiers' in snak:
+            claim['qualifiers'] = {} if 'qualifiers' not in claim else claim['qualifiers']
+            for property_id in snak['qualifiers']:
+                claim['qualifiers'][property_id] = [self.create_snak(property_id, snak['qualifiers'][property_id])]
+        return claim
 
     def process_own_reference(self, only_default_sources: bool, ref: dict = None) -> dict:
         if ref is None:
