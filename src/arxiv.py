@@ -25,7 +25,7 @@ class ArXiv(WikiData):
             try:
                 with request.urlopen(url) as file:
                     return ElementTree.fromstring(file.read())
-            except (error.HTTPError, http.client.IncompleteRead):
+            except (error.HTTPError, http.client.IncompleteRead, ConnectionResetError):
                 print('Error while fetching ' + url)
                 time.sleep(60)
         return None
