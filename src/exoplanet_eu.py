@@ -187,11 +187,11 @@ class ExoplanetEu(WikiData):
                 ident = SimbadDAP.tap_query('https://simbad.u-strasbg.fr/simbad/sim-tap',
                                             'SELECT main_id FROM ident JOIN basic ON oid = oidref ' +
                                             'WHERE id=\'' + td.text + '\'')
-                if len(ident) != 1:
-                    continue
-                force_create = parsing_planet and 'claims' in self.entity and 'P397' not in self.entity['claims']
-                if host_id := SimbadDAP.get_by_id(list(ident.keys())[0], force_create):
-                    current_snak = self.create_snak('P397', host_id)
+                if len(ident) == 1:
+                    no_parent = self.entity and 'claims' in self.entity and 'P397' not in self.entity['claims']
+                    if host_id := SimbadDAP.get_by_id(list(ident.keys())[0], no_parent):
+                        current_snak = self.create_snak('P397', host_id)
+
         if current_snak is not None:
             self.input_snaks.append(current_snak)
 
