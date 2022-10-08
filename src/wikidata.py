@@ -184,11 +184,14 @@ class WikiData(ABC):
 
     def __init__(self, external_id: str, qid: str = None):
         self.external_id = external_id
-        self.entity = None
-        self.input_snaks = None
+        self.qid = qid
+        self.entity, self.input_snaks = None, None
 
     @abstractmethod
-    def parse_input(self, source=None):
+    def prepare_data(self, source=None) -> None:
+        """Load self.entity using self.qid and prepare self.input_snaks by parsing source using self.external_id"""
+        if self.qid:
+            self.entity = WikiData.load_items([self.qid])[self.qid]
         self.input_snaks = [WikiData.create_snak(self.db_property, self.external_id)]
 
     def obtain_claim(self, snak: dict):
@@ -332,15 +335,17 @@ class WikiData(ABC):
                                 continue
                 else:  # there is always P248:db_ref, so if there are no other references -> delete statement
                     claim['remove'] = 1
+
         self.post_process()
         if json.dumps(self.entity) != original:
             return self.save()
 
     @classmethod
-    def get_by_id(cls, external_id, create=True):
+    def get_by_id(cls, external_id: str, create=True):
+        """Attempt to find qid by external_id or create it"""
         if qid := WikiData.api_search('haswbstatement:"{}={}"'.format(cls.db_property, external_id)):
             return qid
         if create:
             instance = cls(external_id)
-            instance.parse_input()
+            instance.prepare_data()
             return instance.update()

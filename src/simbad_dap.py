@@ -136,7 +136,7 @@ class SimbadDAP(WikiData):
     def format_figure(row, col):
         return WikiData.format_float(row[col], int(row[col + 'p']) if col + 'p' in row and row[col + 'p'] != '' else -1)
 
-    def parse_input(self, source=None):
+    def prepare_data(self, source=None):
         mapping = {'?': 6999, 'ev': 2680861, 'Rad': 1931185, 'mR': 67201491, 'cm': 67201524, 'mm': 67201561,
                    'smm': 67201574, 'HI': 67201586, 'rB': 15809070, 'Mas': 1341811, 'IR': 67206691, 'FIR': 67206701,
                    'NIR': 67206785, 'red': 71797619, 'ERO': 71797766, 'blu': 71798532, 'UV': 71798788, 'X': 2154519,
@@ -174,7 +174,7 @@ class SimbadDAP(WikiData):
         if self.external_id not in self.simbad:
             SimbadDAP.load_tap('main_id = \'' + self.external_id + '\'')  # attempt to load this specific object
         if self.external_id in self.simbad:
-            super().parse_input()
+            super().prepare_data()
             for row in self.simbad[self.external_id]:
                 for col in row:
                     if re.search('p\\d+$', col) and row[col] != '':
@@ -244,8 +244,6 @@ if sys.argv[0].endswith(os.path.basename(__file__)):  # if not imported
     # wd_items['SDSS J003906.37+250601.3'] = None
     for simbad_id in wd_items:
         # simbad_id = '* 51 Eri b'
-        item = SimbadDAP(simbad_id)
-        if wd_items[simbad_id] is not None:
-            item.entity = WikiData.load_items([wd_items[simbad_id]])[wd_items[simbad_id]]
-        item.parse_input()
+        item = SimbadDAP(simbad_id, wd_items[simbad_id])
+        item.prepare_data()
         item.update()

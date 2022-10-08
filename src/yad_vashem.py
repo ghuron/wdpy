@@ -64,7 +64,7 @@ class YadVashem(WikiData):
     def info(book_id, named_as, message):
         print('https://righteous.yadvashem.org/?itemId=' + book_id + '\t"' + named_as + '"\t' + message)
 
-    def parse_input(self, source=None):
+    def prepare_data(self, source=None):
         mapping = {
             'ACCOUNTANT': 326653, 'ACTIVIST': 15253558, 'ACTOR': 33999, 'ACTRESS': 33999, 'ADMINISTRATOR': 16532929,
             'ADVISOR': 2994387, 'AGENT': 109555060, 'AGRICULTEUR': 131512, 'AGRICULTURAL ENGINEER': 10272925,
@@ -265,7 +265,7 @@ if sys.argv[0].endswith(basename(__file__)):  # if not imported
                     item.entity = group[wd_items[item_id][row['Title']]]
                     del wd_items[item_id][row['Title']]  # consider it processed
 
-                item.parse_input(row['Details'])
+                item.prepare_data(row['Details'])
                 item.update()
 
         YadVashem.create_pending(wd_items[item_id])

@@ -22,8 +22,8 @@ class ExoplanetEu(WikiData):
     db_property = 'P5653'
     db_ref = 'Q1385430'
 
-    def __init__(self, external_id):
-        super().__init__(external_id)
+    def __init__(self, external_id, qid=None):
+        super().__init__(external_id, qid)
         self.properties = {'planet_planet_status_string_0': 'P31', 'planet_axis_0': 'P2233', 'planet_mass_0': 'P2067',
                            'planet_eccentricity_0': 'P1096', 'planet_period_0': 'P2146', 'planet_discovered_0': 'P575',
                            'planet_omega_0': 'P2248', 'planet_radius_0': 'P2120', 'planet_detection_type_0': 'P1046',
@@ -162,10 +162,9 @@ class ExoplanetEu(WikiData):
             result['datavalue']['value']['unit'] = 'http://www.wikidata.org/entity/Q' + str(ids[reg.group('unit')])
         return result
 
-    def parse_input(self, source=None):
-        if parsing_planet := ('P1046' in self.properties.values()):
-            super().parse_input()
-        else:
+    def prepare_data(self, source=None):
+        super().prepare_data()
+        if not (parsing_planet := ('P1046' in self.properties.values())):
             self.input_snaks = []  # do not write P5356:exoplanet_id for the host star
         self.parse_sources(source)
         current_snak = None
@@ -207,9 +206,7 @@ if sys.argv[0].endswith(basename(__file__)):  # if not imported
 
     for ex_id in wd_items:
         # ex_id = '55 Cnc e'
-        item = ExoplanetEu(ex_id)
-        if wd_items[ex_id] is not None:
-            item.entity = ExoplanetEu.load_items([wd_items[ex_id]])[wd_items[ex_id]]
+        item = ExoplanetEu(ex_id, wd_items[ex_id])
         try:
             response = requests.Session().get("http://exoplanet.eu/catalog/" + ex_id)
             if response.status_code != 200:
@@ -219,15 +216,13 @@ if sys.argv[0].endswith(basename(__file__)):  # if not imported
             print('Error {} while retrieving "{}", skipping it'.format(e, ex_id))
             continue
         page = BeautifulSoup(response.content, 'html.parser')
-        item.parse_input(page)
+        item.prepare_data(page)
         item.update()
         if 'P397' in item.entity['claims'] and len(item.entity['claims']['P397']) == 1:
             if 'datavalue' in item.entity['claims']['P397'][0]['mainsnak']:  # parent != "novalue"
-                parent = ExoplanetEu(ex_id)
-                parent_id = item.entity['claims']['P397'][0]['mainsnak']['datavalue']['value']['id']
-                parent.entity = ExoplanetEu.load_items([parent_id])[parent_id]
+                parent = ExoplanetEu(ex_id, item.entity['claims']['P397'][0]['mainsnak']['datavalue']['value']['id'])
                 parent.properties = STAR
-                parent.parse_input(page)
+                parent.prepare_data(page)
                 parent.update()
         page.decompose()
         time.sleep(10)
