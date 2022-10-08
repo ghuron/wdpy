@@ -8,6 +8,7 @@ from _datetime import datetime
 from abc import ABC, abstractmethod
 from contextlib import closing
 from decimal import Decimal, DecimalException
+from typing import Tuple
 
 import requests
 from requests.structures import CaseInsensitiveDict
@@ -74,7 +75,8 @@ class WikiData(ABC):
         return result
 
     @staticmethod
-    def get_next_chunk(offset):
+    def get_next_chunk(offset: any) -> Tuple[list[str], any]:
+        """Used to fetch external identifiers, returns list and new offset"""
         return [], None
 
     @classmethod
