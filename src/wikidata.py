@@ -167,20 +167,24 @@ class WikiData(ABC):
             if 'datavalue' not in candidate_claim['mainsnak']:
                 continue
             candidate = candidate_claim['mainsnak']['datavalue']['value']
-            if candidate == value:
-                return candidate_claim
-            elif 'id' in value and candidate['id'] == value['id']:
-                return candidate_claim
-            elif 'time' in value and candidate['precision'] == value['precision']:
-                if candidate['time'] == value['time']:
+            if isinstance(value, str):
+                if candidate == value:
                     return candidate_claim
-                if candidate['precision'] == 9 and candidate['time'][0:5] == value['time'][0:5]:
+            elif 'id' in value:
+                if candidate['id'] == value['id']:
                     return candidate_claim
-            elif 'amount' in value and float(candidate['amount']) == float(value['amount']):
-                if 'lowerBound' not in value:
-                    return candidate_claim
-                if 'lowerBound' in candidate and float(candidate['lowerBound']) == float(value['lowerBound']):
-                    return candidate_claim
+            elif 'time' in value:
+                if candidate['precision'] == value['precision']:
+                    if candidate['time'] == value['time']:
+                        return candidate_claim
+                    if candidate['precision'] == 9 and candidate['time'][0:5] == value['time'][0:5]:
+                        return candidate_claim
+            elif 'amount' in value:
+                if float(candidate['amount']) == float(value['amount']):
+                    if 'lowerBound' not in value:
+                        return candidate_claim
+                    if 'lowerBound' in candidate and float(candidate['lowerBound']) == float(value['lowerBound']):
+                        return candidate_claim
 
     def __init__(self, external_id: str, qid: str = None):
         self.external_id = external_id
