@@ -53,10 +53,6 @@ class YadVashem(WikiData):
                             if snak['datavalue']['value']['time'].endswith('-01-01T00:00:00Z'):  # January 1
                                 claim['rank'] = 'deprecated'  # db artefact, only year known for sure
                                 claim['qualifiers'] = {'P2241': [self.create_snak('P2241', 'Q41755623')]}
-                elif snak['property'] == 'P1979':
-                    if 'qualifiers' not in claim:
-                        claim['qualifiers'] = {}
-                    claim['qualifiers']['P1810'] = [self.create_snak('P1810', self.named_as)]
                 return claim
 
     def trace(self, message):
@@ -193,7 +189,8 @@ class YadVashem(WikiData):
         properties = {'recognition_date': 'P585', 'nationality': 'P27', 'gender': 'P21', 'cause_of_death': 'P509',
                       'religion': 'P140', 'date_of_death': 'P570', 'date_of_birth': 'P569', 'profession': 'P106'}
 
-        super().parse_input()
+        self.input_snaks = [WikiData.create_snak(self.db_property, self.external_id)]
+        self.input_snaks[0]['qualifiers'] = {'P1810': self.named_as}
         self.input_snaks.append(self.create_snak('P31', 'Q5'))
         for element in source:
             if element['Title'] in properties:
