@@ -295,8 +295,8 @@ class WikiData(ABC):
                 else:
                     time.sleep(0.5)
                     if 'nochange' not in response['entity']:
-                        self.trace('modified' if 'id' in data else 'created')
                         self.entity = response['entity']
+                        self.trace('modified' if 'id' in data else 'created')
                         return self.entity['id']
                     return
             except requests.exceptions.RequestException:
