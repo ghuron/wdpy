@@ -60,7 +60,8 @@ class ArXiv(WikiData):
             self.input_snaks.append(self.create_snak('P1476', {'text': title, 'language': 'en'}))
             self.author_num = 0
             for author in tree.findall('*/*/w3:name', ns):
-                self.input_snaks.append(self.create_snak('P2093', author.text))
+                if len(author.text.strip()) > 3:
+                    self.input_snaks.append(self.create_snak('P2093', author.text.strip()))
             if len(doi := tree.findall('*/arxiv:doi', ns)) == 1:
                 self.doi = doi[0].text.upper()
                 self.input_snaks.append(self.create_snak('P356', self.doi))
