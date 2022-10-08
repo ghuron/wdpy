@@ -174,12 +174,9 @@ class ExoplanetEu(WikiData):
                     self.input_snaks.append(current_snak)
                 current_snak = self.parse_text(self.properties[td.get('id')], td.text)
             elif current_snak is not None:
-                if 'showArticle' in str(td):
-                    ref_id = re.sub('.+\'(\\d+)\'.+', '\\g<1>', str(td))
-                    if ref_id in self.sources:
-                        if 'source' not in current_snak:
-                            current_snak['source'] = []
-                        current_snak['source'].append(self.sources[ref_id])
+                if 'showArticle' in str(td) and (ref_id := re.sub('.+\'(\\d+)\'.+', '\\g<1>', str(td))) in self.sources:
+                    current_snak['source'] = [] if 'source' not in current_snak else current_snak['source']
+                    current_snak['source'].append(self.sources[ref_id])
                 elif 'showAllPubs' not in str(td) and current_snak is not None:
                     self.input_snaks.append(current_snak)
                     current_snak = None
