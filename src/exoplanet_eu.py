@@ -98,6 +98,7 @@ class ExoplanetEu(WikiData):
                     '.*iop.org/EJ/abstract/(.+\\d)/?$': 'P356=10.1088/\\g<1>',
                     '.*/aa(\\d+)-(\\d\\d)\\.(html|pdf)': 'P356=10.1051/0004-6361:20\\g<2>\\g<1>',
                     '.*/aa(\\d+)-(\\d{2})\\.(html|pdf)': 'P356=10.1051/0004-6361/20\\g<2>\\g<1>',
+                    '.*/articles/aa/abs/2004/18/aa0959/aa0959.html': 'P356=10.1051/0004-6361:20035959',
                     'http[s]?://(?:ui\\.)?adsabs.harvard.edu/abs/([^/]+).*': 'P819=\\g<1>',
                     'adsabs\\.harvard\\.edu/cgi-bin/nph-bib_query\\?bibcode=([^\\&]+).*': 'P819=\\g<1>',
                     'http://onlinelibrary.wiley.com/doi/([^x]+x).*': 'P356=\\g<1>',
