@@ -117,12 +117,16 @@ class ExoplanetEu(WikiData):
     def parse_sources(self, source):
         publications = source.find_all('p', {'class': 'publication'})
         for p in publications:
-            links = p.find_all('a', {'target': '_blank'})
-            for a in links:
-                if p.get('id') not in self.sources and a.get('href') is not None:
-                    if (ref_id := self.parse_url(a.get('href').strip())) is not None:
+            if p.get('id') not in self.sources:
+                links = p.find_all('a', {'target': '_blank'})
+                for a in links:
+                    if ref_id := self.parse_url(a.get('href').strip()):
                         self.sources[p.get('id')] = ref_id
                         break
+                if p.get('id') not in self.sources:
+                    title = p.find('b').text
+                    if len(title) > 32 and (ref_id := WikiData.api_search('"{}"'.format(title))):
+                        self.sources[p.get('id')] = ref_id
 
     def parse_text(self, property_id, text):
         ids = {'Confirmed': 44559, 'MJ': 651336, 'AU': 1811, 'day': 573, 'deg': 28390, 'JD': 14267, 'TTV': 2945337,
