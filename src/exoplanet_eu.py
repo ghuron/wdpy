@@ -85,8 +85,6 @@ class ExoplanetEu(WikiData):
 
     @staticmethod
     def parse_url(url: str):
-        if not url:
-            return
         patterns = {'.*48550/arXiv\\.(\\d{4}.\\d+|[a-z\\-]+(\\.[A-Z]{2})?\\/\\d{7}).*': 'P818=\\g<1>',
                     '(http[s]?://)?(dx\\.)?doi\\.org/': 'P356=',
                     '.*arxiv\\.org/(abs|pdf)/(\\d{4}.\\d+|[a-z\\-]+(\\.[A-Z]{2})?\\/\\d{7}).*': 'P818=\\g<2>',
@@ -107,14 +105,14 @@ class ExoplanetEu(WikiData):
                     '.+jstor\\.org/stable/(info/)?': 'P356=',
                     '.*doi=([^&]+)(&.+)?$': 'P356=\\g<1>',
                     '.*/(nature\\d+).html': 'P356=10.1038/\\g<1>'}
-        for search_pattern in patterns:
-            query = urllib.parse.unquote(re.sub(search_pattern, patterns[search_pattern], url, flags=re.S))
-            if query.startswith('P818='):
-                if ref_id := ArXiv.get_by_id(query.replace('P818=', '')):
+        if url:
+            for search_pattern in patterns:
+                query = urllib.parse.unquote(re.sub(search_pattern, patterns[search_pattern], url.strip(), flags=re.S))
+                if query.startswith('P818='):
+                    if ref_id := ArXiv.get_by_id(query.replace('P818=', '')):
+                        return ref_id
+                elif query.startswith('P') and (ref_id := WikiData.api_search('haswbstatement:' + query)):
                     return ref_id
-            elif query.startswith('P') and (ref_id := WikiData.api_search('haswbstatement:' + query)):
-                return ref_id
-        print('Could not parse url: ' + url)
 
     def parse_sources(self, source):
         publications = source.find_all('p', {'class': 'publication'})
