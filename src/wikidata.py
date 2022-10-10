@@ -201,6 +201,8 @@ class WikiData(ABC):
     def obtain_claim(self, snak: dict):
         if snak is None:
             return
+        if 'id' in snak['datavalue']['value'] and self.qid == snak['datavalue']['value']['id']:
+            return
 
         self.entity = {} if self.entity is None else self.entity
         self.entity['claims'] = {} if 'claims' not in self.entity else self.entity['claims']
