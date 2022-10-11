@@ -45,7 +45,6 @@ class ArXiv(WikiData):
     def __init__(self, external_id, qid=None):
         super().__init__(external_id, qid)
         self.doi = None
-        self.author_num = 0
 
     def prepare_data(self, source=None):
         if self.external_id in self.arxiv:
@@ -58,10 +57,12 @@ class ArXiv(WikiData):
             ns = {'w3': 'http://www.w3.org/2005/Atom', 'arxiv': 'http://arxiv.org/schemas/atom'}
             title = ' '.join(tree.findall('*/w3:title', ns)[0].text.split())
             self.input_snaks.append(self.create_snak('P1476', {'text': title, 'language': 'en'}))
-            self.author_num = 0
+            author_num = 0
             for author in tree.findall('*/*/w3:name', ns):
                 if len(author.text.strip()) > 3:
-                    self.input_snaks.append(self.create_snak('P2093', author.text.strip()))
+                    snak = self.create_snak('P2093', author.text.strip())
+                    snak['qualifiers'] = {'P1545': str(author_num := author_num + 1)}
+                    self.input_snaks.append(snak)
             if len(doi := tree.findall('*/arxiv:doi', ns)) == 1:
                 self.doi = doi[0].text.upper()
                 self.input_snaks.append(self.create_snak('P356', self.doi))
@@ -74,17 +75,14 @@ class ArXiv(WikiData):
         if snak is not None:
             if snak['property'] == 'P1476' and 'P1476' in self.entity['claims']:
                 return
-            if snak['property'] == 'P2093':
-                self.author_num += 1
+            if snak['property'] == 'P2093' and 'qualifiers' in snak and 'P1545' in snak['qualifiers']:
                 for property_id in ['P50', 'P2093']:
                     if property_id in self.entity['claims']:
                         for claim in self.entity['claims'][property_id]:
                             if 'qualifiers' in claim and 'P1545' in claim['qualifiers']:
-                                if claim['qualifiers']['P1545'][0]['datavalue']['value'] == str(self.author_num):
-                                    return None
+                                if claim['qualifiers']['P1545'][0]['datavalue']['value'] == snak['qualifiers']['P1545']:
+                                    return
         claim = super().obtain_claim(snak)
-        if claim is not None and snak is not None and snak['property'] == 'P2093':
-            claim['qualifiers'] = {'P1545': [self.create_snak('P1545', str(self.author_num))]}
         return claim
 
     def post_process(self):
