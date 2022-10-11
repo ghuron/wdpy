@@ -67,7 +67,8 @@ class ArXiv(WikiData):
                 self.input_snaks.append(self.create_snak('P356', self.doi))
 
         if self.doi and self.entity is None and (qid := ArXiv.api_search('haswbstatement:"P356={}"'.format(self.doi))):
-            self.entity = ArXiv.load_items([qid])[qid]
+            if result := ArXiv.load_items([qid]):
+                self.entity = result[qid]
 
     def obtain_claim(self, snak):
         if snak is not None:

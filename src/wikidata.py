@@ -46,10 +46,9 @@ class WikiData(ABC):
     @staticmethod
     def load_items(ids: list[str]):
         """Load up to 50 wikidata entities, returns None in case of error"""
-        if len(ids) == 0:
-            return {}
-        result = WikiData.api_call('wbgetentities', {'props': 'claims|info|labels', 'ids': '|'.join(ids)})
-        return result['entities'] if result is not None and 'entities' in result else None
+        if len(ids) > 0:
+            result = WikiData.api_call('wbgetentities', {'props': 'claims|info|labels', 'ids': '|'.join(ids)})
+            return result['entities'] if result is not None and 'entities' in result else None
 
     @staticmethod
     def api_search(query: str):
@@ -194,8 +193,8 @@ class WikiData(ABC):
     @abstractmethod
     def prepare_data(self, source=None) -> None:
         """Load self.entity using self.qid and prepare self.input_snaks by parsing source using self.external_id"""
-        if self.qid:
-            self.entity = WikiData.load_items([self.qid])[self.qid]
+        if self.qid and (result := WikiData.load_items([self.qid])):
+            self.entity = result[self.qid]
         self.input_snaks = [WikiData.create_snak(self.db_property, self.external_id)]
 
     def obtain_claim(self, snak: dict):
