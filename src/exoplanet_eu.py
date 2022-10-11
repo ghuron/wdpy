@@ -211,10 +211,10 @@ if sys.argv[0].endswith(basename(__file__)):  # if not imported
         try:
             response = requests.Session().get("http://exoplanet.eu/catalog/" + ex_id)
             if response.status_code != 200:
-                print('Error {} while retrieving "{}", skipping it'.format(response.status_code, ex_id))
+                item.trace('error {} while retrieving "{}", skipping it'.format(response.status_code, ex_id))
                 continue
         except (requests.exceptions.ConnectionError, requests.exceptions.ReadTimeout) as e:
-            print('Error {} while retrieving "{}", skipping it'.format(e, ex_id))
+            item.trace('error {} while retrieving "{}", skipping it'.format(e, ex_id))
             continue
         page = BeautifulSoup(response.content, 'html.parser')
         item.prepare_data(page)
