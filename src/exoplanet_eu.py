@@ -120,7 +120,7 @@ class ExoplanetEu(WikiData):
             if p.get('id') not in self.sources:
                 links = p.find_all('a', {'target': '_blank'})
                 for a in links:
-                    if ref_id := self.parse_url(a.get('href').strip()):
+                    if ref_id := self.parse_url(a.get('href')):
                         self.sources[p.get('id')] = ref_id
                         break
                 if p.get('id') not in self.sources:
