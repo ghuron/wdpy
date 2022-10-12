@@ -13,7 +13,7 @@ If you want to run them in [toolforge](https://wikitech.wikimedia.org/wiki/Porta
    1. ```git init```
    2. ```git remote add origin https://github.com/ghuron/wdpy.git```
    3. ```git pull origin master```
-2. Create [BotPassword](https://www.wikidata.org/wiki/Special:BotPasswords) with a limited set of permissions (normally besides *basic* I request *editpage*, *createeditmovepage* and *highvolume* (see https://www.wikidata.org/wiki/Special:ListGrants for details)
+2. Create [BotPassword](https://www.wikidata.org/wiki/Special:BotPasswords) with a limited set of permissions. Normally besides *basic* I request *editpage*, *createeditmovepage* and *highvolume* (see https://www.wikidata.org/wiki/Special:ListGrants for details)
 3. Create one-liner file ```src/toolforge/.credentials``` and type there login and password separated by space. Script will use it to make edits in wikidata. Don't forget ```chmod 440 src/toolforge/.credentials``` to make sure other toolforge users will not see your credentials.
 4. Run ```toolforge-jobs run bootstrap-venv --command "cd $PWD && src/bootstrap_venv.sh" --image tf-python39 --wait``` in order to initialize python virtual environment and install nessecary packages.
 5. Load jobs schedule via ```toolforge-jobs load src/toolforge/jobs.yaml``` or run them individually (see https://wikitech.wikimedia.org/wiki/Help:Toolforge/Jobs_framework)
