@@ -1,8 +1,9 @@
 Minimalistic framework for continuous replication of external sources content to wikidata.
 Few scripts demonstrate the use of the framework in practice:
-* [yad_vashem.py](/src/yad_vashem.py) replacates basic info about [Righteous Among the Nations](https://en.wikipedia.org/wiki/Righteous_Among_the_Nations) from https://https://righteous.yadvashem.org/ to wikidata. Data is obtained via internal API.
 * [simbad_dap.py](/src/simbad_dap.py) replicates stars/galaxies astrometry information from https://simbad.u-strasbg.fr/simbad/ to wikidata. Data is obtained by running ADQL queries via Table Access Protocol (TAP).
-* [exoplanet_eu.py](/src/exoplanet_eu.py) replicates exoplanets astrometry information from http://exoplanet.eu/ to wikidata. List of exoplanets is obtained via internal API, actual data is scrapped from html (because no API provide real sources for the measurements). Utilizes script above to create parent star if one does not exist in wikidata.
+* [arxiv.py](/src/arxiv.py) replicates some pieces of preprints metadata from https://arxiv.org. Data is obtained both via regular public API and OAI-PMH. 
+* [exoplanet_eu.py](/src/exoplanet_eu.py) replicates exoplanets astrometry information from http://exoplanet.eu/ to wikidata. List of exoplanets is obtained via internal API, actual data is scrapped from html (because no API provide real sources for the measurements). Utilizes scripts above to create/update parent star or preprint when necessary.
+* [yad_vashem.py](/src/yad_vashem.py) replacates basic info about [Righteous Among the Nations](https://en.wikipedia.org/wiki/Righteous_Among_the_Nations) from https://https://righteous.yadvashem.org/ to wikidata. Data is obtained via internal API.
 
 # Installation
 You can run them in IDE of your choice, just specify your login and password as a command line argument. Required modules can be installed by ```pip install -r src/requirements.txt```
