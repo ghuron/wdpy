@@ -16,7 +16,7 @@ class ArXiv(WikiData):
 
     @staticmethod
     def get_xml(url):
-        for retries in range(1, 3):
+        for retries in range(1, 5):
             try:
                 with request.urlopen(url) as file:
                     return ElementTree.fromstring(file.read())
@@ -82,6 +82,16 @@ class ArXiv(WikiData):
                             if 'qualifiers' in claim and 'P1545' in claim['qualifiers']:
                                 if claim['qualifiers']['P1545'][0]['datavalue']['value'] == snak['qualifiers']['P1545']:
                                     return
+            if snak['property'] == 'P356':
+                if 'P356' in self.entity['claims']:
+                    doi = self.entity['claims']['P356'][0]['mainsnak']['datavalue']['value']
+                    if snak['datavalue']['value'] != doi:
+                        self.trace('has DOI {}, but arxiv {} contains {}'.format(doi, self.external_id, self.doi))
+                        return
+                elif qid := ArXiv.api_search('haswbstatement:"P356={}"'.format(self.doi)):
+                    self.trace('arxiv {}, DOI {} already assigned to {}'.format(self.external_id, self.doi, qid))
+                    return
+
         claim = super().obtain_claim(snak)
         return claim
 
@@ -98,12 +108,14 @@ class ArXiv(WikiData):
 
 if sys.argv[0].endswith(os.path.basename(__file__)):  # if not imported
     ArXiv.logon(sys.argv[1], sys.argv[2])
-    wd_items = ArXiv.get_all_items('SELECT ?id (SAMPLE(?i) AS ?a) {?i wdt:P818 ?id} GROUP BY ?id')
-    for arxiv_id in wd_items:
-        item = ArXiv(arxiv_id, wd_items[arxiv_id])
-        if arxiv_id not in ArXiv.arxiv:  # if it not comes from OAI, it must come from sparql
-            print(wd_items[arxiv_id] + ' contains arxiv value ' + arxiv_id + ' that is not found in batch OAI')
-        else:
+    wd_items = ArXiv.query('SELECT ?id (SAMPLE(?i) AS ?a) {?i wdt:P818 ?id} GROUP BY ?id')
+    offset = None
+    while True:
+        chunk, offset = ArXiv.get_next_chunk(offset)
+        if len(chunk) == 0:
+            break
+        for ex_id in chunk:
+            item = ArXiv(ex_id, wd_items[ex_id] if ex_id in wd_items else None)  # ToDo: find items with invalid arxiv
             item.prepare_data()
             if item.entity is not None:
                 if 'P818' not in item.entity['claims'] or item.doi is not None and 'P356' not in item.entity['claims']:
