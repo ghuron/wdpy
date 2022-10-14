@@ -30,7 +30,7 @@ class WikiData(ABC):
             return WikiData.api.post(WD_API, data={**params, 'format': 'json', 'action': action}).json()
         except json.decoder.JSONDecodeError:
             print('Cannot decode {} response for {}'.format(action, params))
-        except requests.exceptions.ConnectionError:
+        except (requests.exceptions.ConnectionError, requests.exceptions.RequestException):
             print('Connection error while calling {} for {}'.format(action, params))
 
     @staticmethod
@@ -290,23 +290,19 @@ class WikiData(ABC):
             data['new'] = 'item'
 
         for retries in range(1, 3):
-            try:
-                data['token'] = WikiData.token
-                response = WikiData.api_call('wbeditentity', data)
-                if 'error' in response:
-                    if response['error']['code'] == 'badtoken':
-                        WikiData.token = WikiData.api_call('query', {'meta': 'tokens'})['query']['tokens']['csrftoken']
-                        continue
-                    self.trace('error while saving: ' + response['error']['info'])
-                else:
+            data['token'] = WikiData.token
+            if response := WikiData.api_call('wbeditentity', data):
+                if 'error' not in response:
                     time.sleep(0.5)
                     if 'nochange' not in response['entity']:
                         self.entity = response['entity']
                         self.trace('modified' if 'id' in data else 'created')
                         return self.entity['id']
-                    return
-            except requests.exceptions.RequestException:
-                pass
+                    return  # no change
+                if response['error']['code'] == 'badtoken':
+                    WikiData.token = WikiData.api_call('query', {'meta': 'tokens'})['query']['tokens']['csrftoken']
+                    continue
+                self.trace('error while saving: ' + response['error']['info'])
             time.sleep(10)
             self.logon()  # just in case - re-authenticate
         return ''
