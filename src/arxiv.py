@@ -28,8 +28,6 @@ class ArXiv(WikiData):
 
     @staticmethod
     def get_next_chunk(suffix):
-        # if len(ArXiv.arxiv) > 100:
-        #     return [], 0
         result = {}
         suffix = '&metadataPrefix=arXiv' if suffix is None else suffix
         if (tree := ArXiv.get_xml('http://export.arxiv.org/oai2?verb=ListRecords' + suffix)) is not None:
