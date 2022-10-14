@@ -1,5 +1,6 @@
 #!/usr/bin/python3
 import csv
+import logging
 import os.path
 import re
 import sys
@@ -129,7 +130,7 @@ class SimbadDAP(WikiData):
                         else:
                             result[object_id] = [row]
         except requests.exceptions.ConnectionError:
-            print('Error while retrieving results of the query: ' + sql)
+            logging.error('Error while retrieving results of the query: ' + sql)
         return result
 
     @staticmethod

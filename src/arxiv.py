@@ -1,5 +1,6 @@
 #!/usr/bin/python3
 import http.client
+import logging
 import os.path
 import sys
 import time
@@ -21,8 +22,8 @@ class ArXiv(WikiData):
                 with request.urlopen(url) as file:
                     return ElementTree.fromstring(file.read())
             except (error.HTTPError, http.client.IncompleteRead, ConnectionResetError):
-                print('Error while fetching ' + url)
-                time.sleep(60)
+                logging.error('Error while fetching ' + url)
+                time.sleep(100*retries)
         return None
 
     @staticmethod

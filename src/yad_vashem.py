@@ -1,4 +1,5 @@
 #!/usr/bin/python3
+import logging
 import sys
 from os.path import basename
 
@@ -62,7 +63,7 @@ class YadVashem(WikiData):
 
     @staticmethod
     def info(book_id, named_as, message):
-        print('https://righteous.yadvashem.org/?itemId=' + book_id + '\t"' + named_as + '"\t' + message)
+        logging.info('https://righteous.yadvashem.org/?itemId=' + book_id + '\t"' + named_as + '"\t' + message)
 
     def prepare_data(self, source=None):
         mapping = {

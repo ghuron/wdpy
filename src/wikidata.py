@@ -1,6 +1,8 @@
 #!/usr/bin/python3
 import csv
 import json
+import logging
+import os
 import re
 import time
 import uuid
@@ -21,6 +23,8 @@ class WikiData(ABC):
     db_property, db_ref = None, None
     login, password, token = '', '', 'bad'
     types: dict[str, str] = None
+    logging.basicConfig(format="%(asctime)s: %(levelname)s - %(message)s",
+                        level=os.environ.get('LOGLEVEL', 'INFO').upper())
 
     @staticmethod
     def api_call(action: str, params: dict[str, str]) -> dict:
@@ -29,9 +33,9 @@ class WikiData(ABC):
         try:
             return WikiData.api.post(WD_API, data={**params, 'format': 'json', 'action': action}).json()
         except json.decoder.JSONDecodeError:
-            print('Cannot decode {} response for {}'.format(action, params))
+            logging.error('Cannot decode {} response for {}'.format(action, params))
         except (requests.exceptions.ConnectionError, requests.exceptions.RequestException):
-            print('Connection error while calling {} for {}'.format(action, params))
+            logging.error('Connection error while calling {} for {}'.format(action, params))
 
     @staticmethod
     def logon(login: str = None, password: str = None):
@@ -54,9 +58,11 @@ class WikiData(ABC):
     def api_search(query: str):
         """CirrusSearch query, returns first found element, warns if zero or more than one found"""
         if (response := WikiData.api_call('query', {'list': 'search', 'srsearch': query})) and 'query' in response:
-            if len(response['query']['search']) != 1:
-                print(query + ' returned ' + str(len(response['query']['search'])) + ' results')
-            if len(response['query']['search']) > 0:
+            if len(response['query']['search']) > 1:
+                logging.warning(query + ' returned ' + str(len(response['query']['search'])) + ' results')
+            if len(response['query']['search']) == 0:
+                logging.info(query + ' not found')
+            else:
                 return response['query']['search'][0]['title']
 
     @staticmethod
@@ -276,7 +282,7 @@ class WikiData(ABC):
     def trace(self, message: str):
         if self.entity is not None and 'id' in self.entity:
             message = 'https://www.wikidata.org/wiki/' + self.entity['id'] + '\t' + message
-        print(message)
+        logging.info(message)
 
     def get_summary(self):
         return 'batch import from [[' + self.db_ref + ']] for object ' + self.external_id
