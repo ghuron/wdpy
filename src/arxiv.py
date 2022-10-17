@@ -2,6 +2,7 @@
 import http.client
 import logging
 import os.path
+import random
 import sys
 import time
 from urllib import request, error
@@ -23,7 +24,7 @@ class ArXiv(WikiData):
                     return ElementTree.fromstring(file.read())
             except (error.HTTPError, http.client.IncompleteRead, ConnectionResetError):
                 logging.error('Error while fetching ' + url)
-                time.sleep(100*retries)
+                time.sleep(100 * retries)
         return None
 
     @staticmethod
@@ -38,7 +39,12 @@ class ArXiv(WikiData):
                 else:
                     result[preprint.find('oa:id', ns).text] = None
             ArXiv.arxiv = ArXiv.arxiv | result
-            suffix = '&resumptionToken=' + tree.find('.//oai:resumptionToken', ns).text
+            if suffix.endswith('arXiv'):  # randomise the starting offset
+                random.seed()
+                suffix = '&resumptionToken=' + tree.find('.//oai:resumptionToken', ns).text.split('|')[0]
+                suffix = suffix + '|' + str(random.randint(0, 2000)) + '001'
+            else:
+                suffix = '&resumptionToken=' + tree.find('.//oai:resumptionToken', ns).text
         return result.keys(), suffix
 
     def __init__(self, external_id, qid=None):
