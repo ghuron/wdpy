@@ -18,13 +18,13 @@ class ArXiv(WikiData):
 
     @staticmethod
     def get_xml(url):
-        for retries in range(1, 5):
+        for retries in range(1, 3):
             try:
                 with request.urlopen(url) as file:
                     return ElementTree.fromstring(file.read())
             except (error.HTTPError, http.client.IncompleteRead, ConnectionResetError):
                 logging.error('Error while fetching ' + url)
-                time.sleep(100 * retries)
+                time.sleep(60)
         return None
 
     @staticmethod
