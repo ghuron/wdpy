@@ -71,12 +71,15 @@ class WikiData(ABC):
         with requests.Session() as session:
             session.headers.update({'Accept': 'text/csv', 'User-Agent': WikiData.USER_AGENT})
             with closing(session.post('https://query.wikidata.org/sparql', params={'query': query}, stream=True)) as r:
-                reader = csv.reader(r.iter_lines(decode_unicode='utf-8'), delimiter=',', quotechar='"')
-                next(reader)
-                for line in reader:
-                    line = [item.replace('http://www.wikidata.org/entity/', '') for item in line]
-                    if len(line) > 1:
-                        result[line[0]] = process(line[1:], result[line[0]] if line[0] in result else [])
+                try:
+                    reader = csv.reader(r.iter_lines(decode_unicode='utf-8'), delimiter=',', quotechar='"')
+                    next(reader)
+                    for line in reader:
+                        line = [item.replace('http://www.wikidata.org/entity/', '') for item in line]
+                        if len(line) > 1:
+                            result[line[0]] = process(line[1:], result[line[0]] if line[0] in result else [])
+                except requests.exceptions.ChunkedEncodingError:
+                    logging.error('Error while executing '+ query)
         return result
 
     @staticmethod
