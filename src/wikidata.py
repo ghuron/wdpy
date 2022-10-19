@@ -4,6 +4,7 @@ import json
 import logging
 import os
 import re
+import sys
 import time
 import uuid
 from _datetime import datetime
@@ -23,7 +24,7 @@ class WikiData(ABC):
     db_property, db_ref = None, None
     login, password, token = '', '', 'bad'
     types: dict[str, str] = None
-    logging.basicConfig(format="%(asctime)s: %(levelname)s - %(message)s",
+    logging.basicConfig(format="%(asctime)s: %(levelname)s - %(message)s", stream=sys.stdout,
                         level=os.environ.get('LOGLEVEL', 'INFO').upper())
 
     @staticmethod
