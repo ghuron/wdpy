@@ -28,7 +28,8 @@ class ExoplanetEu(WikiData):
                            'planet_eccentricity_0': 'P1096', 'planet_period_0': 'P2146', 'planet_discovered_0': 'P575',
                            'planet_omega_0': 'P2248', 'planet_radius_0': 'P2120', 'planet_detection_type_0': 'P1046',
                            'planet_albedo_0': 'P4501', 'planet_mass_sini_0': 'P2051', 'planet_inclination_0': 'P2045',
-                           'star_0_stars__ra_0': 'P6257', 'star_0_stars__dec_0': 'P6258'}
+                           'star_0_stars__ra_0': 'P6257', 'star_0_stars__dec_0': 'P6258',
+                           'star_0_stars__alternate_names_0': 'P397'}
 
     @staticmethod
     def get_next_chunk(offset):
