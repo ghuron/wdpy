@@ -3,6 +3,7 @@ import http.client
 import logging
 import os.path
 import random
+import socket
 import sys
 import time
 from urllib import request, error
@@ -22,7 +23,7 @@ class ArXiv(WikiData):
             try:
                 with request.urlopen(url, timeout=100) as file:
                     return ElementTree.fromstring(file.read())
-            except (error.HTTPError, http.client.IncompleteRead, ConnectionResetError, TimeoutError):
+            except (error.HTTPError, http.client.IncompleteRead, ConnectionResetError, socket.timeout):
                 logging.error('Error while fetching ' + url)
                 time.sleep(600)
         return None
