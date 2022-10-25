@@ -227,4 +227,4 @@ if sys.argv[0].endswith(basename(__file__)):  # if not imported
                 parent.prepare_data(page)
                 parent.update()
         page.decompose()
-        time.sleep(10)
+        time.sleep(5)
