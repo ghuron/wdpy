@@ -126,7 +126,7 @@ class WikiData(ABC):
                 WikiData.types[prop] = WikiData.types[prop].replace('http://wikiba.se/ontology#', ''). \
                     replace('WikibaseItem', 'wikibase-item').replace('ExternalId', 'external-id').lower()
 
-        if property_id not in WikiData.types or value == '' or value == 'NaN':
+        if property_id not in WikiData.types or not value or value == 'NaN':
             return None
 
         snak = {'datatype': WikiData.types[property_id], 'property': property_id, 'snaktype': 'value',

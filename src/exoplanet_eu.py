@@ -163,7 +163,7 @@ class ExoplanetEu(WikiData):
         else:
             return self.create_snak(property_id, text)
 
-        if reg is not None and reg.group('unit'):
+        if result and reg and reg.group('unit'):
             result['datavalue']['value']['unit'] = 'http://www.wikidata.org/entity/Q' + str(ids[reg.group('unit')])
         return result
 
