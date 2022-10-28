@@ -44,8 +44,10 @@ class ArXiv(WikiData):
                 random.seed()
                 suffix = '&resumptionToken=' + tree.find('.//oai:resumptionToken', ns).text.split('|')[0]
                 suffix = suffix + '|' + str(random.randint(0, 2000)) + '001'
-            else:
+            elif tree.find('.//oai:resumptionToken', ns).text:
                 suffix = '&resumptionToken=' + tree.find('.//oai:resumptionToken', ns).text
+            else:
+                suffix = '&metadataPrefix=arXiv'
         return result.keys(), suffix
 
     def __init__(self, external_id, qid=None):
