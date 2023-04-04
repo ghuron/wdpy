@@ -195,8 +195,7 @@ class ExoplanetEu(WikiData):
                     self.input_snaks.append(current_snak)
                     current_snak = None
             elif parsing_planet and len(td.attrs) == 0 and (td.parent.parent.get('id') == 'table_' + td.text):
-                if current_snak:= self.parse_text('P397', td.text):
-                    break
+                current_snak = self.parse_text('P397', td.text)
 
         if current_snak is not None:
             self.input_snaks.append(current_snak)
