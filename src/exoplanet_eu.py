@@ -1,5 +1,6 @@
 #!/usr/bin/python3
 import json
+import logging
 import re
 import sys
 import time
@@ -215,10 +216,10 @@ if sys.argv[0].endswith(basename(__file__)):  # if not imported
         try:
             response = requests.Session().get("http://exoplanet.eu/catalog/" + ex_id)
             if response.status_code != 200:
-                item.trace('error {} while retrieving "{}", skipping it'.format(response.status_code, ex_id))
+                logging.error('response {} while retrieving {}'.format(response.status_code, response.url))
                 continue
-        except (requests.exceptions.ConnectionError, requests.exceptions.ReadTimeout) as e:
-            item.trace('error {} while retrieving "{}", skipping it'.format(e, ex_id))
+        except requests.exceptions.RequestException as e:
+            logging.error(e)
             continue
         page = BeautifulSoup(response.content, 'html.parser')
         item.prepare_data(page)
