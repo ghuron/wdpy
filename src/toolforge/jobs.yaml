@@ -1,12 +1,13 @@
 # https://wikitech.wikimedia.org/wiki/Help:Toolforge/Jobs_framework
 ---
 - name: yad-vashem
-  command: src/toolforge/run.sh yad_vashem
+  command: src/toolforge/run.sh yad-vashem
   image: tf-python39
   schedule: "0 0 * * *"
   emails: all
 - name: exoplanet-eu
-  command: src/toolforge/run.sh exoplanet_eu
+  command: src/toolforge/run.sh exoplanet-eu
   image: tf-python39
+  mem: 1Gi
   schedule: "0 20 * * *"
   emails: all
