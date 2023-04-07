@@ -284,9 +284,7 @@ class WikiData(ABC):
             self.entity['labels']['en'] = {'value': self.external_id, 'language': 'en'}
 
     def trace(self, message: str):
-        if self.entity is not None and 'id' in self.entity:
-            message = 'https://www.wikidata.org/wiki/' + self.entity['id'] + '\t' + message
-        logging.info(message)
+        logging.error('https://www.wikidata.org/wiki/' + self.qid + '\t' + message if self.qid else message)
 
     def get_summary(self):
         return 'batch import from [[' + self.db_ref + ']] for object ' + self.external_id
@@ -319,7 +317,6 @@ class WikiData(ABC):
 
     def update(self):
         if self.input_snaks is None:
-            self.trace('error while retrieving/parsing {}:"{}"'.format(self.db_property, self.external_id))
             return
 
         self.entity = {} if self.entity is None else self.entity

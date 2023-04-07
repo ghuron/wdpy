@@ -1,6 +1,5 @@
 #!/usr/bin/python3
 import json
-import logging
 import re
 import sys
 import time
@@ -116,15 +115,14 @@ class ExoplanetEu(WikiData):
                 elif query.startswith('P') and (ref_id := WikiData.api_search('haswbstatement:' + query)):
                     return ref_id
 
-    @staticmethod
-    def retrieve(exoplanet_id: str):
+    def retrieve(self):
         try:
-            response = requests.Session().get("http://exoplanet.eu/catalog/" + exoplanet_id)
+            response = requests.Session().get("http://exoplanet.eu/catalog/" + self.external_id)
             if response.status_code != 200:
-                logging.error('response {} while retrieving {}'.format(response.status_code, response.url))
+                self.trace('{}\tresponse: {}'.format(response.url, response.status_code))
                 return
         except requests.exceptions.RequestException as e:
-            logging.error(e)
+            self.trace(e.__str__())
             return
         page = BeautifulSoup(response.content, 'html.parser')
 
@@ -194,6 +192,8 @@ class ExoplanetEu(WikiData):
         return result
 
     def prepare_data(self, source=None):
+        if not source:
+            return
         super().prepare_data()
         if not (parsing_planet := ('P1046' in self.properties.values())):
             self.input_snaks = []  # do not write P5356:exoplanet_id for the host star
@@ -227,9 +227,8 @@ if sys.argv[0].endswith(basename(__file__)):  # if not imported
 
     for ex_id in wd_items:
         # ex_id = '55 Cnc e'
-        if not (data := ExoplanetEu.retrieve(ex_id)):
-            continue
         item = ExoplanetEu(ex_id, wd_items[ex_id])
+        data = item.retrieve()
         item.prepare_data(data)
         item.update()
         if 'P397' in item.entity['claims'] and len(item.entity['claims']['P397']) == 1:
