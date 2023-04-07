@@ -125,10 +125,13 @@ class ExoplanetEu(WikiData):
                     if ref_id := self.parse_url(a.get('href')):
                         self.sources[p.get('id')] = ref_id
                         break
-                if p.get('id') not in self.sources:
-                    title = p.find('b').text
-                    if len(title) > 32 and (ref_id := WikiData.api_search('"{}"'.format(title))):
-                        self.sources[p.get('id')] = ref_id
+                if (p.get('id') not in ExoplanetEu.sources) and (ref_id := ExoplanetEu.find_by_title(p.find('b').text)):
+                    ExoplanetEu.sources[p.get('id')] = ref_id
+
+    @staticmethod
+    def find_by_title(title: str):
+        if title and len(title) > 32:
+            return WikiData.api_search('"{}"'.format(' '.join(title.replace('\n', ' ').rstrip('.').split())))
 
     def parse_text(self, property_id, text):
         ids = {'Confirmed': 44559, 'MJ': 651336, 'AU': 1811, 'day': 573, 'deg': 28390, 'JD': 14267, 'TTV': 2945337,
