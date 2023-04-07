@@ -57,11 +57,11 @@ class WikiData(ABC):
 
     @staticmethod
     def api_search(query: str):
-        """CirrusSearch query, returns first found element, warns if zero or more than one found"""
+        """CirrusSearch query, returns only if one element found, warns otherwise"""
         if (response := WikiData.api_call('query', {'list': 'search', 'srsearch': query})) and 'query' in response:
             if len(response['query']['search']) > 1:
-                logging.warning(query + ' returned ' + str(len(response['query']['search'])) + ' results')
-            if len(response['query']['search']) == 0:
+                logging.error(query + ' returned ' + str(len(response['query']['search'])) + ' results')
+            elif len(response['query']['search']) == 0:
                 logging.info(query + ' not found')
             else:
                 return response['query']['search'][0]['title']
@@ -80,7 +80,7 @@ class WikiData(ABC):
                         if len(line) > 1:
                             result[line[0]] = process(line[1:], result[line[0]] if line[0] in result else [])
                 except requests.exceptions.ChunkedEncodingError:
-                    logging.error('Error while executing '+ query)
+                    logging.error('Error while executing ' + query)
         return result
 
     @staticmethod
