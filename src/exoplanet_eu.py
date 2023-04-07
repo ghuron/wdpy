@@ -143,7 +143,7 @@ class ExoplanetEu(WikiData):
     @staticmethod
     def find_by_title(title: str):
         if title and len(title) > 32:
-            return WikiData.api_search('"{}"'.format(' '.join(title.replace('\n', ' ').rstrip('.').split())))
+            return WikiData.api_search('"{}" -erratum'.format(' '.join(title.replace('\n', ' ').rstrip('.').split())))
 
     def parse_text(self, property_id, text):
         ids = {'Confirmed': 44559, 'MJ': 651336, 'AU': 1811, 'day': 573, 'deg': 28390, 'JD': 14267, 'TTV': 2945337,
