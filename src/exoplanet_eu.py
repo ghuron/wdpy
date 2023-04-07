@@ -117,8 +117,18 @@ class ExoplanetEu(WikiData):
                     return ref_id
 
     @staticmethod
-    def parse_sources(source):
-        publications = source.find_all('p', {'class': 'publication'})
+    def retrieve(exoplanet_id: str):
+        try:
+            response = requests.Session().get("http://exoplanet.eu/catalog/" + exoplanet_id)
+            if response.status_code != 200:
+                logging.error('response {} while retrieving {}'.format(response.status_code, response.url))
+                return
+        except requests.exceptions.RequestException as e:
+            logging.error(e)
+            return
+        page = BeautifulSoup(response.content, 'html.parser')
+
+        publications = page.find_all('p', {'class': 'publication'})
         for p in publications:
             if p.get('id') not in ExoplanetEu.sources:
                 links = p.find_all('a', {'target': '_blank'})
@@ -128,6 +138,7 @@ class ExoplanetEu(WikiData):
                         break
                 if (p.get('id') not in ExoplanetEu.sources) and (ref_id := ExoplanetEu.find_by_title(p.find('b').text)):
                     ExoplanetEu.sources[p.get('id')] = ref_id
+        return page
 
     @staticmethod
     def find_by_title(title: str):
@@ -215,24 +226,16 @@ if sys.argv[0].endswith(basename(__file__)):  # if not imported
 
     for ex_id in wd_items:
         # ex_id = '55 Cnc e'
-        item = ExoplanetEu(ex_id, wd_items[ex_id])
-        try:
-            response = requests.Session().get("http://exoplanet.eu/catalog/" + ex_id)
-            if response.status_code != 200:
-                logging.error('response {} while retrieving {}'.format(response.status_code, response.url))
-                continue
-        except requests.exceptions.RequestException as e:
-            logging.error(e)
+        if not (data := ExoplanetEu.retrieve(ex_id)):
             continue
-        page = BeautifulSoup(response.content, 'html.parser')
-        ExoplanetEu.parse_sources(page)
-        item.prepare_data(page)
+        item = ExoplanetEu(ex_id, wd_items[ex_id])
+        item.prepare_data(data)
         item.update()
         if 'P397' in item.entity['claims'] and len(item.entity['claims']['P397']) == 1:
             if 'datavalue' in item.entity['claims']['P397'][0]['mainsnak']:  # parent != "novalue"
                 parent = ExoplanetEu(ex_id, item.entity['claims']['P397'][0]['mainsnak']['datavalue']['value']['id'])
                 parent.properties = STAR
-                parent.prepare_data(page)
+                parent.prepare_data(data)
                 parent.update()
-        page.decompose()
+        data.decompose()
         time.sleep(4)
