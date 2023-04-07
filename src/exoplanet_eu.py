@@ -67,9 +67,9 @@ class ExoplanetEu(WikiData):
         claim = super().obtain_claim(snak)
         if claim is not None:
             if snak['property'] in ['P4501']:
-                claim['qualifiers'] = {'P4501': [self.create_snak('P1013', 'Q2832068')]}
+                claim['qualifiers'] = {'P4501': [WikiData.create_snak('P1013', 'Q2832068')]}
             elif snak['property'] == 'P1215':
-                claim['qualifiers'] = {'P1227': [self.create_snak('P1227', 'Q4892529')]}
+                claim['qualifiers'] = {'P1227': [WikiData.create_snak('P1227', 'Q4892529')]}
                 claim['rank'] = 'preferred'  # V-magnitude is always preferred
         return claim
 
@@ -145,7 +145,8 @@ class ExoplanetEu(WikiData):
         if title and len(title) > 32:
             return WikiData.api_search('"{}" -erratum'.format(' '.join(title.replace('\n', ' ').rstrip('.').split())))
 
-    def parse_text(self, property_id, text):
+    @staticmethod
+    def create_snak(property_id: str, value, lower=None, upper=None):
         ids = {'Confirmed': 44559, 'MJ': 651336, 'AU': 1811, 'day': 573, 'deg': 28390, 'JD': 14267, 'TTV': 2945337,
                'Radial Velocity': 2273386, 'm/s': 182429, 'RJ': 3421309, 'Imaging': 15279026, 'Candidate': 18611609,
                'Primary Transit': 2069919, 'Microlensing': 1028022, 'Astrometry': 181505, 'Controversial': 18611609,
@@ -154,39 +155,39 @@ class ExoplanetEu(WikiData):
         unit = '\\s*(?P<unit>[A-Za-z]\\S*)?'
         if reg := re.search(
                 '(?P<value>' + num + ')\\s*\\(\\s*-+(?P<min>' + num + ')\\s+(?P<max>\\+' + num + ')\\s*\\)' + unit,
-                text):
-            result = self.create_snak(property_id, reg.group('value'), reg.group('min'), reg.group('max'))
+                value):
+            result = WikiData.create_snak(property_id, reg.group('value'), reg.group('min'), reg.group('max'))
         elif reg := re.search(
-                '^(?P<value>' + num + ')\\s*(\\(\\s*±\\s*(?P<bound>' + num + ')\\s*\\))?' + unit + '$', text):
+                '^(?P<value>' + num + ')\\s*(\\(\\s*±\\s*(?P<bound>' + num + ')\\s*\\))?' + unit + '$', value):
             if reg.group('bound'):
-                result = self.create_snak(property_id, reg.group('value'), reg.group('bound'), reg.group('bound'))
+                result = WikiData.create_snak(property_id, reg.group('value'), reg.group('bound'), reg.group('bound'))
             else:
-                result = self.create_snak(property_id, reg.group('value'))
-        elif len(deg := text.split(':')) == 3:
+                result = WikiData.create_snak(property_id, reg.group('value'))
+        elif len(deg := value.split(':')) == 3:  # coordinates
             try:
-                digits = 3 + (len(text) - text.find('.') - 1 if text.find('.') > 0 else 0)
+                digits = 3 + (len(value) - value.find('.') - 1 if value.find('.') > 0 else 0)
                 mult = 15 if property_id == 'P6257' else 1
                 if deg[0].startswith('-'):
                     angle = -((float(deg[2]) / 60 + float(deg[1])) / 60 - float(deg[0]))
                 else:
                     angle = +((float(deg[2]) / 60 + float(deg[1])) / 60 + float(deg[0]))
-                result = self.create_snak(property_id, self.format_float(angle * mult, digits))
+                result = WikiData.create_snak(property_id, WikiData.format_float(angle * mult, digits))
                 result['datavalue']['value']['unit'] = 'http://www.wikidata.org/entity/Q28390'
             except (ValueError, DecimalException):
-                return self.create_snak(property_id, text)
+                return WikiData.create_snak(property_id, value)
         elif property_id == 'P397':
             ident = SimbadDAP.tap_query('https://simbad.u-strasbg.fr/simbad/sim-tap',
                                         'SELECT main_id FROM ident JOIN basic ON oid = oidref ' +
-                                        'WHERE id=\'' + text + '\'')
+                                        'WHERE id=\'' + value + '\'')
             if len(ident) != 1:
                 return
-            no_parent = self.entity and 'claims' in self.entity and 'P397' not in self.entity['claims']
-            host_id = SimbadDAP.get_by_id(list(ident.keys())[0], no_parent)
-            return ExoplanetEu.create_snak(property_id, host_id)
-        elif text in ids:
-            return self.create_snak(property_id, 'Q' + str(ids[text]))
+            # no_parent = self.entity and 'claims' in self.entity and 'P397' not in self.entity['claims']
+            host_id = SimbadDAP.get_by_id(list(ident.keys())[0])
+            return WikiData.create_snak(property_id, host_id)
+        elif value in ids:
+            return WikiData.create_snak(property_id, 'Q' + str(ids[value]))
         else:
-            return self.create_snak(property_id, text)
+            return WikiData.create_snak(property_id, value)
 
         if result and reg and reg.group('unit'):
             result['datavalue']['value']['unit'] = 'http://www.wikidata.org/entity/Q' + str(ids[reg.group('unit')])
@@ -201,7 +202,7 @@ class ExoplanetEu(WikiData):
             if td.get('id') in self.properties and td.text != '—':
                 if current_snak is not None:
                     self.input_snaks.append(current_snak)
-                current_snak = self.parse_text(self.properties[td.get('id')], td.text)
+                current_snak = ExoplanetEu.create_snak(self.properties[td.get('id')], td.text)
             elif current_snak is not None:
                 if 'showArticle' in str(td) and (ref_id := re.sub('.+\'(\\d+)\'.+', '\\g<1>', str(td))) in self.sources:
                     current_snak['source'] = [] if 'source' not in current_snak else current_snak['source']
@@ -210,7 +211,7 @@ class ExoplanetEu(WikiData):
                     self.input_snaks.append(current_snak)
                     current_snak = None
             elif parsing_planet and len(td.attrs) == 0 and (td.parent.parent.get('id') == 'table_' + td.text):
-                current_snak = self.parse_text('P397', td.text)
+                current_snak = ExoplanetEu.create_snak('P397', td.text)
 
         if current_snak is not None:
             self.input_snaks.append(current_snak)
