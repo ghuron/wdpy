@@ -116,14 +116,15 @@ class ExoplanetEu(WikiData):
                 elif query.startswith('P') and (ref_id := WikiData.api_search('haswbstatement:' + query)):
                     return ref_id
 
-    def parse_sources(self, source):
+    @staticmethod
+    def parse_sources(source):
         publications = source.find_all('p', {'class': 'publication'})
         for p in publications:
-            if p.get('id') not in self.sources:
+            if p.get('id') not in ExoplanetEu.sources:
                 links = p.find_all('a', {'target': '_blank'})
                 for a in links:
-                    if ref_id := self.parse_url(a.get('href')):
-                        self.sources[p.get('id')] = ref_id
+                    if ref_id := ExoplanetEu.parse_url(a.get('href')):
+                        ExoplanetEu.sources[p.get('id')] = ref_id
                         break
                 if (p.get('id') not in ExoplanetEu.sources) and (ref_id := ExoplanetEu.find_by_title(p.find('b').text)):
                     ExoplanetEu.sources[p.get('id')] = ref_id
@@ -184,7 +185,6 @@ class ExoplanetEu(WikiData):
         super().prepare_data()
         if not (parsing_planet := ('P1046' in self.properties.values())):
             self.input_snaks = []  # do not write P5356:exoplanet_id for the host star
-        self.parse_sources(source)
         current_snak = None
         for td in source.find_all('td'):
             if td.get('id') in self.properties and td.text != '—':
@@ -225,6 +225,7 @@ if sys.argv[0].endswith(basename(__file__)):  # if not imported
             logging.error(e)
             continue
         page = BeautifulSoup(response.content, 'html.parser')
+        ExoplanetEu.parse_sources(page)
         item.prepare_data(page)
         item.update()
         if 'P397' in item.entity['claims'] and len(item.entity['claims']['P397']) == 1:
