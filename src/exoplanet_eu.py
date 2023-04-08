@@ -231,11 +231,12 @@ if sys.argv[0].endswith(basename(__file__)):  # if not imported
         data = item.retrieve()
         item.prepare_data(data)
         item.update()
-        if 'P397' in item.entity['claims'] and len(item.entity['claims']['P397']) == 1:
+        if item.entity and 'P397' in item.entity['claims'] and len(item.entity['claims']['P397']) == 1:
             if 'datavalue' in item.entity['claims']['P397'][0]['mainsnak']:  # parent != "novalue"
                 parent = ExoplanetEu(ex_id, item.entity['claims']['P397'][0]['mainsnak']['datavalue']['value']['id'])
                 parent.properties = STAR
                 parent.prepare_data(data)
                 parent.update()
-        data.decompose()
+        if data:
+            data.decompose()
         time.sleep(4)
