@@ -104,7 +104,7 @@ class WikiData(ABC):
     @staticmethod
     def format_float(figure, digits: int = -1):
         """Raises: DecimalException"""
-        if 0 <= digits < 20:
+        if 0 <= digits < 24:
             return ('{0:.' + str(digits) + 'f}').format(Decimal(figure))
         if amount := re.search('(?P<mantissa>\\d\\.\\d+)e-(?P<exponent>\\d+)', str(figure)):
             return WikiData.format_float(figure, len(amount.group('mantissa')) + int(amount.group('exponent')) - 2)
