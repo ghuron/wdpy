@@ -180,7 +180,7 @@ class ExoplanetEu(WikiData):
             if len(ident) != 1:
                 return
             # no_parent = self.entity and 'claims' in self.entity and 'P397' not in self.entity['claims']
-            host_id = SimbadDAP.get_by_id(list(ident.keys())[0])
+            host_id = SimbadDAP.get_by_id(list(ident.keys())[0], false)
             return WikiData.create_snak(property_id, host_id)
         elif value in ids:
             return WikiData.create_snak(property_id, 'Q' + str(ids[value]))
