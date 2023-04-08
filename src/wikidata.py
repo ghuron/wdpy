@@ -60,7 +60,7 @@ class WikiData(ABC):
         """CirrusSearch query, returns only if one element found, warns otherwise"""
         if (response := WikiData.api_call('query', {'list': 'search', 'srsearch': query})) and 'query' in response:
             if len(response['query']['search']) > 1:
-                logging.error(query + ' returned ' + str(len(response['query']['search'])) + ' results')
+                logging.warning(query + ' returned ' + str(len(response['query']['search'])) + ' results')
             elif len(response['query']['search']) == 0:
                 logging.info(query + ' not found')
             else:
@@ -283,8 +283,8 @@ class WikiData(ABC):
         if 'en' not in self.entity['labels']:
             self.entity['labels']['en'] = {'value': self.external_id, 'language': 'en'}
 
-    def trace(self, message: str):
-        logging.error('https://www.wikidata.org/wiki/' + self.qid + '\t' + message if self.qid else message)
+    def trace(self, message: str, level=20):
+        logging.log(level, 'https://www.wikidata.org/wiki/' + self.qid + '\t' + message if self.qid else message)
 
     def get_summary(self):
         return 'batch import from [[' + self.db_ref + ']] for object ' + self.external_id
@@ -310,7 +310,7 @@ class WikiData(ABC):
                 if response['error']['code'] == 'badtoken':
                     WikiData.token = WikiData.api_call('query', {'meta': 'tokens'})['query']['tokens']['csrftoken']
                     continue
-                self.trace('error while saving: ' + response['error']['info'])
+                self.trace('error while saving: ' + response['error']['info'], 40)
             time.sleep(10)
             self.logon()  # just in case - re-authenticate
         return ''

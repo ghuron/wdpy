@@ -119,10 +119,10 @@ class ExoplanetEu(WikiData):
         try:
             response = requests.Session().get("http://exoplanet.eu/catalog/" + self.external_id)
             if response.status_code != 200:
-                self.trace('{}\tresponse: {}'.format(response.url, response.status_code))
+                self.trace('{}\tresponse: {}'.format(response.url, response.status_code), 40)
                 return
         except requests.exceptions.RequestException as e:
-            self.trace(e.__str__())
+            self.trace(e.__str__(), 40)
             return
         page = BeautifulSoup(response.content, 'html.parser')
 
