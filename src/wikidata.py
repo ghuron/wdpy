@@ -2,6 +2,7 @@
 import csv
 import json
 import logging
+import math
 import os
 import re
 import sys
@@ -104,11 +105,12 @@ class WikiData(ABC):
     @staticmethod
     def format_float(figure, digits: int = -1):
         """Raises: DecimalException"""
+        formatter = '{:f}'
         if 0 <= digits < 24:
-            return ('{0:.' + str(digits) + 'f}').format(Decimal(figure))
-        if amount := re.search('(?P<mantissa>\\d\\.\\d+)e-(?P<exponent>\\d+)', str(figure)):
-            return WikiData.format_float(figure, len(amount.group('mantissa')) + int(amount.group('exponent')) - 2)
-        return str(Decimal(figure))
+            if math.fabs(Decimal(figure)) >= 1: # adding number of digits before .
+                digits += 1 + int(math.log10(math.fabs(Decimal(figure))))
+            formatter = '{:.' + str(digits) + '}'
+        return formatter.format(Decimal(figure))
 
     @staticmethod
     def fix_error(figure: str) -> str:

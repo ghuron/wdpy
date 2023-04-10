@@ -149,7 +149,7 @@ class ExoplanetEu(WikiData):
                'Radial Velocity': 2273386, 'm/s': 182429, 'RJ': 3421309, 'Imaging': 15279026, 'Candidate': 18611609,
                'Primary Transit': 2069919, 'Microlensing': 1028022, 'Astrometry': 181505, 'Controversial': 18611609,
                'Retracted': 7936582, 'pc': 12129, 'Gyr': 524410, 'RSun': 48440, 'K': 11579, 'MSun': 180892}
-        num = '\\d[-.e\\d]+'
+        num = '\\d[-\\+.eE\\d]+'
         unit = '\\s*(?P<unit>[A-Za-z]\\S*)?'
         if reg := re.search(
                 '(?P<value>' + num + ')\\s*\\(\\s*-+(?P<min>' + num + ')\\s+(?P<max>\\+' + num + ')\\s*\\)' + unit,
