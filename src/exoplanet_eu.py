@@ -167,14 +167,11 @@ class ExoplanetEu(WikiData):
             except (ValueError, DecimalException):
                 return WikiData.create_snak(property_id, value)
         elif property_id == 'P397':
-            ident = SimbadDAP.tap_query('https://simbad.u-strasbg.fr/simbad/sim-tap',
-                                        'SELECT main_id FROM ident JOIN basic ON oid = oidref ' +
-                                        'WHERE id=\'' + value + '\'')
-            if len(ident) != 1:
+            query = 'SELECT main_id FROM ident JOIN basic ON oid = oidref WHERE id=\'{}\''.format(value)
+            if len(ident := SimbadDAP.tap_query('https://simbad.u-strasbg.fr/simbad/sim-tap', query)) != 1:
                 return
             # no_parent = self.entity and 'claims' in self.entity and 'P397' not in self.entity['claims']
-            host_id = SimbadDAP.get_by_id(list(ident.keys())[0], False)
-            return WikiData.create_snak(property_id, host_id)
+            return WikiData.create_snak(property_id, SimbadDAP.get_by_id(list(ident.keys())[0], False))
         elif value in ids:
             return WikiData.create_snak(property_id, 'Q' + str(ids[value]))
         else:
