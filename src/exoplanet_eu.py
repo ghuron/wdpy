@@ -35,15 +35,12 @@ class ExoplanetEu(WikiData):
     def get_next_chunk(offset):
         identifiers = []
         offset = 0 if offset is None else offset
-        result = requests.post('http://exoplanet.eu/catalog/json/',
-                               {'sSearch': '', 'iSortCol_0': 9, 'iDisplayStart': offset, 'sEcho': 1,
-                                'iDisplayLength': 1000, 'sSortDir_0': 'desc'})
-        if result.status_code == 200:
-            aa_data = json.loads(result.content)['aaData']
-            for record in aa_data:
+        params = {'sSearch': '', 'iSortCol_0': 9, 'iDisplayStart': offset, 'sEcho': 1, 'iDisplayLength': 1000,
+                  'sSortDir_0': 'desc'}
+        if (result := requests.post('http://exoplanet.eu/catalog/json/', params)).status_code == 200:
+            for record in json.loads(result.content)['aaData']:
                 identifiers.append(re.sub('<[^<]+?>', '', record[0]))
-            offset += len(identifiers)
-        return identifiers, offset
+        return identifiers, offset + params['iDisplayLength']
 
     def obtain_claim(self, snak):
         if snak is None:
