@@ -113,8 +113,7 @@ class ExoplanetEu(WikiData):
 
     def retrieve(self):
         try:
-            response = requests.Session().get("http://exoplanet.eu/catalog/" + self.external_id)
-            if response.status_code != 200:
+            if (response := requests.get("http://exoplanet.eu/catalog/" + self.external_id)).status_code != 200:
                 self.trace('{}\tresponse: {}'.format(response.url, response.status_code), 40)
                 return
         except requests.exceptions.RequestException as e:
@@ -122,11 +121,9 @@ class ExoplanetEu(WikiData):
             return
         page = BeautifulSoup(response.content, 'html.parser')
 
-        publications = page.find_all('p', {'class': 'publication'})
-        for p in publications:
+        for p in page.find_all('p', {'class': 'publication'}):
             if p.get('id') not in ExoplanetEu.sources:
-                links = p.find_all('a', {'target': '_blank'})
-                for a in links:
+                for a in p.find_all('a', {'target': '_blank'}):
                     if ref_id := ExoplanetEu.parse_url(a.get('href')):
                         ExoplanetEu.sources[p.get('id')] = ref_id
                         break
