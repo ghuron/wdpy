@@ -1,11 +1,11 @@
 #!/usr/bin/python3
 import json
 import re
-import sys
-import time
-import urllib.parse
 from decimal import DecimalException
 from os.path import basename
+from sys import argv
+from time import sleep
+from urllib.parse import unquote
 
 import requests
 from astropy import coordinates
@@ -82,34 +82,32 @@ class ExoplanetEu(WikiData):
 
     @staticmethod
     def parse_url(url: str):
-        patterns = {'.*48550/arXiv\\.(\\d{4}.\\d+|[a-z\\-]+(\\.[A-Z]{2})?\\/\\d{7}).*': 'P818=\\g<1>',
-                    '(http[s]?://)?(dx\\.)?doi\\.org/': 'P356=',
-                    '.*arxiv\\.org/(abs|pdf)/(\\d{4}.\\d+|[a-z\\-]+(\\.[A-Z]{2})?\\/\\d{7}).*': 'P818=\\g<2>',
-                    'http[s]?://www\\.journals\\.uchicago\\.edu/doi/abs/': 'P356=',
-                    '.*iopscience.iop.org/1538-3881/(.+\\d)/?$': 'P356=10.1088/0004-6256/\\g<1>',
-                    '.*iopscience.iop.org/(.+\\d)/?$': 'P356=10.1088/\\g<1>',
-                    '.*iop.org/EJ/abstract/1402-4896/(.+\\d)/?$': 'P356=10.1088/0031-8949/\\g<1>',
-                    '.*iop.org/EJ/abstract/1538-4357/(.+\\d)/?$': 'P356=10.1088/0004-637X/\\g<1>',
-                    '.*iop.org/EJ/abstract/(.+\\d)/?$': 'P356=10.1088/\\g<1>',
-                    '.*/aa(\\d+)-(\\d\\d)\\.(html|pdf)': 'P356=10.1051/0004-6361:20\\g<2>\\g<1>',
-                    '.*/aa(\\d+)-(\\d{2})\\.(html|pdf)': 'P356=10.1051/0004-6361/20\\g<2>\\g<1>',
-                    '.*/articles/aa/abs/2004/18/aa0959/aa0959.html': 'P356=10.1051/0004-6361:20035959',
-                    'http[s]?://(?:ui\\.)?adsabs.harvard.edu/abs/([^/]+).*': 'P819=\\g<1>',
-                    'adsabs\\.harvard\\.edu/cgi-bin/nph-bib_query\\?bibcode=([^\\&]+).*': 'P819=\\g<1>',
-                    'http://onlinelibrary.wiley.com/doi/([^x]+x).*': 'P356=\\g<1>',
-                    'http://online.liebertpub.com/doi/abs/([^\\?]+).*': 'P356=\\g<1>',
-                    '.*bn=(\\d{3})(\\d)(\\d{3})(\\d{5})(\\d)': 'P212=\\g<1>-\\g<2>-\\g<3>-\\g<4>-\\g<5>',
-                    '.+jstor\\.org/stable/(info/)?': 'P356=',
-                    '.*doi=([^&]+)(&.+)?$': 'P356=\\g<1>',
-                    '.*/(nature\\d+).html': 'P356=10.1038/\\g<1>'}
-        if url:
-            for search_pattern in patterns:
-                query = urllib.parse.unquote(re.sub(search_pattern, patterns[search_pattern], url.strip(), flags=re.S))
-                if query.startswith('P818='):
-                    if ref_id := ArXiv.get_by_id(query.replace('P818=', '')):
-                        return ref_id
-                elif query.startswith('P') and (ref_id := WikiData.api_search('haswbstatement:' + query)):
-                    return ref_id
+        transform = {'.*48550/arXiv\\.(\\d{4}.\\d+|[a-z\\-]+(\\.[A-Z]{2})?\\/\\d{7}).*': 'P818=\\g<1>',
+                     '(http[s]?://)?(dx\\.)?doi\\.org/': 'P356=',
+                     '.*arxiv\\.org/(abs|pdf)/(\\d{4}.\\d+|[a-z\\-]+(\\.[A-Z]{2})?\\/\\d{7}).*': 'P818=\\g<2>',
+                     'http[s]?://www\\.journals\\.uchicago\\.edu/doi/abs/': 'P356=',
+                     '.*iopscience.iop.org/1538-3881/(.+\\d)/?$': 'P356=10.1088/0004-6256/\\g<1>',
+                     '.*iopscience.iop.org/(.+\\d)/?$': 'P356=10.1088/\\g<1>',
+                     '.*iop.org/EJ/abstract/1402-4896/(.+\\d)/?$': 'P356=10.1088/0031-8949/\\g<1>',
+                     '.*iop.org/EJ/abstract/1538-4357/(.+\\d)/?$': 'P356=10.1088/0004-637X/\\g<1>',
+                     '.*iop.org/EJ/abstract/(.+\\d)/?$': 'P356=10.1088/\\g<1>',
+                     '.*/aa(\\d+)-(\\d\\d)\\.(html|pdf)': 'P356=10.1051/0004-6361:20\\g<2>\\g<1>',
+                     '.*/aa(\\d+)-(\\d{2})\\.(html|pdf)': 'P356=10.1051/0004-6361/20\\g<2>\\g<1>',
+                     '.*/articles/aa/abs/2004/18/aa0959/aa0959.html': 'P356=10.1051/0004-6361:20035959',
+                     'http[s]?://(?:ui\\.)?adsabs.harvard.edu/abs/([^/]+).*': 'P819=\\g<1>',
+                     'adsabs\\.harvard\\.edu/cgi-bin/nph-bib_query\\?bibcode=([^\\&]+).*': 'P819=\\g<1>',
+                     'http://onlinelibrary.wiley.com/doi/([^x]+x).*': 'P356=\\g<1>',
+                     'http://online.liebertpub.com/doi/abs/([^\\?]+).*': 'P356=\\g<1>',
+                     '.*bn=(\\d{3})(\\d)(\\d{3})(\\d{5})(\\d)': 'P212=\\g<1>-\\g<2>-\\g<3>-\\g<4>-\\g<5>',
+                     '.+jstor\\.org/stable/(info/)?': 'P356=',
+                     '.*doi=([^&]+)(&.+)?$': 'P356=\\g<1>',
+                     '.*/(nature\\d+).html': 'P356=10.1038/\\g<1>'}
+        if url and url.strip() and (url := url.split()[0]):
+            for pattern in transform:
+                if (query := unquote(re.sub(pattern, transform[pattern], url, flags=re.S))).startswith('P'):
+                    if query.startswith('P818='):
+                        return ArXiv.get_by_id(query.replace('P818=', ''))
+                    return WikiData.api_search('haswbstatement:' + query)
 
     def retrieve(self):
         try:
@@ -214,22 +212,19 @@ STAR = {'star_0_stars__distance_0': 'P2583', 'star_0_stars__spec_type_0': 'P215'
         'star_0_stars__magnitude_v_0': 'P1215', 'star_0_stars__teff_0': 'P6879', 'star_0_stars__radius_0': 'P2120',
         'star_0_stars__metallicity_0': 'P2227', 'star_0_stars__mass_0': 'P2067'}
 
-if sys.argv[0].endswith(basename(__file__)):  # if not imported
-    ExoplanetEu.logon(sys.argv[1], sys.argv[2])
-    wd_items = ExoplanetEu.get_all_items('SELECT ?id ?item {?item p:P5653/ps:P5653 ?id}')
-
-    for ex_id in wd_items:
+if argv[0].endswith(basename(__file__)):  # if not imported
+    ExoplanetEu.logon(argv[1], argv[2])
+    for ex_id, wd_item in ExoplanetEu.get_all_items('SELECT ?id ?item {?item p:P5653/ps:P5653 ?id}').items():
         # ex_id = '55 Cnc e'
-        item = ExoplanetEu(ex_id, wd_items[ex_id])
-        data = item.retrieve()
-        item.prepare_data(data)
-        item.update()
-        if item.entity and 'P397' in item.entity['claims'] and len(item.entity['claims']['P397']) == 1:
-            if 'datavalue' in item.entity['claims']['P397'][0]['mainsnak']:  # parent != "novalue"
-                parent = ExoplanetEu(ex_id, item.entity['claims']['P397'][0]['mainsnak']['datavalue']['value']['id'])
-                parent.properties = STAR
-                parent.prepare_data(data)
-                parent.update()
-        if data:
+        item = ExoplanetEu(ex_id, wd_item)
+        if data := item.retrieve():
+            item.prepare_data(data)
+            item.update()
+            if item.entity and 'P397' in item.entity['claims'] and len(item.entity['claims']['P397']) == 1:
+                if 'datavalue' in (parent := item.entity['claims']['P397'][0]['mainsnak']):  # parent != "novalue"
+                    host = ExoplanetEu(ex_id, parent['datavalue']['value']['id'])
+                    host.properties = STAR
+                    host.prepare_data(data)
+                    host.update()
             data.decompose()
-        time.sleep(4)
+        sleep(4)
