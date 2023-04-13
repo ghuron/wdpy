@@ -47,7 +47,7 @@ class ExoplanetEu(WikiData):
             return
         if snak['property'] in ['P6257', 'P6258'] and float(snak['datavalue']['value']['amount']).is_integer():
             return  # do not put obviously wrong coordinates
-        if self.entity is not None and 'claims' in self.entity and snak['property'] in self.entity['claims']:
+        if self.entity and 'claims' in self.entity and snak['property'] in self.entity['claims']:
             if snak['property'] in ['P6257', 'P6258']:
                 return  # do not update coordinates, because exoplanets.eu ra/dec is usually low precision
             if self.db_property not in self.entity['claims'] or \
@@ -60,8 +60,7 @@ class ExoplanetEu(WikiData):
                                     return
                     else:
                         return
-        claim = super().obtain_claim(snak)
-        if claim is not None:
+        if claim := super().obtain_claim(snak):
             if snak['property'] in ['P4501']:
                 claim['qualifiers'] = {'P4501': [WikiData.create_snak('P1013', 'Q2832068')]}
             elif snak['property'] == 'P1215':
