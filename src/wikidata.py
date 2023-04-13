@@ -286,6 +286,7 @@ class WikiData(ABC):
             self.entity['labels']['en'] = {'value': self.external_id, 'language': 'en'}
 
     def trace(self, message: str, level=20):
+        # CRITICAL: 50, ERROR: 40, WARNING: 30, INFO: 20, DEBUG: 10
         logging.log(level, 'https://www.wikidata.org/wiki/' + self.qid + '\t' + message if self.qid else message)
 
     def get_summary(self):
