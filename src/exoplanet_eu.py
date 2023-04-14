@@ -61,8 +61,8 @@ class ExoplanetEu(WikiData):
                     else:
                         return
         if claim := super().obtain_claim(snak):
-            if snak['property'] in ['P4501']:
-                claim['qualifiers'] = {'P4501': [WikiData.create_snak('P1013', 'Q2832068')]}
+            if snak['property'] == 'P4501':  # always geomeric albedo
+                claim['qualifiers'] = {'P1013': [WikiData.create_snak('P1013', 'Q2832068')]}
             elif snak['property'] == 'P1215':
                 claim['qualifiers'] = {'P1227': [WikiData.create_snak('P1227', 'Q4892529')]}
                 claim['rank'] = 'preferred'  # V-magnitude is always preferred
