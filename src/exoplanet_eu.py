@@ -71,7 +71,7 @@ class ExoplanetEu(WikiData):
 
     @staticmethod
     def find_by(title: str) -> str:
-        if title and len(title := ' '.join(title.replace('\n', ' ').rstrip('.').split())) > 32:
+        if title and len(title := ' '.join(title.replace('\n', ' ').rstrip('.').split())) > 24:
             return WikiData.api_search('"{}" -haswbstatement:P31=Q1348305'.format(title))
 
     def prepare_data(self, source: BeautifulSoup = None):
