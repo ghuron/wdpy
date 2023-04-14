@@ -94,7 +94,7 @@ class WikiData(ABC):
 
     @staticmethod
     def get_next_chunk(offset: any) -> Tuple[list[str], any]:
-        """Used to fetch external identifiers, returns list and new offset"""
+        """Fetch array of external identifiers starting from specified offset"""
         return [], None
 
     @classmethod
@@ -115,7 +115,7 @@ class WikiData(ABC):
         """Raises: DecimalException"""
         formatter = '{:f}'
         if 0 <= digits < 24:
-            if math.fabs(Decimal(figure)) >= 1: # adding number of digits before .
+            if math.fabs(Decimal(figure)) >= 1:  # adding number of digits before .
                 digits += 1 + int(math.log10(math.fabs(Decimal(figure))))
             formatter = '{:.' + str(digits) + '}'
         return formatter.format(Decimal(figure))
@@ -129,7 +129,8 @@ class WikiData(ABC):
             return WikiData.format_float(re.sub('^000+\\d$', '', figure))
 
     @staticmethod
-    def create_snak(property_id: str, value, lower=None, upper=None):
+    def create_snak(property_id: str, value, lower: str = None, upper: str = None) -> dict | None:
+        """Create snak based on provided id of the property and string value"""
         if WikiData.types is None:
             WikiData.types = WikiData.query('SELECT ?prop ?type { ?prop wikibase:propertyType ?type }')
             for prop in WikiData.types:
@@ -217,7 +218,8 @@ class WikiData(ABC):
             self.entity = result[self.qid]
         self.input_snaks = [WikiData.create_snak(self.db_property, self.external_id)]
 
-    def obtain_claim(self, snak: dict):
+    def obtain_claim(self, snak: dict) -> dict | None:
+        """Find or create claim, corresponding to the provided snak"""
         if snak is None:
             return
         if isinstance(snak['datavalue']['value'], dict) and 'id' in snak['datavalue']['value']:
@@ -288,8 +290,8 @@ class WikiData(ABC):
         return filtered
 
     def post_process(self):
-        if 'labels' not in self.entity:
-            self.entity['labels'] = {}
+        """Changes in self.entity that does not depend on specific input"""
+        self.entity['labels'] = {} if 'labels' not in self.entity else self.entity['labels']
         if 'en' not in self.entity['labels']:
             self.entity['labels']['en'] = {'value': self.external_id, 'language': 'en'}
 
