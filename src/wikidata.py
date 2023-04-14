@@ -129,7 +129,7 @@ class WikiData(ABC):
             return WikiData.format_float(re.sub('^000+\\d$', '', figure))
 
     @staticmethod
-    def create_snak(property_id: str, value, lower: str = None, upper: str = None) -> dict | None:
+    def create_snak(property_id: str, value, lower: str = None, upper: str = None):
         """Create snak based on provided id of the property and string value"""
         if WikiData.types is None:
             WikiData.types = WikiData.query('SELECT ?prop ?type { ?prop wikibase:propertyType ?type }')
@@ -218,7 +218,7 @@ class WikiData(ABC):
             self.entity = result[self.qid]
         self.input_snaks = [WikiData.create_snak(self.db_property, self.external_id)]
 
-    def obtain_claim(self, snak: dict) -> dict | None:
+    def obtain_claim(self, snak: dict):
         """Find or create claim, corresponding to the provided snak"""
         if snak is None:
             return
