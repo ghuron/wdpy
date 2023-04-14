@@ -215,7 +215,7 @@ STAR = {'star_0_stars__distance_0': 'P2583', 'star_0_stars__spec_type_0': 'P215'
 if argv[0].endswith(basename(__file__)):  # if not imported
     ExoplanetEu.logon(argv[1], argv[2])
     for ex_id, wd_item in ExoplanetEu.get_all_items('SELECT ?id ?item {?item p:P5653/ps:P5653 ?id}').items():
-        # ex_id = '55 Cnc e'
+        # ex_id, wd_item = 'HD 190360 b', 'Q1072888'  # uncomment to debug specific item only
         item = ExoplanetEu(ex_id, wd_item)
         if data := item.retrieve():
             item.prepare_data(data)
