@@ -64,8 +64,10 @@ class ExoplanetEu(WikiData):
             for pattern, repl in ExoplanetEu.config['transform'].items():
                 if (query := unquote(re.sub(pattern, repl, url, flags=re.S))).startswith('P'):
                     if query.startswith('P818='):
-                        return ArXiv.get_by_id(query.replace('P818=', ''))
-                    return WikiData.api_search('haswbstatement:' + query)  # fallback
+                        if qid := ArXiv.get_by_id(query.replace('P818=', '')):
+                            return qid
+                    elif qid := WikiData.api_search('haswbstatement:' + query):  # fallback
+                        return qid
 
     @staticmethod
     def find_by(title: str) -> str:
