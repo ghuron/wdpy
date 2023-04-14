@@ -18,7 +18,7 @@ from wikidata import WikiData
 
 class ExoplanetEu(WikiData):
     constellations = None
-    sources = {}
+    sources = {'4966': 'Q66424531'}
     db_property = 'P5653'
     db_ref = 'Q1385430'
 
