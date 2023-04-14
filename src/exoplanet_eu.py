@@ -48,7 +48,7 @@ class ExoplanetEu(WikiData):
         page = BeautifulSoup(response.content, 'html.parser')
         for p in page.find_all('p', {'class': 'publication'}):
             if p.get('id') not in ExoplanetEu.articles:
-                for a in p.find_all('a', {'target': '_blank'}):
+                for a in p.find_all('a'):
                     if ref_id := ExoplanetEu.parse_url(a.get('href')):
                         ExoplanetEu.articles[p.get('id')] = ref_id
                         break
