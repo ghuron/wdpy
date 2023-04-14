@@ -32,7 +32,7 @@ def wdqs_query(sparql, process=lambda new, existing: new):
         session.headers.update({'Accept': 'text/csv',
                                 'User-Agent': 'simbadbot/0.1 (https://www.wikidata.org/wiki/User:Ghuron)'})
         download = session.post('https://query.wikidata.org/sparql', params={'query': sparql})
-        download.raise_for_status();
+        download.raise_for_status()
         decoded_content = download.content.decode('utf-8')
 
         cr = csv.reader(decoded_content.splitlines(), delimiter=',')

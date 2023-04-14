@@ -35,7 +35,7 @@ class ExoplanetEu(WikiData):
 
     articles = config['sources']
 
-    def retrieve(self) -> BeautifulSoup | None:
+    def retrieve(self):
         """Load page corresponding to self.external_id and update Exoplanet.articles with parsed sources"""
         try:
             if (response := requests.get("http://exoplanet.eu/catalog/" + self.external_id)).status_code != 200:
