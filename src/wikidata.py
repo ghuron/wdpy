@@ -19,7 +19,7 @@ from requests.structures import CaseInsensitiveDict
 
 
 class WikiData(ABC):
-    USER_AGENT = 'automated import by https://www.wikidata.org/wiki/User:Ghuron)'
+    USER_AGENT = 'automated import by https://www.wikidata.org/wiki/User:Ghuron'
     api = requests.Session()
     api.headers.update({'User-Agent': USER_AGENT})
     db_property, db_ref = None, None
@@ -27,6 +27,14 @@ class WikiData(ABC):
     types: dict[str, str] = None
     logging.basicConfig(format="%(asctime)s: %(levelname)s - %(message)s", stream=sys.stdout,
                         level=os.environ.get('LOGLEVEL', 'INFO').upper())
+
+    @staticmethod
+    def load_config(file_name: str):
+        try:
+            with open(os.path.splitext(file_name)[0] + '.json') as file:
+                return json.load(file)
+        except OSError:
+            return {}
 
     @staticmethod
     def api_call(action: str, params: dict[str, str]) -> dict:
