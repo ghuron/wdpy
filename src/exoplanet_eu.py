@@ -131,8 +131,8 @@ class ExoplanetEu(WikiData):
 
     @staticmethod
     def find_by_title(title: str):
-        if title and len(title) > 32:
-            return WikiData.api_search('"{}" -erratum'.format(' '.join(title.replace('\n', ' ').rstrip('.').split())))
+        if title and len(title := ' '.join(title.replace('\n', ' ').rstrip('.').split())) > 32:
+            return WikiData.api_search('"{}" -haswbstatement:P31=Q1348305'.format(title))
 
     @staticmethod
     def create_snak(property_id: str, value, lower=None, upper=None):
