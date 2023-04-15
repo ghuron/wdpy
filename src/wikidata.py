@@ -118,7 +118,7 @@ class WikiData(ABC):
             if math.fabs(Decimal(figure)) >= 1:  # adding number of digits before .
                 digits += 1 + int(math.log10(math.fabs(Decimal(figure))))
             formatter = '{:.' + str(digits) + '}'
-        return formatter.format(Decimal(figure))
+        return formatter.format(Decimal(figure).normalize())
 
     @staticmethod
     def fix_error(figure: str) -> str:
