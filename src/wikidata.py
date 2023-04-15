@@ -232,8 +232,9 @@ class WikiData(ABC):
             self.entity['claims'][snak['property']] = []
 
         if claim := WikiData.find_claim(snak['datavalue']['value'], self.entity['claims'][snak['property']]):
-            if claim['rank'] == 'deprecated' and 'qualifiers' in claim and 'P2241' in claim['qualifiers']:
-                return  # someone explicitly states that this is a bad statement, do not touch it
+            if 'rank' in claim and claim['rank'] == 'deprecated':
+                if 'qualifiers' in claim and 'P2241' in claim['qualifiers']:
+                    return  # someone explicitly states that this is a bad statement, do not touch it
         else:
             claim = {'type': 'statement', 'mainsnak': snak}
             if 'id' in self.entity:
