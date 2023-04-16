@@ -5,18 +5,16 @@ from decimal import DecimalException
 from os.path import basename
 from sys import argv
 from time import sleep
-from urllib.parse import unquote
 
 import requests
-from astropy import coordinates
-from bs4 import BeautifulSoup
+from bs4 import BeautifulSoup, element
 
-from arxiv import ArXiv
+from adql import ADQL
 from simbad_dap import SimbadDAP
 from wikidata import WikiData
 
 
-class ExoplanetEu(WikiData):
+class ExoplanetEu(ADQL):
     config = WikiData.load_config(__file__)
     db_property, db_ref = 'P5653', 'Q1385430'
 
@@ -47,32 +45,18 @@ class ExoplanetEu(WikiData):
 
         page = BeautifulSoup(response.content, 'html.parser')
         for p in page.find_all('p', {'class': 'publication'}):
-            if p.get('id') not in ExoplanetEu.articles:
-                for a in p.find_all('a'):
-                    if ref_id := ExoplanetEu.parse_url(a.get('href')):
-                        ExoplanetEu.articles[p.get('id')] = ref_id
-                        break
-                if (p.get('id') not in ExoplanetEu.articles) and (ref_id := ExoplanetEu.find_by(p.find('b').text)):
-                    ExoplanetEu.articles[p.get('id')] = ref_id
-
+            if p.get('id') not in ExoplanetEu.articles and (ref_id := ExoplanetEu.parse_publication(p)):
+                ExoplanetEu.articles[p.get('id')] = ref_id
         return page
 
     @staticmethod
-    def parse_url(url: str) -> str:
-        """Try to find qid of the reference based on the url provided"""
-        if url and url.strip() and (url := url.split()[0]):  # get text before first whitespace and strip
-            for pattern, repl in ExoplanetEu.config['transform'].items():
-                if (query := unquote(re.sub(pattern, repl, url, flags=re.S))).startswith('P'):
-                    if query.startswith('P818='):
-                        if qid := ArXiv.get_by_id(query.replace('P818=', '')):
-                            return qid
-                    elif qid := WikiData.api_search('haswbstatement:' + query):  # fallback
-                        return qid
-
-    @staticmethod
-    def find_by(title: str) -> str:
-        if title and len(title := ' '.join(title.replace('\n', ' ').rstrip('.').split())) > 24:
-            return WikiData.api_search('"{}" -haswbstatement:P31=Q1348305'.format(title))
+    def parse_publication(publication: element.Tag):
+        for a in publication.find_all('a'):
+            if ref_id := ADQL.parse_url(a.get('href')):
+                return ref_id
+        if publication.find('b').text:
+            if len(title := ' '.join(publication.find('b').text.replace('\n', ' ').rstrip('.').split())) > 24:
+                return WikiData.api_search('"{}" -haswbstatement:P31=Q1348305'.format(title))
 
     def prepare_data(self, source: BeautifulSoup = None):
         super().prepare_data()
@@ -130,7 +114,7 @@ class ExoplanetEu(WikiData):
                 return WikiData.create_snak(property_id, value)
         elif property_id == 'P397':
             query = 'SELECT main_id FROM ident JOIN basic ON oid = oidref WHERE id=\'{}\''.format(value)
-            if len(ident := SimbadDAP.tap_query('https://simbad.u-strasbg.fr/simbad/sim-tap', query)) != 1:
+            if len(ident := ADQL.tap_query('https://simbad.u-strasbg.fr/simbad/sim-tap', query)) != 1:
                 return
             # no_parent = self.entity and 'claims' in self.entity and 'P397' not in self.entity['claims']
             return WikiData.create_snak(property_id, SimbadDAP.get_by_id(list(ident.keys())[0], False))
@@ -161,26 +145,13 @@ class ExoplanetEu(WikiData):
                             return  # if found - skip provided snak
 
         if claim := super().obtain_claim(snak):
+            claim['mespos'] = 0
             if snak['property'] == 'P4501':  # always geomeric albedo
                 claim['qualifiers'] = {'P1013': [WikiData.create_snak('P1013', 'Q2832068')]}
             elif snak['property'] == 'P1215':
                 claim['qualifiers'] = {'P1227': [WikiData.create_snak('P1227', 'Q4892529')]}
                 claim['rank'] = 'preferred'  # V-magnitude is always preferred
         return claim
-
-    constellations = None
-
-    def post_process(self) -> None:
-        super().post_process()
-        if 'P6257' in self.entity['claims'] and 'P6258' in self.entity['claims']:
-            self.obtain_claim(WikiData.create_snak('P6259', 'Q1264450'))  # J2000
-            if 'P59' not in self.entity['claims']:
-                ra = self.entity['claims']['P6257'][0]['mainsnak']['datavalue']['value']['amount']
-                dec = self.entity['claims']['P6258'][0]['mainsnak']['datavalue']['value']['amount']
-                tla = coordinates.SkyCoord(ra, dec, frame='icrs', unit='deg').get_constellation(short_name=True)
-                SPARQL = 'SELECT DISTINCT ?n ?i {?i wdt:P31/wdt:P279* wd:Q8928; wdt:P1813 ?n}'
-                self.constellations = self.query(SPARQL) if self.constellations is None else self.constellations
-                self.obtain_claim(WikiData.create_snak('P59', self.constellations[tla]))
 
 
 if argv[0].endswith(basename(__file__)):  # if just imported - do nothing
