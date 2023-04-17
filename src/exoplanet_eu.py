@@ -31,7 +31,7 @@ class ExoplanetEu(ADQL):
                 identifiers.append(re.sub('<[^<]+?>', '', record[0]))
         return identifiers, offset + params['iDisplayLength']
 
-    articles = config['sources']
+    articles = {"2540": "Q54012702", "4966": "Q66424531"}
 
     def retrieve(self):
         """Load page corresponding to self.external_id and update Exoplanet.articles with parsed sources"""
