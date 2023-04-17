@@ -15,7 +15,7 @@ from wikidata import WikiData
 
 
 class ExoplanetEu(ADQL):
-    config = WikiData.load_config(__file__)
+    WikiData.load_config(__file__)
     db_property, db_ref = 'P5653', 'Q1385430'
 
     def __init__(self, external_id, qid=None):

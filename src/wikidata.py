@@ -25,6 +25,7 @@ class WikiData(ABC):
     db_property, db_ref = None, None
     login, password, token = '', '', 'bad'
     __types: dict[str, str] = None
+    config = None
     logging.basicConfig(format="%(asctime)s: %(levelname)s - %(message)s", stream=sys.stdout,
                         level=os.environ.get('LOGLEVEL', 'INFO').upper())
 
@@ -32,9 +33,9 @@ class WikiData(ABC):
     def load_config(file_name: str):
         try:
             with open(os.path.splitext(file_name)[0] + '.json') as file:
-                return json.load(file)
+                WikiData.config = {**WikiData.config, **json.load(file)}
         except OSError:
-            return {}
+            return
 
     @staticmethod
     def api_call(action: str, params: dict[str, str]) -> dict:

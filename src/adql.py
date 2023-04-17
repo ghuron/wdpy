@@ -16,7 +16,7 @@ from wikidata import WikiData
 
 
 class ADQL(WikiData, ABC):
-    config = WikiData.load_config(__file__)
+    WikiData.load_config(__file__)
     constellations = None
     ads_articles = None
     publication_dates = None
