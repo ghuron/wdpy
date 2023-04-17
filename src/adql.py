@@ -120,11 +120,10 @@ class ADQL(WikiData, ABC):
 
     @staticmethod
     def construct_snak(row, col):
-        if col + 'h' not in row or row[col + 'h'] == '':
-            try:
-                result = WikiData.create_snak(col.upper(), ADQL.format_figure(row, col))
-            except InvalidOperation:
-                result = WikiData.create_snak(col.upper(), ADQL.format_figure(row, col))
+        if WikiData.get_type(col.upper()) != 'quantity':
+            result = WikiData.create_snak(col.upper(), row[col])
+        elif col + 'h' not in row or row[col + 'h'] == '':
+            result = WikiData.create_snak(col.upper(), ADQL.format_figure(row, col))
         else:
             try:
                 high = ADQL.format_figure(row, col + 'h')
