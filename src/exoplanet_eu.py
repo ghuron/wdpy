@@ -91,7 +91,13 @@ class ExoplanetEu(ADQL):
         prefix = 'http://www.wikidata.org/entity/'
         num = '\\d[-\\+.eE\\d]+'
         unit = '\\s*(?P<unit>[A-Za-z]\\S*)?'
-        if reg := re.search(
+        if property_id == 'P397':
+            query = 'SELECT main_id FROM ident JOIN basic ON oid = oidref WHERE id=\'{}\''.format(value)
+            if len(ident := ADQL.tap_query('https://simbad.u-strasbg.fr/simbad/sim-tap', query)) != 1:
+                return
+            # no_parent = self.entity and 'claims' in self.entity and 'P397' not in self.entity['claims']
+            return WikiData.create_snak(property_id, SimbadDAP.get_by_id(list(ident.keys())[0], False))
+        elif reg := re.search(
                 '(?P<value>' + num + ')\\s*\\(\\s*-+(?P<min>' + num + ')\\s+(?P<max>\\+' + num + ')\\s*\\)' + unit,
                 value):
             result = WikiData.create_snak(property_id, reg.group('value'), reg.group('min'), reg.group('max'))
@@ -110,12 +116,6 @@ class ExoplanetEu(ADQL):
                 (result := WikiData.create_snak(property_id, value))['datavalue']['value']['unit'] = prefix + 'Q28390'
             except (ValueError, DecimalException):
                 return WikiData.create_snak(property_id, value)
-        elif property_id == 'P397':
-            query = 'SELECT main_id FROM ident JOIN basic ON oid = oidref WHERE id=\'{}\''.format(value)
-            if len(ident := ADQL.tap_query('https://simbad.u-strasbg.fr/simbad/sim-tap', query)) != 1:
-                return
-            # no_parent = self.entity and 'claims' in self.entity and 'P397' not in self.entity['claims']
-            return WikiData.create_snak(property_id, SimbadDAP.get_by_id(list(ident.keys())[0], False))
         else:
             return WikiData.create_snak(property_id, value)
 
@@ -152,7 +152,7 @@ class ExoplanetEu(ADQL):
 if argv[0].endswith(basename(__file__)):  # if just imported - do nothing
     WikiData.logon(argv[1], argv[2])
     for ex_id, wd_item in WikiData.get_all_items('SELECT ?id ?item {?item p:P5653/ps:P5653 ?id}').items():
-        # ex_id, wd_item = 'HD 190360 b', 'Q1072888'  # uncomment to debug specific item only
+        ex_id, wd_item = 'K03456.02', 'Q21067504'  # uncomment to debug specific item only
         item = ExoplanetEu(ex_id, wd_item)
         if data := item.retrieve():
             item.prepare_data(data)
