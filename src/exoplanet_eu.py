@@ -88,6 +88,7 @@ class ExoplanetEu(ADQL):
 
     @staticmethod
     def create_snak(property_id: str, value: str, lower=None, upper=None):
+        prefix = 'http://www.wikidata.org/entity/'
         num = '\\d[-\\+.eE\\d]+'
         unit = '\\s*(?P<unit>[A-Za-z]\\S*)?'
         if reg := re.search(
@@ -102,14 +103,11 @@ class ExoplanetEu(ADQL):
                 result = WikiData.create_snak(property_id, reg.group('value'))
         elif len(deg := value.split(':')) == 3:  # coordinates
             try:
+                deg[1], deg[2] = ('-' + deg[1], '-' + deg[2]) if deg[0].startswith('-') else (deg[1], deg[2])
+                angle = (float(deg[2]) / 60 + float(deg[1])) / 60 + float(deg[0])
                 digits = 3 + (len(value) - value.find('.') - 1 if value.find('.') > 0 else 0)
-                mult = 15 if property_id == 'P6257' else 1
-                if deg[0].startswith('-'):
-                    angle = -((float(deg[2]) / 60 + float(deg[1])) / 60 - float(deg[0]))
-                else:
-                    angle = +((float(deg[2]) / 60 + float(deg[1])) / 60 + float(deg[0]))
-                result = WikiData.create_snak(property_id, WikiData.format_float(angle * mult, digits))
-                result['datavalue']['value']['unit'] = 'http://www.wikidata.org/entity/Q28390'
+                value = WikiData.format_float(15 * angle if property_id == 'P6257' else angle, digits)
+                (result := WikiData.create_snak(property_id, value))['datavalue']['value']['unit'] = prefix + 'Q28390'
             except (ValueError, DecimalException):
                 return WikiData.create_snak(property_id, value)
         elif property_id == 'P397':
@@ -121,9 +119,8 @@ class ExoplanetEu(ADQL):
         else:
             return WikiData.create_snak(property_id, value)
 
-        if result and reg and reg.group('unit'):
-            result['datavalue']['value']['unit'] = 'http://www.wikidata.org/entity/Q' + str(
-                ExoplanetEu.config['ids'][reg.group('unit')])
+        if result and reg and reg.group('unit') and reg.group('unit') in WikiData.config['translate']:
+            result['datavalue']['value']['unit'] = prefix + WikiData.config['translate'][reg.group('unit')]
         return result
 
     def obtain_claim(self, snak):
