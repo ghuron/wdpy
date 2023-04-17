@@ -168,6 +168,8 @@ class WikiData(ABC):
             text = snak['datavalue']['value']
             if WikiData.config and 'translate' in WikiData.config and text in WikiData.config['translate']:
                 text = WikiData.config['translate'][text]
+            if not re.search('Q\\d+$', text):
+                return
             snak['datavalue'] = {'type': 'wikibase-entityid', 'value': {'entity-type': 'item', 'id': text}}
         elif snak['datatype'] == 'time':
             snak['datavalue']['type'] = 'time'
