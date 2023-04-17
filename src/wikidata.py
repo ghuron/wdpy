@@ -165,10 +165,10 @@ class WikiData(ABC):
             except (ValueError, DecimalException, KeyError):
                 return None
         elif snak['datatype'] == 'wikibase-item':
-            if not re.search('^Q\\d+$', snak['datavalue']['value']):
-                return None
-            snak['datavalue']['type'] = 'wikibase-entityid'
-            snak['datavalue']['value'] = {'entity-type': 'item', 'id': snak['datavalue']['value']}
+            text = snak['datavalue']['value']
+            if WikiData.config and 'translate' in WikiData.config and text in WikiData.config['translate']:
+                text = WikiData.config['translate'][text]
+            snak['datavalue'] = {'type': 'wikibase-entityid', 'value': {'entity-type': 'item', 'id': text}}
         elif snak['datatype'] == 'time':
             snak['datavalue']['type'] = 'time'
             if len(snak['datavalue']['value']) == 4:  # year only
