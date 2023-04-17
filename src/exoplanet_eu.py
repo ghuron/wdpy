@@ -118,8 +118,6 @@ class ExoplanetEu(ADQL):
                 return
             # no_parent = self.entity and 'claims' in self.entity and 'P397' not in self.entity['claims']
             return WikiData.create_snak(property_id, SimbadDAP.get_by_id(list(ident.keys())[0], False))
-        elif value in ExoplanetEu.config['ids']:
-            return WikiData.create_snak(property_id, 'Q' + str(ExoplanetEu.config['ids'][value]))
         else:
             return WikiData.create_snak(property_id, value)
 
