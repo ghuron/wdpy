@@ -8,9 +8,9 @@ import re
 import sys
 import time
 import uuid
-from datetime import datetime
 from abc import ABC, abstractmethod
 from contextlib import closing
+from datetime import datetime
 from decimal import Decimal, DecimalException
 from typing import Tuple
 
