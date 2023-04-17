@@ -76,7 +76,7 @@ class ExoplanetEu(ADQL):
                             current_snak['source'] = [] if 'source' not in current_snak else current_snak['source']
                             current_snak['source'].append(self.articles[ref_id])
                         elif ref_id:
-                            self.trace("source {} could have been used".format(ref_id), 30)
+                            self.trace("can use source\t{}".format(ref_id), 30)
                     elif 'showAllPubs' not in str(td):
                         self.input_snaks.append(current_snak)
                         current_snak = None
