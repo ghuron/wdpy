@@ -25,7 +25,7 @@ class WikiData(ABC):
     db_property, db_ref = None, None
     login, password, token = '', '', 'bad'
     __types: dict[str, str] = None
-    config = None
+    config = {}
     logging.basicConfig(format="%(asctime)s: %(levelname)s - %(message)s", stream=sys.stdout,
                         level=os.environ.get('LOGLEVEL', 'INFO').upper())
 

@@ -20,12 +20,12 @@ class ExoplanetEu(ADQL):
 
     def __init__(self, external_id, qid=None):
         super().__init__(external_id, qid)
-        self.properties = ExoplanetEu.config['planet']
+        self.properties = WikiData.config['planet']
 
     @staticmethod
     def get_next_chunk(offset: int) -> tuple[list[str], int]:
         identifiers, offset = [], 0 if offset is None else offset
-        params = {**ExoplanetEu.config['post'], **{'iDisplayStart': offset}}
+        params = {**WikiData.config['post'], **{'iDisplayStart': offset}}
         if (result := requests.post('http://exoplanet.eu/catalog/json/', params)).status_code == 200:
             for record in json.loads(result.content)['aaData']:
                 identifiers.append(re.sub('<[^<]+?>', '', record[0]))
@@ -165,7 +165,7 @@ if argv[0].endswith(basename(__file__)):  # if just imported - do nothing
             if item.entity and 'P397' in item.entity['claims'] and len(item.entity['claims']['P397']) == 1:
                 if 'datavalue' in (parent := item.entity['claims']['P397'][0]['mainsnak']):  # parent != "novalue"
                     host = ExoplanetEu(ex_id, parent['datavalue']['value']['id'])
-                    host.properties = ExoplanetEu.config['star']
+                    host.properties = WikiData.config['star']
                     host.prepare_data(data)
                     if ExoplanetEu.db_property not in host.entity['claims']:  # only if host is star
                         host.update()
