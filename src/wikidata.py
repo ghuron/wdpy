@@ -24,7 +24,7 @@ class WikiData(ABC):
     api.headers.update({'User-Agent': USER_AGENT})
     db_property, db_ref = None, None
     login, password, token = '', '', 'bad'
-    types: dict[str, str] = None
+    __types: dict[str, str] = None
     logging.basicConfig(format="%(asctime)s: %(levelname)s - %(message)s", stream=sys.stdout,
                         level=os.environ.get('LOGLEVEL', 'INFO').upper())
 
@@ -129,19 +129,24 @@ class WikiData(ABC):
             return WikiData.format_float(re.sub('^000+\\d$', '', figure))
 
     @staticmethod
+    def get_type(property_id: str) -> str:
+        """Lazy load and read-only access to type of the property"""
+        if WikiData.__types is None:
+            WikiData.__types = WikiData.query('SELECT ?prop ?type { ?prop wikibase:propertyType ?type }')
+            for prop in WikiData.__types:
+                WikiData.__types[prop] = WikiData.__types[prop].replace('http://wikiba.se/ontology#', ''). \
+                    replace('WikibaseItem', 'wikibase-item').replace('ExternalId', 'external-id').lower()
+        if property_id in WikiData.__types:
+            return WikiData.__types[property_id]
+
+    @staticmethod
     def create_snak(property_id: str, value, lower: str = None, upper: str = None):
         """Create snak based on provided id of the property and string value"""
-        if WikiData.types is None:
-            WikiData.types = WikiData.query('SELECT ?prop ?type { ?prop wikibase:propertyType ?type }')
-            for prop in WikiData.types:
-                WikiData.types[prop] = WikiData.types[prop].replace('http://wikiba.se/ontology#', ''). \
-                    replace('WikibaseItem', 'wikibase-item').replace('ExternalId', 'external-id').lower()
-
-        if property_id not in WikiData.types or not value or value == 'NaN':
+        if not WikiData.get_type(property_id) or not value or value == 'NaN':
             return None
 
-        snak = {'datatype': WikiData.types[property_id], 'property': property_id, 'snaktype': 'value',
-                'datavalue': {'value': value, 'type': WikiData.types[property_id]}}
+        snak = {'datatype': WikiData.get_type(property_id), 'property': property_id, 'snaktype': 'value',
+                'datavalue': {'value': value, 'type': WikiData.get_type(property_id)}}
         if snak['datatype'] == 'quantity':
             try:
                 snak['datavalue']['value'] = {'amount': WikiData.format_float(value), 'unit': '1'}

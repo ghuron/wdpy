@@ -38,7 +38,7 @@ class ADQL(WikiData, ABC):
                     'SELECT DISTINCT ?n ?i {?i wdt:P31/wdt:P279* wd:Q8928; wdt:P1813 ?n}')
             self.obtain_claim(WikiData.create_snak('P59', ADQL.constellations[tla]))
         for property_id in self.entity['claims']:
-            if property_id not in ADQL.config['noranking'] and WikiData.types[property_id] == 'quantity':
+            if property_id not in ADQL.config['noranking'] and WikiData.get_type(property_id) == 'quantity':
                 ADQL.normalize(self.entity['claims'][property_id])
 
     @staticmethod
