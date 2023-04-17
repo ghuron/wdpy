@@ -75,7 +75,10 @@ class ADQL(WikiData, ABC):
         latest = dateutil.parser.parse('1800-01-01T00:00:00Z')
         for statement in statements:
             if 'mespos' in statement:  # normal for new statements with minimal mespos, deprecated for the rest
-                statement['rank'] = 'deprecated' if int(statement['mespos']) > minimal else 'normal'
+                if int(statement['mespos']) == minimal:
+                    statement['rank'] = 'normal'
+                elif 'hash' not in statement['mainsnak']:  # newly created statement
+                    statement['rank'] = 'deprecated'
 
             if 'rank' not in statement or statement['rank'] == 'normal':
                 if (current := ADQL.get_latest_publication_date(statement)) > latest:
