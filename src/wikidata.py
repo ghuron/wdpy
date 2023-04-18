@@ -10,7 +10,6 @@ import time
 import uuid
 from abc import ABC, abstractmethod
 from contextlib import closing
-from datetime import datetime
 from decimal import Decimal, DecimalException
 from typing import Tuple
 
@@ -172,22 +171,20 @@ class WikiData(ABC):
                 return
             snak['datavalue'] = {'type': 'wikibase-entityid', 'value': {'entity-type': 'item', 'id': text}}
         elif snak['datatype'] == 'time':
-            snak['datavalue']['type'] = 'time'
-            if len(snak['datavalue']['value']) == 4:  # year only
-                snak['datavalue']['value'] = {'time': '+' + snak['datavalue']['value'] + '-00-00T00:00:00Z',
-                                              'precision': 9, 'timezone': 0, 'before': 0, 'after': 0,
-                                              'calendarmodel': 'http://www.wikidata.org/entity/Q1985727'}
-            else:
-                try:  # trying to parse date
-                    snak['datavalue']['value'] = {
-                        'time': datetime.strptime(snak['datavalue']['value'], '%d/%m/%Y').strftime(
-                            '+%Y-%m-%dT00:00:00Z'), 'precision': 11, 'timezone': 0, 'before': 0, 'after': 0,
-                        'calendarmodel': 'http://www.wikidata.org/entity/Q1985727'}
-                except ValueError:
-                    return None
+            if not (value := WikiData.parse_date(snak['datavalue']['value'])):
+                return
+            snak['datavalue']['value'] = value
         elif snak['datatype'] == 'external-id':
             snak['datavalue']['type'] = 'string'
         return snak
+
+    @staticmethod
+    def parse_date(i: str):
+        for p in ['(?P<d>\\d\\d?)/(?P<m>\\d\\d?)/(?P<y>\\d{4})', '(?P<y>\\d{4})-?(?P<m>\\d\\d?)?-?(?P<d>\\d\\d?)?']:
+            if (m := re.search(p, i)) and (g := m.groupdict('0')):
+                return {'before': 0, 'after': 0, 'calendarmodel': 'http://www.wikidata.org/entity/Q1985727',
+                        'time': '+{}-{:02d}-{:02d}T00:00:00Z'.format(int(g['y']), int(g['m']), int(g['d'])),
+                        'precision': 9 if g['m'] == '0' else 10 if g['d'] == '0' else 11, 'timezone': 0}
 
     @staticmethod
     def find_claim(value: dict, claims: list):
