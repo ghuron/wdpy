@@ -132,12 +132,11 @@ class ExoplanetEu(ADQL):
             if snak['property'] in ['P6257', 'P6258']:
                 return  # do not update coordinates, because exoplanets.eu ra/dec is usually low precision
             if self.db_property not in self.entity['claims']:
-                if snak['property'] != 'P1215':
-                    return  # TODO: allow adding statements for host star with rank normalizer
-                for claim in self.entity['claims']['P1215']:  # Looking for visual magnitude statement
-                    if 'qualifiers' in claim and 'P1227' in claim['qualifiers']:
-                        if claim['qualifiers']['P1227'][0]['datavalue']['value']['id'] == 'Q4892529':
-                            return  # if found - skip provided snak
+                if snak['property'] == 'P1215':
+                    for claim in self.entity['claims']['P1215']:  # Looking for visual magnitude statement
+                        if 'qualifiers' in claim and 'P1227' in claim['qualifiers']:
+                            if claim['qualifiers']['P1227'][0]['datavalue']['value']['id'] == 'Q4892529':
+                                return  # if found - skip provided snak
 
         if claim := super().obtain_claim(snak):
             claim['mespos'] = 0
