@@ -11,21 +11,20 @@ from bs4 import BeautifulSoup, element
 
 from adql import ADQL
 from simbad_dap import SimbadDAP
-from wikidata import WikiData
 
 
 class ExoplanetEu(ADQL):
-    WikiData.load_config(__file__)
+    ADQL.load_config(__file__)
     db_property, db_ref = 'P5653', 'Q1385430'
 
     def __init__(self, external_id, qid=None):
         super().__init__(external_id, qid)
-        self.properties = WikiData.config['planet']
+        self.properties = ADQL.config['planet']
 
     @staticmethod
     def get_next_chunk(offset: int) -> tuple[list[str], int]:
         identifiers, offset = [], 0 if offset is None else offset
-        params = {**WikiData.config['post'], **{'iDisplayStart': offset}}
+        params = {**ADQL.config['post'], **{'iDisplayStart': offset}}
         if (result := requests.post('http://exoplanet.eu/catalog/json/', params)).status_code == 200:
             for record in json.loads(result.content)['aaData']:
                 identifiers.append(re.sub('<[^<]+?>', '', record[0]))
@@ -56,7 +55,7 @@ class ExoplanetEu(ADQL):
                 return ref_id
         if publication.find('b').text and "Data Validation (DV) Report for Kepler" not in publication.find('b').text:
             if len(title := ' '.join(publication.find('b').text.replace('\n', ' ').rstrip('.').split())) > 24:
-                return WikiData.api_search('"{}" -haswbstatement:P31=Q1348305'.format(title))
+                return ADQL.api_search('"{}" -haswbstatement:P31=Q1348305'.format(title))
 
     def prepare_data(self, source: BeautifulSoup = None):
         super().prepare_data()
@@ -96,31 +95,31 @@ class ExoplanetEu(ADQL):
             if len(ident := ADQL.tap_query('https://simbad.u-strasbg.fr/simbad/sim-tap', query)) != 1:
                 return
             # no_parent = self.entity and 'claims' in self.entity and 'P397' not in self.entity['claims']
-            return WikiData.create_snak(property_id, SimbadDAP.get_by_id(list(ident.keys())[0], False))
+            return ADQL.create_snak(property_id, SimbadDAP.get_by_id(list(ident.keys())[0], False))
         elif reg := re.search(
                 '(?P<value>' + num + ')\\s*\\(\\s*-+(?P<min>' + num + ')\\s+(?P<max>\\+' + num + ')\\s*\\)' + unit,
                 value):
-            result = WikiData.create_snak(property_id, reg.group('value'), reg.group('min'), reg.group('max'))
+            result = ADQL.create_snak(property_id, reg.group('value'), reg.group('min'), reg.group('max'))
         elif reg := re.search(
                 '^(?P<value>' + num + ')\\s*(\\(\\s*±\\s*(?P<bound>' + num + ')\\s*\\))?' + unit + '$', value):
             if reg.group('bound'):
-                result = WikiData.create_snak(property_id, reg.group('value'), reg.group('bound'), reg.group('bound'))
+                result = ADQL.create_snak(property_id, reg.group('value'), reg.group('bound'), reg.group('bound'))
             else:
-                result = WikiData.create_snak(property_id, reg.group('value'))
+                result = ADQL.create_snak(property_id, reg.group('value'))
         elif len(deg := value.split(':')) == 3:  # coordinates
             try:
                 deg[1], deg[2] = ('-' + deg[1], '-' + deg[2]) if deg[0].startswith('-') else (deg[1], deg[2])
                 angle = (float(deg[2]) / 60 + float(deg[1])) / 60 + float(deg[0])
                 digits = 3 + (len(value) - value.find('.') - 1 if value.find('.') > 0 else 0)
-                value = WikiData.format_float(15 * angle if property_id == 'P6257' else angle, digits)
-                (result := WikiData.create_snak(property_id, value))['datavalue']['value']['unit'] = prefix + 'Q28390'
+                value = ADQL.format_float(15 * angle if property_id == 'P6257' else angle, digits)
+                (result := ADQL.create_snak(property_id, value))['datavalue']['value']['unit'] = prefix + 'Q28390'
             except (ValueError, DecimalException):
-                return WikiData.create_snak(property_id, value)
+                return ADQL.create_snak(property_id, value)
         else:
-            return WikiData.create_snak(property_id, value)
+            return ADQL.create_snak(property_id, value)
 
-        if result and reg and reg.group('unit') and reg.group('unit') in WikiData.config['translate']:
-            result['datavalue']['value']['unit'] = prefix + WikiData.config['translate'][reg.group('unit')]
+        if result and reg and reg.group('unit') and reg.group('unit') in ADQL.config['translate']:
+            result['datavalue']['value']['unit'] = prefix + ADQL.config['translate'][reg.group('unit')]
         return result
 
     def obtain_claim(self, snak):
@@ -141,16 +140,16 @@ class ExoplanetEu(ADQL):
         if claim := super().obtain_claim(snak):
             claim['mespos'] = 0
             if snak['property'] == 'P4501':  # always geomeric albedo
-                claim['qualifiers'] = {'P1013': [WikiData.create_snak('P1013', 'Q2832068')]}
+                claim['qualifiers'] = {'P1013': [ADQL.create_snak('P1013', 'Q2832068')]}
             elif snak['property'] == 'P1215':
-                claim['qualifiers'] = {'P1227': [WikiData.create_snak('P1227', 'Q4892529')]}
+                claim['qualifiers'] = {'P1227': [ADQL.create_snak('P1227', 'Q4892529')]}
                 claim['rank'] = 'preferred'  # V-magnitude is always preferred
         return claim
 
 
 if argv[0].endswith(basename(__file__)):  # if just imported - do nothing
-    WikiData.logon(argv[1], argv[2])
-    for ex_id, wd_item in WikiData.get_all_items('SELECT ?id ?item {?item p:P5653/ps:P5653 ?id}').items():
+    ADQL.logon(argv[1], argv[2])
+    for ex_id, wd_item in ADQL.get_all_items('SELECT ?id ?item {?item p:P5653/ps:P5653 ?id}').items():
         # ex_id, wd_item = 'K03456.02', 'Q21067504'  # uncomment to debug specific item only
         item = ExoplanetEu(ex_id, wd_item)
         if data := item.retrieve():
@@ -159,7 +158,7 @@ if argv[0].endswith(basename(__file__)):  # if just imported - do nothing
             if item.entity and 'P397' in item.entity['claims'] and len(item.entity['claims']['P397']) == 1:
                 if 'datavalue' in (parent := item.entity['claims']['P397'][0]['mainsnak']):  # parent != "novalue"
                     host = ExoplanetEu(ex_id, parent['datavalue']['value']['id'])
-                    host.properties = WikiData.config['star']
+                    host.properties = ADQL.config['star']
                     host.prepare_data(data)
                     if ExoplanetEu.db_property not in host.entity['claims']:  # only if host is star
                         host.update()
