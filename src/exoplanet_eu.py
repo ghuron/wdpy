@@ -54,7 +54,7 @@ class ExoplanetEu(ADQL):
         for a in publication.find_all('a'):
             if ref_id := ADQL.parse_url(a.get('href')):
                 return ref_id
-        if publication.find('b').text:
+        if publication.find('b').text and "Data Validation (DV) Report for Kepler" not in publication.find('b').text:
             if len(title := ' '.join(publication.find('b').text.replace('\n', ' ').rstrip('.').split())) > 24:
                 return WikiData.api_search('"{}" -haswbstatement:P31=Q1348305'.format(title))
 
