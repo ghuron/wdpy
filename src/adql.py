@@ -17,15 +17,14 @@ from wikidata import WikiData
 
 class ADQL(WikiData, ABC):
     WikiData.load_config(__file__)
-    constellations = None
-    ads_articles = None
-    publication_dates = None
 
     def obtain_claim(self, snak):
         claim = super().obtain_claim(snak)
         if claim and 'mespos' in snak:
             claim['mespos'] = snak['mespos']
         return claim
+
+    constellations = None
 
     def post_process(self):
         super().post_process()
@@ -40,6 +39,8 @@ class ADQL(WikiData, ABC):
         for property_id in self.entity['claims']:
             if property_id not in ADQL.config['noranking'] and WikiData.get_type(property_id) == 'quantity':
                 ADQL.normalize(self.entity['claims'][property_id])
+
+    publication_dates = None
 
     @staticmethod
     def get_latest_publication_date(claim):
