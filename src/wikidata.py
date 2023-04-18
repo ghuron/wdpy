@@ -295,10 +295,9 @@ class WikiData(ABC):
         for statement in unfiltered:
             if 'references' in statement:
                 for ref in statement['references']:
-                    if 'P248' in ref['snaks']:
-                        if ref['snaks']['P248'][0]['datavalue']['value']['id'] == self.db_ref:
-                            filtered.append(statement)
-                            break
+                    if 'P248' in ref['snaks'] and ref['snaks']['P248'][0]['datavalue']['value']['id'] == self.db_ref:
+                        filtered.append(statement)
+                        break
         return filtered
 
     def post_process(self):
