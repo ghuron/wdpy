@@ -40,27 +40,21 @@ class ADQL(WikiData, ABC):
             if property_id not in ADQL.config['noranking'] and WikiData.get_type(property_id) == 'quantity':
                 ADQL.normalize(self.entity['claims'][property_id])
 
-    publication_dates = None
+    __pub_dates = None
 
     @staticmethod
     def get_latest_publication_date(claim):
-        if not ADQL.publication_dates:
-            ADQL.publication_dates = WikiData.query(
-                'select ?item ?date { ?item wdt:P819 []; OPTIONAL { ?item wdt:P577 ?date }}')
-            ADQL.publication_dates['Q66617668'] = '1924-01-01T00:00:00Z'
+        if not ADQL.__pub_dates:
+            ADQL.__pub_dates = ADQL.query('select ?i ?d { ?i wdt:P819 []; OPTIONAL { ?i wdt:P577 ?d }}')
+            ADQL.__pub_dates['Q66617668'] = '1924-01-01T00:00:00Z'
 
         latest = dateutil.parser.parse('1800-01-01T00:00:00Z')
         if 'references' in claim:
             for ref in claim['references']:
-                if 'P248' not in ref['snaks']:
-                    continue
-                if ref['snaks']['P248'][0]['datavalue']['value']['id'] in ADQL.publication_dates:
-                    text = ADQL.publication_dates[ref['snaks']['P248'][0]['datavalue']['value']['id']]
-                    if text and dateutil.parser.parse(text) > latest:
-                        latest = dateutil.parser.parse(text)
-                else:
-                    if ref['snaks']['P248'][0]['datavalue']['value']['id'] == 'Q654724':
-                        latest = dateutil.parser.parse('1800-01-02T00:00:00Z')
+                if 'P248' in ref['snaks']:
+                    if (ref_id := ref['snaks']['P248'][0]['datavalue']['value']['id']) in ADQL.__pub_dates:
+                        if ADQL.__pub_dates[ref_id] and dateutil.parser.parse(ADQL.__pub_dates[ref_id]) > latest:
+                            latest = dateutil.parser.parse(ADQL.__pub_dates[ref_id])
         return latest
 
     @staticmethod
