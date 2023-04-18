@@ -66,8 +66,7 @@ class ExoplanetEu(ADQL):
         if source:
             for td in source.find_all('td'):
                 if td.get('id') in self.properties and td.text != '—':
-                    if current_snak is not None:
-                        self.input_snaks.append(current_snak)
+                    self.input_snaks += [current_snak] if current_snak else []
                     current_snak = ExoplanetEu.create_snak(self.properties[td.get('id')], td.text)
                 elif current_snak:
                     if 'showArticle' in str(td):
@@ -77,13 +76,12 @@ class ExoplanetEu(ADQL):
                         elif ref_id:
                             self.trace("can use source\t{}".format(ref_id), 30)
                     elif 'showAllPubs' not in str(td):
-                        self.input_snaks.append(current_snak)
+                        self.input_snaks += [current_snak] if current_snak else []
                         current_snak = None
                 elif parsing_planet and len(td.attrs) == 0 and (td.parent.parent.get('id') == 'table_' + td.text):
                     current_snak = ExoplanetEu.create_snak('P397', td.text)
 
-        if current_snak is not None:
-            self.input_snaks.append(current_snak)
+        self.input_snaks += [current_snak] if current_snak else []
 
     @staticmethod
     def create_snak(property_id: str, value: str, lower=None, upper=None):
@@ -132,7 +130,7 @@ class ExoplanetEu(ADQL):
 
         if claim := super().obtain_claim(snak):
             claim['mespos'] = 0
-            if snak['property'] == 'P4501':  # always geomeric albedo
+            if snak['property'] == 'P4501':  # always geometric albedo
                 claim['qualifiers'] = {'P1013': [ADQL.create_snak('P1013', 'Q2832068')]}
             elif snak['property'] == 'P1215':
                 claim['qualifiers'] = {'P1227': [ADQL.create_snak('P1227', 'Q4892529')]}
@@ -153,7 +151,7 @@ if argv[0].endswith(basename(__file__)):  # if just imported - do nothing
                     host = ExoplanetEu(ex_id, parent['datavalue']['value']['id'])
                     host.properties = ADQL.config['star']
                     host.prepare_data(data)
-                    if ExoplanetEu.db_property not in host.entity['claims']:  # only if host is star
+                    if ExoplanetEu.db_property not in host.entity['claims']:  # only if host is a star
                         host.update()
             data.decompose()
         sleep(4)
