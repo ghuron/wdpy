@@ -24,21 +24,24 @@ class ADQL(WikiData, ABC):
             claim['mespos'] = snak['mespos']
         return claim
 
-    constellations = None
+    __const = None
 
     def post_process(self):
         super().post_process()
-        if 'P59' not in self.entity['claims'] and 'P6257' in self.entity['claims'] and 'P6258' in self.entity['claims']:
-            ra = self.entity['claims']['P6257'][0]['mainsnak']['datavalue']['value']['amount']
-            dec = self.entity['claims']['P6258'][0]['mainsnak']['datavalue']['value']['amount']
-            tla = coordinates.SkyCoord(ra, dec, frame='icrs', unit='deg').get_constellation(short_name=True)
-            if ADQL.constellations is None:
-                ADQL.constellations = WikiData.query(
-                    'SELECT DISTINCT ?n ?i {?i wdt:P31/wdt:P279* wd:Q8928; wdt:P1813 ?n}')
-            self.obtain_claim(WikiData.create_snak('P59', ADQL.constellations[tla]))
         for property_id in self.entity['claims']:
             if property_id not in ADQL.config['noranking'] and WikiData.get_type(property_id) == 'quantity':
                 ADQL.normalize(self.entity['claims'][property_id])
+            elif property_id in ['P6257', 'P6258']:
+                self.entity['claims'][property_id] = ADQL.get_best_value(self.entity['claims'][property_id])
+        if 'P6257' in self.entity['claims'] and 'P6258' in self.entity['claims']:
+            self.obtain_claim(self.create_snak('P6259', 'Q1264450'))  # J2000
+            if 'P59' not in self.entity['claims']:
+                ra = self.entity['claims']['P6257'][0]['mainsnak']['datavalue']['value']['amount']
+                dec = self.entity['claims']['P6258'][0]['mainsnak']['datavalue']['value']['amount']
+                tla = coordinates.SkyCoord(ra, dec, frame='icrs', unit='deg').get_constellation(short_name=True)
+                if ADQL.__const is None:
+                    ADQL.__const = ADQL.query('SELECT DISTINCT ?n ?i {?i wdt:P31/wdt:P279* wd:Q8928; wdt:P1813 ?n}')
+                self.obtain_claim(WikiData.create_snak('P59', ADQL.__const[tla]))
 
     __pub_dates = None
 
@@ -56,6 +59,23 @@ class ADQL(WikiData, ABC):
                         if ADQL.__pub_dates[ref_id] and dateutil.parser.parse(ADQL.__pub_dates[ref_id]) > latest:
                             latest = dateutil.parser.parse(ADQL.__pub_dates[ref_id])
         return latest
+
+    @staticmethod
+    def get_best_value(statements):
+        latest = dateutil.parser.parse('1800-01-01T00:00:00Z')
+        for statement in statements:
+            if (current := ADQL.get_latest_publication_date(statement)) > latest:
+                latest = current
+        result = []
+        remaining_normal = 1  # only one statement supported by latest sources should remain existing
+        for statement in statements:  # len(statement['mainsnak']['datavalue']['value']['amount'])
+            if latest == ADQL.get_latest_publication_date(statement) and remaining_normal == 1:
+                remaining_normal = 0
+                result.append(statement)
+            elif 'hash' in statement['mainsnak']:
+                statement['remove'] = 1
+                result.append(statement)
+        return result
 
     @staticmethod
     def normalize(statements):
