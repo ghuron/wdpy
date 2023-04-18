@@ -123,19 +123,12 @@ class ExoplanetEu(ADQL):
         return result
 
     def obtain_claim(self, snak):
-        if snak is None:
-            return
-        if snak['property'] in ['P6257', 'P6258'] and float(snak['datavalue']['value']['amount']).is_integer():
-            return  # do not put obviously wrong coordinates
-        if self.entity and 'claims' in self.entity and snak['property'] in self.entity['claims']:
-            if snak['property'] in ['P6257', 'P6258']:
-                return  # do not update coordinates, because exoplanets.eu ra/dec is usually low precision
-            if self.db_property not in self.entity['claims']:
-                if snak['property'] == 'P1215':
-                    for claim in self.entity['claims']['P1215']:  # Looking for visual magnitude statement
-                        if 'qualifiers' in claim and 'P1227' in claim['qualifiers']:
-                            if claim['qualifiers']['P1227'][0]['datavalue']['value']['id'] == 'Q4892529':
-                                return  # if found - skip provided snak
+        if snak and self.entity and 'claims' in self.entity and snak['property'] in self.entity['claims']:
+            if self.db_property not in self.entity['claims'] and snak['property'] == 'P1215':
+                for claim in self.entity['claims']['P1215']:  # Looking for visual magnitude statement
+                    if 'qualifiers' in claim and 'P1227' in claim['qualifiers']:
+                        if claim['qualifiers']['P1227'][0]['datavalue']['value']['id'] == 'Q4892529':
+                            return  # if found - skip provided snak
 
         if claim := super().obtain_claim(snak):
             claim['mespos'] = 0
