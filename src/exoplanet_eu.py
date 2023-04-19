@@ -140,7 +140,8 @@ class ExoplanetEu(ADQL):
 
 if argv[0].endswith(basename(__file__)):  # if just imported - do nothing
     ADQL.logon(argv[1], argv[2])
-    for ex_id, wd_item in ADQL.get_all_items('SELECT ?id ?item {?item p:P5653/ps:P5653 ?id}').items():
+    updated_hosts = []
+    for ex_id, wd_item in ADQL.get_all_items('SELECT ?id ?item {?item p:P5653/ps:P5653 ?id} ORDER BY ?id').items():
         # ex_id, wd_item = 'K03456.02', 'Q21067504'  # uncomment to debug specific item only
         item = ExoplanetEu(ex_id, wd_item)
         if data := item.retrieve():
@@ -151,7 +152,7 @@ if argv[0].endswith(basename(__file__)):  # if just imported - do nothing
                     host = ExoplanetEu(ex_id, parent['datavalue']['value']['id'])
                     host.properties = ADQL.config['star']
                     host.prepare_data(data)
-                    if ExoplanetEu.db_property not in host.entity['claims']:  # only if host is a star
-                        host.update()
+                    if ExoplanetEu.db_property not in host.entity['claims'] and host.qid not in updated_hosts:
+                        updated_hosts.append(host.update())
             data.decompose()
         sleep(4)
