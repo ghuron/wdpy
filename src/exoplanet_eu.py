@@ -114,7 +114,7 @@ class ExoplanetEu(ADQL):
             except (ValueError, DecimalException):
                 return ADQL.create_snak(property_id, value)
         else:
-            return ADQL.create_snak(property_id, value)
+            return ADQL.create_snak(property_id, value.strip())
 
         if result and reg and reg.group('unit') and reg.group('unit') in ADQL.config['translate']:
             result['datavalue']['value']['unit'] = prefix + ADQL.config['translate'][reg.group('unit')]
