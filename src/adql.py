@@ -29,7 +29,7 @@ class ADQL(WikiData, ABC):
     def post_process(self):
         super().post_process()
         for property_id in self.entity['claims']:
-            if property_id not in ADQL.config['noranking'] and WikiData.get_type(property_id) == 'quantity':
+            if property_id not in ADQL.config['noranking'] and WikiData.get_type(property_id) in ['quantity', 'time']:
                 ADQL.normalize(self.entity['claims'][property_id])
             elif property_id in ['P6257', 'P6258']:
                 self.entity['claims'][property_id] = ADQL.get_best_value(self.entity['claims'][property_id])
@@ -68,7 +68,7 @@ class ADQL(WikiData, ABC):
                 latest = current
         result = []
         remaining_normal = 1  # only one statement supported by latest sources should remain existing
-        for statement in statements:  # len(statement['mainsnak']['datavalue']['value']['amount'])
+        for statement in statements:
             if latest == ADQL.get_latest_publication_date(statement) and remaining_normal == 1:
                 remaining_normal = 0
                 result.append(statement)
@@ -76,6 +76,29 @@ class ADQL(WikiData, ABC):
                 statement['remove'] = 1
                 result.append(statement)
         return result
+
+    @staticmethod
+    def extract_significant_date_part(datetime: dict):
+        if datetime['precision'] == 9:
+            return datetime['time'][:5]
+        elif datetime['precision'] == 10:
+            return datetime['time'][:8]
+        elif datetime['precision'] == 11:
+            return datetime['time'][:11]
+
+    @staticmethod
+    def deprecated_less_precise_values(statements):
+        for claim1 in statements:
+            if 'rank' not in claim1 or claim1['rank'] == 'normal':
+                for claim2 in statements:
+                    if claim1 != claim2 and ('rank' not in claim2 or claim2['rank'] == 'normal'):
+                        if claim1['mainsnak']['datatype'] == 'time':
+                            date1 = ADQL.extract_significant_date_part(val1 := claim1['mainsnak']['datavalue']['value'])
+                            date2 = ADQL.extract_significant_date_part(val2 := claim2['mainsnak']['datavalue']['value'])
+                            if int(val1['precision']) < int(val2['precision']) and date2.startswith(date1):
+                                claim1['rank'] = 'deprecated'
+                                claim1['qualifiers'] = {} if 'qualifiers' not in claim1 else claim1['qualifiers']
+                                claim1['qualifiers']['P2241'] = [ADQL.create_snak('P2241', 'Q42727519')]
 
     @staticmethod
     def normalize(statements):
@@ -87,7 +110,6 @@ class ADQL(WikiData, ABC):
             if 'mespos' in statement and minimal > int(statement['mespos']):
                 minimal = int(statement['mespos'])
 
-        latest = dateutil.parser.parse('1800-01-01T00:00:00Z')
         for statement in statements:
             if 'mespos' in statement:  # normal for new statements with minimal mespos, deprecated for the rest
                 if int(statement['mespos']) == minimal:
@@ -95,6 +117,10 @@ class ADQL(WikiData, ABC):
                 elif 'hash' not in statement['mainsnak']:  # newly created statement
                     statement['rank'] = 'deprecated'
 
+        ADQL.deprecated_less_precise_values(statements)
+
+        latest = dateutil.parser.parse('1800-01-01T00:00:00Z')
+        for statement in statements:
             if 'rank' not in statement or statement['rank'] == 'normal':
                 if (current := ADQL.get_latest_publication_date(statement)) > latest:
                     latest = current
