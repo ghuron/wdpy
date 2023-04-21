@@ -3,7 +3,7 @@ import logging
 import re
 from abc import ABC
 from contextlib import closing
-from decimal import InvalidOperation
+from decimal import InvalidOperation, Decimal
 from urllib.parse import unquote
 
 import dateutil.parser
@@ -78,27 +78,40 @@ class ADQL(WikiData, ABC):
         return result
 
     @staticmethod
-    def extract_significant_date_part(datetime: dict):
-        if datetime['precision'] == 9:
-            return datetime['time'][:5]
-        elif datetime['precision'] == 10:
-            return datetime['time'][:8]
-        elif datetime['precision'] == 11:
-            return datetime['time'][:11]
+    def round_to_standard(value: dict, standard: dict):
+        if 'precision' in standard and int(value['precision']) >= int(standard['precision']):
+            if standard['precision'] == 9:
+                return value['time'][:5]
+            elif standard['precision'] == 10:
+                return value['time'][:8]
+            elif standard['precision'] == 11:
+                return value['time'][:11]
+        elif 'amount' in standard and value['unit'] == standard['unit']:
+            digits = -Decimal(standard['amount']).normalize().as_tuple().exponent
+            result = str(round(Decimal(value['amount']), digits))
+            if 'lowerBound' in value:
+                result += '|' + str(round(Decimal(value['amount']) - Decimal(value['lowerBound']), digits))
+            elif 'lowerBound' in standard:
+                result += '|' + str(round(Decimal(standard['amount']) - Decimal(standard['lowerBound']), digits))
+            if 'upperBound' in value:
+                result += '|' + str(round(Decimal(value['upperBound']) - Decimal(value['amount']), digits))
+            elif 'upperBound' in standard:
+                result += '|' + str(round(Decimal(standard['upperBound']) - Decimal(standard['amount']), digits))
+            return result
+        return float('nan')
 
     @staticmethod
-    def deprecated_less_precise_values(statements):
+    def deprecate_less_precise_values(statements):
         for claim1 in statements:
             if 'rank' not in claim1 or claim1['rank'] == 'normal':
                 for claim2 in statements:
                     if claim1 != claim2 and ('rank' not in claim2 or claim2['rank'] == 'normal'):
-                        if claim1['mainsnak']['datatype'] == 'time':
-                            date1 = ADQL.extract_significant_date_part(val1 := claim1['mainsnak']['datavalue']['value'])
-                            date2 = ADQL.extract_significant_date_part(val2 := claim2['mainsnak']['datavalue']['value'])
-                            if int(val1['precision']) < int(val2['precision']) and date2.startswith(date1):
-                                claim1['rank'] = 'deprecated'
-                                claim1['qualifiers'] = {} if 'qualifiers' not in claim1 else claim1['qualifiers']
-                                claim1['qualifiers']['P2241'] = [ADQL.create_snak('P2241', 'Q42727519')]
+                        val1 = claim1['mainsnak']['datavalue']['value']
+                        val2 = claim2['mainsnak']['datavalue']['value']
+                        if ADQL.round_to_standard(val2, val1) == ADQL.round_to_standard(val1, val1):
+                            claim1['rank'] = 'deprecated'
+                            claim1['qualifiers'] = {} if 'qualifiers' not in claim1 else claim1['qualifiers']
+                            claim1['qualifiers']['P2241'] = [ADQL.create_snak('P2241', 'Q42727519')]
 
     @staticmethod
     def normalize(statements):
@@ -117,7 +130,7 @@ class ADQL(WikiData, ABC):
                 elif 'hash' not in statement['mainsnak']:  # newly created statement
                     statement['rank'] = 'deprecated'
 
-        ADQL.deprecated_less_precise_values(statements)
+        ADQL.deprecate_less_precise_values(statements)
 
         latest = dateutil.parser.parse('1800-01-01T00:00:00Z')
         for statement in statements:
