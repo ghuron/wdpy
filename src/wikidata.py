@@ -200,7 +200,7 @@ class WikiData(ABC):
                     return candidate_claim
             elif 'time' in value:
                 if candidate['precision'] == value['precision']:
-                    if candidate['time'] == value['time']:
+                    if WikiData.serialize_value(candidate) == WikiData.serialize_value(value):
                         return candidate_claim
             elif 'amount' in value and Decimal(candidate['amount']) == Decimal(value['amount']):  # ToDo: units + tests
                 if 'lowerBound' not in candidate and 'lowerBound' not in value:
@@ -378,3 +378,21 @@ class WikiData(ABC):
             instance = cls(external_id)
             instance.prepare_data()
             return instance.update()
+
+    @staticmethod
+    def serialize_value(value: dict, standard: dict = None):
+        if 'amount' in (standard := standard if standard else value):
+            digits = -Decimal(standard['amount']).normalize().as_tuple().exponent
+            result = str(round(Decimal(value['amount']), digits))
+            if 'lowerBound' in value and 'lowerBound' in standard:
+                result += '|' + str(round(Decimal(value['amount']) - Decimal(value['lowerBound']), digits))
+                result += '|' + str(round(Decimal(value['upperBound']) - Decimal(value['amount']), digits))
+            return result + value['unit']
+        elif 'precision' in standard and int(value['precision']) >= int(standard['precision']):
+            if standard['precision'] == 9:
+                return value['time'][:5]
+            elif standard['precision'] == 10:
+                return value['time'][:8]
+            elif standard['precision'] == 11:
+                return value['time'][:11]
+        return float('nan')

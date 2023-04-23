@@ -3,7 +3,7 @@ import logging
 import re
 from abc import ABC
 from contextlib import closing
-from decimal import InvalidOperation, Decimal
+from decimal import InvalidOperation
 from urllib.parse import unquote
 
 import dateutil.parser
@@ -78,24 +78,6 @@ class ADQL(WikiData, ABC):
         return result
 
     @staticmethod
-    def round_to_standard(value: dict, standard: dict):
-        if 'precision' in standard and int(value['precision']) >= int(standard['precision']):
-            if standard['precision'] == 9:
-                return value['time'][:5]
-            elif standard['precision'] == 10:
-                return value['time'][:8]
-            elif standard['precision'] == 11:
-                return value['time'][:11]
-        elif 'amount' in standard and value['unit'] == standard['unit']:
-            digits = -Decimal(standard['amount']).normalize().as_tuple().exponent
-            result = str(round(Decimal(value['amount']), digits))
-            if 'lowerBound' in value and 'lowerBound' in standard:
-                result += '|' + str(round(Decimal(value['amount']) - Decimal(value['lowerBound']), digits))
-                result += '|' + str(round(Decimal(value['upperBound']) - Decimal(value['amount']), digits))
-            return result
-        return float('nan')
-
-    @staticmethod
     def deprecate_less_precise_values(statements):
         for claim1 in statements:
             if 'rank' not in claim1 or claim1['rank'] == 'normal':
@@ -103,7 +85,7 @@ class ADQL(WikiData, ABC):
                     if claim1 != claim2 and ('rank' not in claim2 or claim2['rank'] == 'normal'):
                         val1 = claim1['mainsnak']['datavalue']['value']
                         val2 = claim2['mainsnak']['datavalue']['value']
-                        if ADQL.round_to_standard(val2, val1) == ADQL.round_to_standard(val1, val1):
+                        if ADQL.serialize_value(val2, val1) == ADQL.serialize_value(val1, val1):
                             claim1['rank'] = 'deprecated'
                             claim1['qualifiers'] = {} if 'qualifiers' not in claim1 else claim1['qualifiers']
                             claim1['qualifiers']['P2241'] = [ADQL.create_snak('P2241', 'Q42727519')]
