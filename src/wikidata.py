@@ -202,14 +202,13 @@ class WikiData(ABC):
                 if candidate['precision'] == value['precision']:
                     if candidate['time'] == value['time']:
                         return candidate_claim
-                    if candidate['precision'] == 9 and candidate['time'][0:5] == value['time'][0:5]:
-                        return candidate_claim
-            elif 'amount' in value:
-                if float(candidate['amount']) == float(value['amount']):
-                    if 'lowerBound' not in value:
-                        return candidate_claim
-                    if 'lowerBound' in candidate and float(candidate['lowerBound']) == float(value['lowerBound']):
-                        return candidate_claim
+            elif 'amount' in value and Decimal(candidate['amount']) == Decimal(value['amount']):  # ToDo: units + tests
+                if 'lowerBound' not in candidate and 'lowerBound' not in value:
+                    return candidate_claim
+                if 'lowerBound' in candidate and 'lowerBound' in value:
+                    if Decimal(candidate['lowerBound']) == Decimal(value['lowerBound']):
+                        if Decimal(candidate['upperBound']) == Decimal(value['upperBound']):
+                            return candidate_claim
 
     def __init__(self, external_id: str, qid: str = None):
         self.external_id = external_id
