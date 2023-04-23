@@ -89,14 +89,9 @@ class ADQL(WikiData, ABC):
         elif 'amount' in standard and value['unit'] == standard['unit']:
             digits = -Decimal(standard['amount']).normalize().as_tuple().exponent
             result = str(round(Decimal(value['amount']), digits))
-            if 'lowerBound' in value:
+            if 'lowerBound' in value and 'lowerBound' in standard:
                 result += '|' + str(round(Decimal(value['amount']) - Decimal(value['lowerBound']), digits))
-            elif 'lowerBound' in standard:
-                result += '|' + str(round(Decimal(standard['amount']) - Decimal(standard['lowerBound']), digits))
-            if 'upperBound' in value:
                 result += '|' + str(round(Decimal(value['upperBound']) - Decimal(value['amount']), digits))
-            elif 'upperBound' in standard:
-                result += '|' + str(round(Decimal(standard['upperBound']) - Decimal(standard['amount']), digits))
             return result
         return float('nan')
 
