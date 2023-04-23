@@ -264,7 +264,7 @@ class WikiData(ABC):
         return ref
 
     def add_refs(self, claim: dict, references: list = None):
-        references = [] if references is None else references
+        references = set([] if references is None else references)  # Get rid of duplicate sources
         if 'references' not in claim:
             claim['references'] = []
         default_ref_exists = False
