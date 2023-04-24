@@ -142,7 +142,7 @@ class WikiData(ABC):
     @staticmethod
     def create_snak(property_id: str, value, lower: str = None, upper: str = None):
         """Create snak based on provided id of the property and string value"""
-        if not WikiData.get_type(property_id) or not value or value == 'NaN':
+        if not WikiData.get_type(property_id) or value is None or value == 'NaN':
             return None
 
         snak = {'datatype': WikiData.get_type(property_id), 'property': property_id, 'snaktype': 'value',
