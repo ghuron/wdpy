@@ -63,13 +63,18 @@ class ADQL(WikiData, ABC):
     @staticmethod
     def get_best_value(statements):
         latest = dateutil.parser.parse('1800-01-01T00:00:00Z')
-        for statement in statements:
-            if (current := ADQL.get_latest_publication_date(statement)) > latest:
-                latest = current
-        result = []
         remaining_normal = 1  # only one statement supported by latest sources should remain existing
         for statement in statements:
-            if latest == ADQL.get_latest_publication_date(statement) and remaining_normal == 1:
+            if 'datavalue' not in statement['mainsnak']:
+                remaining_normal = 0
+                break
+            elif (current := ADQL.get_latest_publication_date(statement)) > latest:
+                latest = current
+        result = []
+        for statement in statements:
+            if 'datavalue' not in statement['mainsnak']:
+                result.append(statement)
+            elif latest == ADQL.get_latest_publication_date(statement) and remaining_normal == 1:
                 remaining_normal = 0
                 result.append(statement)
             elif 'hash' in statement['mainsnak']:
