@@ -85,7 +85,7 @@ class ADQL(WikiData, ABC):
                     if claim1 != claim2 and ('rank' not in claim2 or claim2['rank'] == 'normal'):
                         val1 = claim1['mainsnak']['datavalue']['value']
                         val2 = claim2['mainsnak']['datavalue']['value']
-                        if ADQL.serialize_value(val2, val1) == ADQL.serialize_value(val1, val1):
+                        if ADQL.serialize_value(val2, val1) == ADQL.serialize_value(val1):
                             claim1['rank'] = 'deprecated'
                             claim1['qualifiers'] = {} if 'qualifiers' not in claim1 else claim1['qualifiers']
                             claim1['qualifiers']['P2241'] = [ADQL.create_snak('P2241', 'Q42727519')]

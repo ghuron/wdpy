@@ -188,27 +188,10 @@ class WikiData(ABC):
 
     @staticmethod
     def find_claim(value: dict, claims: list):
-        for candidate_claim in claims:
-            if 'datavalue' not in candidate_claim['mainsnak']:
-                continue
-            candidate = candidate_claim['mainsnak']['datavalue']['value']
-            if isinstance(value, str):
-                if candidate == value:
-                    return candidate_claim
-            elif 'id' in value:
-                if candidate['id'] == value['id']:
-                    return candidate_claim
-            elif 'time' in value:
-                if candidate['precision'] == value['precision']:
-                    if WikiData.serialize_value(candidate) == WikiData.serialize_value(value):
-                        return candidate_claim
-            elif 'amount' in value and Decimal(candidate['amount']) == Decimal(value['amount']):  # ToDo: units + tests
-                if 'lowerBound' not in candidate and 'lowerBound' not in value:
-                    return candidate_claim
-                if 'lowerBound' in candidate and 'lowerBound' in value:
-                    if Decimal(candidate['lowerBound']) == Decimal(value['lowerBound']):
-                        if Decimal(candidate['upperBound']) == Decimal(value['upperBound']):
-                            return candidate_claim
+        for claim in claims:
+            if 'datavalue' in claim['mainsnak']:  # not novalue
+                if WikiData.serialize_value(claim['mainsnak']['datavalue']['value']) == WikiData.serialize_value(value):
+                    return claim
 
     def __init__(self, external_id: str, qid: str = None):
         self.external_id = external_id
@@ -381,7 +364,11 @@ class WikiData(ABC):
 
     @staticmethod
     def serialize_value(value: dict, standard: dict = None):
-        if 'amount' in (standard := standard if standard else value):
+        if isinstance(value, str):
+            return value
+        elif 'id' in (standard := standard if standard else value):
+            return value['id']  # TODO: implement P279*
+        elif 'amount' in standard:
             digits = -Decimal(standard['amount']).normalize().as_tuple().exponent
             result = str(round(Decimal(value['amount']), digits))
             if 'lowerBound' in value and 'lowerBound' in standard:
@@ -395,4 +382,4 @@ class WikiData(ABC):
                 return value['time'][:8]
             elif standard['precision'] == 11:
                 return value['time'][:11]
-        return float('nan')
+        return float('nan')  # because NaN != NaN
