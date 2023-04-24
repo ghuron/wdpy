@@ -168,10 +168,10 @@ class ADQL(WikiData, ABC):
             result['mespos'] = row['mespos']
             if col + 'u' in row:
                 result['datavalue']['value']['unit'] = 'http://www.wikidata.org/entity/' + row[col + 'u']
-            if col + 'r' in row and row[col + 'r'] != '':
-                if ref_id := ADQL.parse_url(re.sub('.*(http\\S+).*', '\\g<1>', row[col + 'r'])):
-                    result['source'] = [] if 'source' not in result else result['source']
-                    result['source'].append(ref_id)
+            reference = row[col + 'r'] if col + 'r' in row and row[col + 'r'] else None
+            reference = row['reference'] if 'reference' in row and row['reference'] else reference
+            if ref_id := ADQL.parse_url(re.sub('.*(http\\S+).*', '\\g<1>', reference)):
+                result['source'] = [ref_id] if 'source' not in result else result['source'] + [ref_id]
 
         return result
 
