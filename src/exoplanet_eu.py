@@ -14,17 +14,17 @@ from simbad_dap import SimbadDAP
 
 
 class ExoplanetEu(ADQL):
-    ADQL.load_config(__file__)
+    config = ADQL.load_config(__file__)
     db_property, db_ref = 'P5653', 'Q1385430'
 
     def __init__(self, external_id, qid=None):
         super().__init__(external_id, qid)
-        self.properties = ADQL.config['planet']
+        self.properties = ExoplanetEu.config['planet']
 
     @staticmethod
     def get_next_chunk(offset: int) -> tuple[list[str], int]:
         identifiers, offset = [], 0 if offset is None else offset
-        params = {**ADQL.config['post'], **{'iDisplayStart': offset}}
+        params = {**ExoplanetEu.config['post'], **{'iDisplayStart': offset}}
         if (result := requests.post('http://exoplanet.eu/catalog/json/', params)).status_code == 200:
             for record in json.loads(result.content)['aaData']:
                 identifiers.append(re.sub('<[^<]+?>', '', record[0]))
@@ -67,7 +67,7 @@ class ExoplanetEu(ADQL):
             for td in source.find_all('td'):
                 if td.get('id') in self.properties and td.text != '—':
                     self.input_snaks += [current_snak] if current_snak else []
-                    current_snak = ExoplanetEu.create_snak(self.properties[td.get('id')], td.text)
+                    current_snak = ExoplanetEu.parse_value(self.properties[td.get('id')], td.text)
                 elif current_snak:
                     if 'showArticle' in str(td):
                         if (ref_id := re.sub('.+\'(\\d+)\'.+', '\\g<1>', str(td), flags=re.S)) in self.articles:
@@ -79,12 +79,12 @@ class ExoplanetEu(ADQL):
                         self.input_snaks += [current_snak] if current_snak else []
                         current_snak = None
                 elif parsing_planet and len(td.attrs) == 0 and (td.parent.parent.get('id') == 'table_' + td.text):
-                    current_snak = ExoplanetEu.create_snak('P397', td.text)
+                    current_snak = ExoplanetEu.parse_value('P397', td.text)
 
         self.input_snaks += [current_snak] if current_snak else []
 
     @staticmethod
-    def create_snak(property_id: str, value: str, lower=None, upper=None):
+    def parse_value(property_id: str, value: str):
         prefix = 'http://www.wikidata.org/entity/'
         num = '\\d[-\\+.eE\\d]+'
         unit = '\\s*(?P<unit>[A-Za-z]\\S*)?'
@@ -93,31 +93,32 @@ class ExoplanetEu(ADQL):
             if len(ident := ADQL.tap_query('https://simbad.u-strasbg.fr/simbad/sim-tap', query)) != 1:
                 return
             # no_parent = self.entity and 'claims' in self.entity and 'P397' not in self.entity['claims']
-            return ADQL.create_snak(property_id, SimbadDAP.get_by_id(list(ident.keys())[0], False))
+            return ExoplanetEu.create_snak(property_id, SimbadDAP.get_by_id(list(ident.keys())[0], False))
         elif reg := re.search(
                 '(?P<value>' + num + ')\\s*\\(\\s*-+(?P<min>' + num + ')\\s+(?P<max>\\+' + num + ')\\s*\\)' + unit,
                 value):
-            result = ADQL.create_snak(property_id, reg.group('value'), reg.group('min'), reg.group('max'))
+            result = ExoplanetEu.create_snak(property_id, reg.group('value'), reg.group('min'), reg.group('max'))
         elif reg := re.search(
                 '^(?P<value>' + num + ')\\s*(\\(\\s*±\\s*(?P<bound>' + num + ')\\s*\\))?' + unit + '$', value):
-            if reg.group('bound'):
-                result = ADQL.create_snak(property_id, reg.group('value'), reg.group('bound'), reg.group('bound'))
+            if bound := reg.group('bound'):
+                result = ExoplanetEu.create_snak(property_id, reg.group('value'), bound, bound)
             else:
-                result = ADQL.create_snak(property_id, reg.group('value'))
+                result = ExoplanetEu.create_snak(property_id, reg.group('value'))
         elif len(deg := value.split(':')) == 3:  # coordinates
             try:
                 deg[1], deg[2] = ('-' + deg[1], '-' + deg[2]) if deg[0].startswith('-') else (deg[1], deg[2])
                 angle = (float(deg[2]) / 60 + float(deg[1])) / 60 + float(deg[0])
                 digits = 3 + (len(value) - value.find('.') - 1 if value.find('.') > 0 else 0)
                 value = ADQL.format_float(15 * angle if property_id == 'P6257' else angle, digits)
-                (result := ADQL.create_snak(property_id, value))['datavalue']['value']['unit'] = prefix + 'Q28390'
+                if result := ExoplanetEu.create_snak(property_id, value):
+                    result['datavalue']['value']['unit'] = prefix + 'Q28390'
             except (ValueError, DecimalException):
-                return ADQL.create_snak(property_id, value)
+                return ExoplanetEu.create_snak(property_id, value)
         else:
-            return ADQL.create_snak(property_id, value.strip())
+            return ExoplanetEu.create_snak(property_id, value.strip())
 
-        if result and reg and reg.group('unit') and reg.group('unit') in ADQL.config['translate']:
-            result['datavalue']['value']['unit'] = prefix + ADQL.config['translate'][reg.group('unit')]
+        if result and reg and (unit := reg.group('unit')) and unit in ExoplanetEu.config['translate']:
+            result['datavalue']['value']['unit'] = prefix + ExoplanetEu.config['translate'][unit]
         return result
 
     def obtain_claim(self, snak):
@@ -131,9 +132,9 @@ class ExoplanetEu(ADQL):
         if claim := super().obtain_claim(snak):
             claim['mespos'] = 0
             if snak['property'] == 'P4501':  # always geometric albedo
-                claim['qualifiers'] = {'P1013': [ADQL.create_snak('P1013', 'Q2832068')]}
+                claim['qualifiers'] = {'P1013': [ExoplanetEu.create_snak('P1013', 'Q2832068')]}
             elif snak['property'] == 'P1215':
-                claim['qualifiers'] = {'P1227': [ADQL.create_snak('P1227', 'Q4892529')]}
+                claim['qualifiers'] = {'P1227': [ExoplanetEu.create_snak('P1227', 'Q4892529')]}
                 claim['rank'] = 'preferred'  # V-magnitude is always preferred
         return claim
 
@@ -150,7 +151,7 @@ if argv[0].endswith(basename(__file__)):  # if just imported - do nothing
             if item.entity and 'P397' in item.entity['claims'] and len(item.entity['claims']['P397']) == 1:
                 if 'datavalue' in (parent := item.entity['claims']['P397'][0]['mainsnak']):  # parent != "novalue"
                     host = ExoplanetEu(ex_id, parent['datavalue']['value']['id'])
-                    host.properties = ADQL.config['star']
+                    host.properties = ExoplanetEu.config['star']
                     host.prepare_data(data)
                     if ExoplanetEu.db_property not in host.entity['claims'] and host.qid not in updated_hosts:
                         updated_hosts.append(host.update())

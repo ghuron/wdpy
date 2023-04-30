@@ -16,7 +16,7 @@ from wikidata import WikiData
 
 
 class ADQL(WikiData, ABC):
-    WikiData.load_config(__file__)
+    config = WikiData.load_config(__file__)
 
     def obtain_claim(self, snak):
         claim = super().obtain_claim(snak)
@@ -26,13 +26,13 @@ class ADQL(WikiData, ABC):
 
     cache = {}
 
-    @staticmethod
-    def load(condition=None):
-        for lines in ADQL.config['queries']:
+    @classmethod
+    def load(cls, condition=None):
+        for lines in cls.config['queries']:
             query = ''.join(lines)
             if condition:
                 query = 'SELECT * FROM ({}) a WHERE {}'.format(query, condition)  # condition uses "final" column names
-            ADQL.tap_query(ADQL.config['endpoint'], query, ADQL.cache)
+            ADQL.tap_query(cls.config['endpoint'], query, ADQL.cache)
 
     def prepare_data(self, source=None):
         if self.external_id not in self.cache:

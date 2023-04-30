@@ -28,11 +28,11 @@ class WikiData(ABC):
     logging.basicConfig(format="%(asctime)s: %(levelname)s - %(message)s", stream=sys.stdout,
                         level=os.environ.get('LOGLEVEL', 'INFO').upper())
 
-    @staticmethod
-    def load_config(file_name: str):
+    @classmethod
+    def load_config(cls, file_name: str):
         try:
             with open(os.path.splitext(file_name)[0] + '.json') as file:
-                WikiData.config = {**WikiData.config, **json.load(file)}
+                return {**cls.config, **json.load(file)}
         except OSError:
             return
 
@@ -139,10 +139,10 @@ class WikiData(ABC):
         if property_id in WikiData.__types:
             return WikiData.__types[property_id]
 
-    @staticmethod
-    def create_snak(property_id: str, value, lower: str = None, upper: str = None):
+    @classmethod
+    def create_snak(cls, property_id: str, value, lower: str = None, upper: str = None):
         """Create snak based on provided id of the property and string value"""
-        if not WikiData.get_type(property_id) or value is None or value == 'NaN':
+        if not WikiData.get_type(property_id) or value is None or value == '' or value == 'NaN':
             return None
 
         snak = {'datatype': WikiData.get_type(property_id), 'property': property_id, 'snaktype': 'value',
@@ -165,8 +165,8 @@ class WikiData(ABC):
                 return None
         elif snak['datatype'] == 'wikibase-item':
             text = snak['datavalue']['value']
-            if WikiData.config and 'translate' in WikiData.config and text in WikiData.config['translate']:
-                text = WikiData.config['translate'][text]
+            if cls.config and 'translate' in cls.config and text in cls.config['translate']:
+                text = cls.config['translate'][text]
             if not re.search('Q\\d+$', text):
                 return
             snak['datavalue'] = {'type': 'wikibase-entityid', 'value': {'entity-type': 'item', 'id': text}}

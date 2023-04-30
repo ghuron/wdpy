@@ -6,7 +6,7 @@ from adql import ADQL
 
 
 class SimbadDAP(ADQL):
-    ADQL.load_config(__file__)
+    config = ADQL.load_config(__file__)
     db_property, db_ref = 'P3083', 'Q654724'
 
     @staticmethod
@@ -16,8 +16,8 @@ class SimbadDAP(ADQL):
         SimbadDAP.load()
         return ADQL.cache.keys(), None
 
-    @staticmethod
-    def load(condition=None):
+    @classmethod
+    def load(cls, condition=None):
         if condition:
             query = 'SELECT oidref FROM ident WHERE id=\'{}\''.format(condition)
             if len(ident := SimbadDAP.tap_query('https://simbad.u-strasbg.fr/simbad/sim-tap', query)) == 1:
