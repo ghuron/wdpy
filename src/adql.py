@@ -155,17 +155,18 @@ class ADQL(WikiData, ABC):
         return WikiData.format_float(row[col], int(row[col + 'p']) if col + 'p' in row and row[col + 'p'] != '' else -1)
 
     @staticmethod
-    def construct_snak(row, col):
-        if WikiData.get_type(col.upper()) != 'quantity':
-            result = WikiData.create_snak(col.upper(), row[col])
+    def construct_snak(row, col, new_col=None):
+        new_col = (new_col if new_col else col).upper()
+        if WikiData.get_type(new_col) != 'quantity':
+            result = WikiData.create_snak(new_col, row[col])
         elif col + 'h' not in row or row[col + 'h'] == '':
-            result = WikiData.create_snak(col.upper(), ADQL.format_figure(row, col))
+            result = WikiData.create_snak(new_col, ADQL.format_figure(row, col))
         else:
             try:
                 high = ADQL.format_figure(row, col + 'h')
                 low = ADQL.format_figure(row, col + 'l')
                 figure = ADQL.format_figure(row, col)
-                result = WikiData.create_snak(col.upper(), figure, low, high)
+                result = WikiData.create_snak(new_col, figure, low, high)
             except InvalidOperation:
                 return
 
