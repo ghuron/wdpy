@@ -106,10 +106,10 @@ class ADQL(WikiData, ABC):
                 minimal = int(statement['mespos'])
 
         for statement in statements:
-            if 'mespos' in statement:  # normal for new statements with minimal mespos, deprecated for the rest
+            if 'mespos' in statement:  # normal for statements with minimal mespos, deprecated for the rest
                 if int(statement['mespos']) == minimal:
                     statement['rank'] = 'normal'
-                elif 'hash' not in statement['mainsnak']:  # newly created statement
+                elif 'hash' not in statement['mainsnak'] and 'rank' not in statement:
                     statement['rank'] = 'deprecated'
 
         ADQL.deprecate_less_precise_values(statements)
