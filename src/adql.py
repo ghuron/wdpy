@@ -24,6 +24,26 @@ class ADQL(WikiData, ABC):
             claim['mespos'] = snak['mespos']
         return claim
 
+    cache = {}
+
+    @staticmethod
+    def load(condition=None):
+        for lines in ADQL.config['queries']:
+            query = ''.join(lines)
+            if condition:
+                query = 'SELECT * FROM ({}) a WHERE {}'.format(query, condition)  # condition uses "final" column names
+            ADQL.tap_query(ADQL.config['endpoint'], query, ADQL.cache)
+
+    def prepare_data(self, source=None):
+        if self.external_id not in self.cache:
+            self.load(self.external_id)  # attempt to load this specific object
+        if self.external_id in self.cache:
+            super().prepare_data()
+            for row in self.cache[self.external_id]:
+                for col in row:
+                    if row[col] and re.search('\\d+$', col) and (snak := self.construct_snak(row, col)):
+                        self.input_snaks.append(snak)
+
     __const = None
 
     def post_process(self):
