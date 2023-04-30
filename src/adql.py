@@ -35,10 +35,10 @@ class ADQL(WikiData, ABC):
             ADQL.tap_query(cls.config['endpoint'], query, ADQL.cache)
 
     def prepare_data(self, source=None):
-        if self.external_id not in self.cache:
+        super().prepare_data()
+        if self.external_id not in self.cache and 'endpoint' in self.config:
             self.load(self.external_id)  # attempt to load this specific object
         if self.external_id in self.cache:
-            super().prepare_data()
             for row in self.cache[self.external_id]:
                 for col in row:
                     if row[col] and re.search('\\d+$', col) and (snak := self.construct_snak(row, col)):
