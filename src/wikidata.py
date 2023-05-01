@@ -370,11 +370,15 @@ class WikiData(ABC):
             return value['id']  # TODO: implement P279*
         elif 'amount' in standard:
             digits = -Decimal(standard['amount']).normalize().as_tuple().exponent
-            result = str(round(Decimal(value['amount']), digits))
+            result = value['unit']
             if 'lowerBound' in value and 'lowerBound' in standard:
+                if digits < (bound := -Decimal(standard['lowerBound']).normalize().as_tuple().exponent):
+                    digits = bound
+                if digits < (bound := -Decimal(standard['upperBound']).normalize().as_tuple().exponent):
+                    digits = bound
                 result += '|' + str(round(Decimal(value['amount']) - Decimal(value['lowerBound']), digits))
                 result += '|' + str(round(Decimal(value['upperBound']) - Decimal(value['amount']), digits))
-            return result + value['unit']
+            return result + '|' + str(round(Decimal(value['amount']), digits))
         elif 'precision' in standard and int(value['precision']) >= int(standard['precision']):
             if standard['precision'] == 9:
                 return value['time'][:5]
