@@ -11,19 +11,15 @@ class SimbadDAP(ADQL):
 
     @staticmethod
     def get_next_chunk(offset):
-        if len(ADQL.cache) > 0:
-            return [], None
-        SimbadDAP.load()
-        return ADQL.cache.keys(), None
-
-    @classmethod
-    def load(cls, condition=None):
-        if condition:
-            query = 'SELECT oidref FROM ident WHERE id=\'{}\''.format(condition)
+        if isinstance(offset, str):
+            query = 'SELECT oidref FROM ident WHERE id=\'{}\''.format(offset)
             if len(ident := SimbadDAP.tap_query('https://simbad.u-strasbg.fr/simbad/sim-tap', query)) == 1:
-                return ADQL.load('id={}'.format(list(ident.keys())[0]))
-        else:
-            return ADQL.load('id BETWEEN {} AND {}'.format(0, 10000))
+                SimbadDAP.load('id = \'{}\''.format(list(ident.keys())[0]))
+            return [], None
+        elif len(ADQL.cache) > 0:  # TODO: sliding window
+            return [], None
+        SimbadDAP.load('id BETWEEN {} AND {}'.format(0, 10000))
+        return SimbadDAP.cache.keys(), None
 
     @staticmethod
     def construct_snak(row, col, new_col=None):
