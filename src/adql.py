@@ -49,7 +49,7 @@ class ADQL(WikiData, ABC):
     def post_process(self):
         super().post_process()
         for property_id in self.entity['claims']:
-            if property_id not in ADQL.config['noranking'] and WikiData.get_type(property_id) in ['quantity', 'time']:
+            if property_id in ADQL.config['normalize']:
                 ADQL.normalize(self.entity['claims'][property_id])
             elif property_id in ['P6257', 'P6258']:
                 self.entity['claims'][property_id] = ADQL.get_best_value(self.entity['claims'][property_id])
