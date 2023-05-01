@@ -37,7 +37,7 @@ class ADQL(WikiData, ABC):
     def prepare_data(self, source=None):
         super().prepare_data()
         if self.external_id not in self.cache and 'endpoint' in self.config:
-            self.load(self.external_id)  # attempt to load this specific object
+            self.get_next_chunk(self.external_id)  # attempt to load this specific object
         if self.external_id in self.cache:
             for row in self.cache[self.external_id]:
                 for col in row:
