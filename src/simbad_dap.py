@@ -37,6 +37,12 @@ class SimbadDAP(ADQL):
                 snak['qualifiers'] = {'P1227': SimbadDAP.config['band'][row['filter']]}
         return snak
 
+    @staticmethod
+    def get_by_any_id(ident: str):
+        query = 'SELECT main_id FROM ident JOIN basic ON oid = oidref WHERE id=\'{}\''.format(ident)
+        if len(row := SimbadDAP.tap_query('https://simbad.u-strasbg.fr/simbad/sim-tap', query)) == 1:
+            return SimbadDAP.get_by_id(list(row.keys())[0])
+
 
 if argv[0].endswith(basename(__file__)):  # if not imported
     SimbadDAP.logon(argv[1], argv[2])
