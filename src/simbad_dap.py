@@ -13,7 +13,7 @@ class SimbadDAP(ADQL):
     def get_next_chunk(offset):
         if isinstance(offset, str):
             query = 'SELECT oidref FROM ident WHERE id=\'{}\''.format(offset)
-            if len(ident := SimbadDAP.tap_query('https://simbad.u-strasbg.fr/simbad/sim-tap', query)) == 1:
+            if len(ident := SimbadDAP.tap_query(SimbadDAP.config['endpoint'], query)) == 1:
                 SimbadDAP.load('id = \'{}\''.format(list(ident.keys())[0]))
             return [], None
         elif len(ADQL.cache) > 0:  # TODO: sliding window
@@ -37,7 +37,7 @@ class SimbadDAP(ADQL):
     @staticmethod
     def get_by_any_id(ident: str):
         query = 'SELECT main_id FROM ident JOIN basic ON oid = oidref WHERE id=\'{}\''.format(ident)
-        if len(row := SimbadDAP.tap_query('https://simbad.u-strasbg.fr/simbad/sim-tap', query)) == 1:
+        if len(row := SimbadDAP.tap_query(SimbadDAP.config['endpoint'], query)) == 1:
             return SimbadDAP.get_by_id(list(row.keys())[0])
 
 
