@@ -155,6 +155,9 @@ class ADQL(WikiData, ABC):
         try:
             with closing(requests.post(url + '/sync', params={'request': 'doQuery', 'lang': 'adql', 'format': 'csv',
                                                               'maxrec': -1, 'query': sql, }, stream=True)) as r:
+                if r.status_code != 200:
+                    logging.error('Connecting {} error {}'.format(url, r.status_code))
+                    return {}
                 reader = csv.reader(r.iter_lines(decode_unicode='utf-8'), delimiter=',', quotechar='"')
                 header = next(reader)
                 for line in reader:
