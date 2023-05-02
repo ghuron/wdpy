@@ -53,15 +53,16 @@ class ADQL(WikiData, ABC):
                 ADQL.normalize(self.entity['claims'][property_id])
             elif property_id in ['P6257', 'P6258']:
                 self.entity['claims'][property_id] = ADQL.get_best_value(self.entity['claims'][property_id])
-        if 'P6257' in self.entity['claims'] and 'P6258' in self.entity['claims']:
-            self.obtain_claim(self.create_snak('P6259', 'Q1264450'))  # J2000
-            if 'P59' not in self.entity['claims']:
-                ra = self.entity['claims']['P6257'][0]['mainsnak']['datavalue']['value']['amount']
-                dec = self.entity['claims']['P6258'][0]['mainsnak']['datavalue']['value']['amount']
-                tla = coordinates.SkyCoord(ra, dec, frame='icrs', unit='deg').get_constellation(short_name=True)
-                if ADQL.__const is None:
-                    ADQL.__const = ADQL.query('SELECT DISTINCT ?n ?i {?i wdt:P31/wdt:P279* wd:Q8928; wdt:P1813 ?n}')
-                self.obtain_claim(WikiData.create_snak('P59', ADQL.__const[tla]))
+        if 'P6257' in self.entity['claims'] and 'datavalue' in self.entity['claims']['P6257'][0]['mainsnak']:
+            if 'P6258' in self.entity['claims'] and 'datavalue' in self.entity['claims']['P6258'][0]['mainsnak']:
+                self.obtain_claim(self.create_snak('P6259', 'Q1264450'))  # J2000
+                if 'P59' not in self.entity['claims']:
+                    ra = self.entity['claims']['P6257'][0]['mainsnak']['datavalue']['value']['amount']
+                    dec = self.entity['claims']['P6258'][0]['mainsnak']['datavalue']['value']['amount']
+                    tla = coordinates.SkyCoord(ra, dec, frame='icrs', unit='deg').get_constellation(short_name=True)
+                    if ADQL.__const is None:
+                        ADQL.__const = ADQL.query('SELECT DISTINCT ?n ?i {?i wdt:P31/wdt:P279* wd:Q8928; wdt:P1813 ?n}')
+                    self.obtain_claim(WikiData.create_snak('P59', ADQL.__const[tla]))
 
     __pub_dates = None
 
