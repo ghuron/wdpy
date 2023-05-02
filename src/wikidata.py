@@ -305,8 +305,9 @@ class WikiData(ABC):
                     time.sleep(0.5)
                     if 'nochange' not in response['entity']:
                         self.entity = response['entity']
+                        self.qid = self.entity['id']
                         self.trace('modified' if 'id' in data else 'created')
-                        return self.entity['id']
+                        return self.qid
                     return  # no change
                 if response['error']['code'] == 'badtoken':
                     WikiData.token = WikiData.api_call('query', {'meta': 'tokens'})['query']['tokens']['csrftoken']
