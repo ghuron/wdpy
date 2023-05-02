@@ -21,6 +21,9 @@ class ExoplanetEu(ADQL):
         super().__init__(external_id, qid)
         self.properties = ExoplanetEu.config['planet']
 
+    def trace(self, message: str, level=20):
+        super().trace('http://exoplanet.eu/catalog/{}\t{}'.format(self.external_id.replace(' ', '_'), message))
+
     @staticmethod
     def get_next_chunk(offset: int) -> tuple[list[str], int]:
         identifiers, offset = [], 0 if offset is None else offset
@@ -36,7 +39,7 @@ class ExoplanetEu(ADQL):
         """Load page corresponding to self.external_id and update Exoplanet.articles with parsed sources"""
         try:
             if (response := requests.get("http://exoplanet.eu/catalog/" + self.external_id)).status_code != 200:
-                self.trace('{}\tresponse: {}'.format(response.url, response.status_code), 40)
+                self.trace('http response: {}'.format(response.status_code), 40)
                 return
         except requests.exceptions.RequestException as e:
             self.trace(e.__str__(), 40)
@@ -74,7 +77,7 @@ class ExoplanetEu(ADQL):
                             current_snak['source'] = [] if 'source' not in current_snak else current_snak['source']
                             current_snak['source'].append(self.articles[ref_id])
                         elif ref_id:
-                            self.trace("can use source\t{}".format(ref_id), 30)
+                            self.trace("{} source missing".format(ref_id), 30)
                     elif 'showAllPubs' not in str(td):
                         self.input_snaks += [current_snak] if current_snak else []
                         current_snak = None
