@@ -141,6 +141,23 @@ class ExoplanetEu(ADQL):
                 claim['rank'] = 'preferred'  # V-magnitude is always preferred
         return claim
 
+    @staticmethod
+    def compare_refs(claim: dict, references: set):
+        target = references.copy().union({ExoplanetEu.db_ref})
+        try:
+            for ref in claim['references']:
+                target.remove(ref['snaks']['P248'][0]['datavalue']['value']['id'])
+        except KeyError:
+            return False
+        return len(target) == 0
+
+    def add_refs(self, claim: dict, references: set):
+        for candidate in self.entity['claims'][claim['mainsnak']['property']]:
+            if candidate['id'] != claim['id'] and ExoplanetEu.compare_refs(candidate, references):
+                self.trace('{} replace statement'.format(claim['mainsnak']['property']), 30)
+                candidate['remove'] = 1  # A different claim had exactly the same set of references -> replace it
+        super().add_refs(claim, references)
+
 
 if argv[0].endswith(basename(__file__)):  # if just imported - do nothing
     ADQL.logon(argv[1], argv[2])

@@ -246,23 +246,21 @@ class WikiData(ABC):
         #     ref['snaks']['P813'] = [self.create_snak('P813', datetime.now().strftime('%d/%m/%Y'))]
         return ref
 
-    def add_refs(self, claim: dict, references: list = None):
-        references = set([] if references is None else references)  # Get rid of duplicate sources
-        if 'references' not in claim:
-            claim['references'] = []
+    def add_refs(self, claim: dict, references: set):
         default_ref_exists = False
         only_default_sources = (len(references) == 0)
-        for ref in list(claim['references']):
-            if 'P248' in ref['snaks']:
-                if ref['snaks']['P248'][0]['datavalue']['value']['id'] == self.db_ref:
+        claim['references'] = [] if 'references' not in claim else claim['references']
+        for exiting_ref in list(claim['references']):
+            if 'P248' in exiting_ref['snaks']:
+                if (ref_id := exiting_ref['snaks']['P248'][0]['datavalue']['value']['id']) == self.db_ref:
                     default_ref_exists = True
-                    self.process_own_reference(only_default_sources, ref)
-                elif ref['snaks']['P248'][0]['datavalue']['value']['id'] in references:
-                    references.remove(ref['snaks']['P248'][0]['datavalue']['value']['id'])
-            ref['snaks'].pop('P143', 0)  # Doesn't make sense to keep "imported from" if real source exists
-            ref['snaks'].pop('P4656', 0)
-            if len(ref['snaks']) == 0:
-                claim['references'].remove(ref)
+                    self.process_own_reference(only_default_sources, exiting_ref)
+                elif ref_id in references:
+                    references.remove(ref_id)
+            exiting_ref['snaks'].pop('P143', 0)  # Doesn't make sense to keep "imported from" if real source exists
+            exiting_ref['snaks'].pop('P4656', 0)
+            if len(exiting_ref['snaks']) == 0:
+                claim['references'].remove(exiting_ref)
 
         if not default_ref_exists:
             claim['references'].append(self.process_own_reference(only_default_sources))
@@ -335,7 +333,7 @@ class WikiData(ABC):
                 if claim in affected_statements[snak['property']]:
                     affected_statements[snak['property']].remove(claim)
                 if claim['mainsnak']['datatype'] != 'external-id':
-                    self.add_refs(claim, snak['source'] if 'source' in snak else None)
+                    self.add_refs(claim, set(snak['source']) if 'source' in snak else set())
 
         for property_id in affected_statements:
             for claim in affected_statements[property_id]:
