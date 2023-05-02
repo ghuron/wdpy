@@ -175,19 +175,22 @@ class ADQL(WikiData, ABC):
     def format_figure(row, col):
         return WikiData.format_float(row[col], int(row[col + 'p']) if col + 'p' in row and row[col + 'p'] != '' else -1)
 
-    @staticmethod
-    def construct_snak(row, col, new_col=None):
+    def construct_snak(self, row, col, new_col=None):
+        from simbad_dap import SimbadDAP
+
         new_col = (new_col if new_col else col).upper()
         if WikiData.get_type(new_col) != 'quantity':
-            result = WikiData.create_snak(new_col, row[col])
+            if col == 'p397' and (qid := SimbadDAP.get_by_any_id(row[col])):
+                row[col] = qid
+            return self.create_snak(new_col, row[col])
         elif col + 'h' not in row or row[col + 'h'] == '':
-            result = WikiData.create_snak(new_col, ADQL.format_figure(row, col))
+            result = self.create_snak(new_col, ADQL.format_figure(row, col))
         else:
             try:
                 high = ADQL.format_figure(row, col + 'h')
                 low = ADQL.format_figure(row, col + 'l')
                 figure = ADQL.format_figure(row, col)
-                result = WikiData.create_snak(new_col, figure, low, high)
+                result = self.create_snak(new_col, figure, low, high)
             except InvalidOperation:
                 return
 

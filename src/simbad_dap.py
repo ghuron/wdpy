@@ -21,18 +21,15 @@ class SimbadDAP(ADQL):
         SimbadDAP.load('id BETWEEN {} AND {}'.format(0, 10000))
         return SimbadDAP.cache.keys(), None
 
-    @staticmethod
-    def construct_snak(row, col, new_col=None):
+    def construct_snak(self, row, col, new_col=None):
         if (new_col := col) == 'p397':
-            if parent_id := SimbadDAP.get_by_id(row[col]):
-                row[col] = parent_id
-                new_col = 'p361' if row['parent_type'] in SimbadDAP.config["groups"] else new_col
+            new_col = 'p361' if row['parent_type'] in SimbadDAP.config["groups"] else new_col
         elif col == 'p215':
             row[col] = row[col].replace(' ', '')
         elif col == 'p2216' and row['p2216t'] != 'v':
             return
 
-        if snak := ADQL.construct_snak(row, col, new_col):
+        if snak := super().construct_snak(row, col, new_col):
             if 'filter' in row and row['filter'] in SimbadDAP.config['band']:
                 snak['qualifiers'] = {'P1227': SimbadDAP.config['band'][row['filter']]}
         return snak
