@@ -1,0 +1,37 @@
+{
+  "translate": {
+    "Controversial0": "Q44559",
+    "Controversial1": "Q18611609",
+    "Transit Timing Variations": "Q2945337",
+    "Radial Velocity": "Q2273386",
+    "Transit": "Q2069919",
+    "Imaging": "Q15279026",
+    "Astrometry": "Q181505",
+    "Microlensing": "Q1028022",
+    "Pulsar Timing": "Q42364577"
+  },
+  "endpoint": "https://exoplanetarchive.ipac.caltech.edu/TAP/",
+  "queries": [
+    [
+      "SELECT pl_name AS id, 1-default_flag AS mespos, pl_refname as reference,",
+      "       pl_orbeccen AS P1096, pl_orbeccenerr1 AS P1096h, pl_orbeccenerr2 AS P1096l,",
+      "       pl_orbincl AS P2045, pl_orbinclerr1 AS P2045h, pl_orbinclerr2 AS P2045l, 'Q28390' AS P2045u,",
+      "       pl_msinie AS E2051, pl_msinieerr1 AS E2051h, pl_msinieerr2 AS E2051l, 'Q681996' AS E2051u,",
+      "       pl_msinij AS J2051, pl_msinijerr1 AS J2051h, pl_msinijerr2 AS J2051l, 'Q651336' AS J2051u,",
+      "       pl_masse AS E2067, pl_masseerr1 AS E2067h, pl_masseerr2 AS E2067l, 'Q681996' AS E2067u,",
+      "       pl_massj AS J2067, pl_massjerr1 AS J2067h, pl_massjerr2 AS J2067l ,'Q651336' AS J2067u,",
+      "       pl_rade AS E2120, pl_radeerr1 AS E2120h, pl_radeerr2 AS E2120l, 'Q1155470' AS E2120u,",
+      "       pl_radj AS J2120, pl_radjerr1 AS J2120h, pl_radjerr2 AS J2120l, 'Q3421309' AS J2120u,",
+      "       pl_orbper AS P2146, pl_orbpererr1 AS P2146h, pl_orbpererr2 AS P2146l, 'Q573' AS P2146u,",
+      "       pl_orbsmax AS P2233, pl_orbsmaxerr1 AS P2233h, pl_orbsmaxerr2 AS P2233l, 'Q1811' AS P2233u,",
+      "       pl_orblper AS P2248, pl_orblpererr1 AS P2248h, pl_orblpererr2 AS P2248l, 'Q28390' AS P2248u",
+      "  FROM ps WHERE 'Published Confirmed' = soltype"
+    ],
+    [
+      "SELECT DISTINCT pl_name AS id, 1 AS mespos, disc_refname AS reference, hostname AS P397,",
+      "       ra AS P6257, 'Q28390' AS P6257u, dec AS P6258, 'Q28390' AS P6258u,",
+      "       discoverymethod AS P1046, disc_pubdate AS P575, 'Controversial'||pl_controv_flag AS P31",
+      "  FROM ps"
+    ]
+  ]
+}
