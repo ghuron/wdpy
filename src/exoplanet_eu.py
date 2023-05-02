@@ -92,11 +92,8 @@ class ExoplanetEu(ADQL):
         num = '\\d[-\\+.eE\\d]+'
         unit = '\\s*(?P<unit>[A-Za-z]\\S*)?'
         if property_id == 'P397':
-            query = 'SELECT main_id FROM ident JOIN basic ON oid = oidref WHERE id=\'{}\''.format(value)
-            if len(ident := ADQL.tap_query('https://simbad.u-strasbg.fr/simbad/sim-tap', query)) != 1:
-                return
             # no_parent = self.entity and 'claims' in self.entity and 'P397' not in self.entity['claims']
-            return ExoplanetEu.create_snak(property_id, SimbadDAP.get_by_id(list(ident.keys())[0], False))
+            return ExoplanetEu.create_snak(property_id, SimbadDAP.get_by_any_id(value))
         elif reg := re.search(
                 '(?P<value>' + num + ')\\s*\\(\\s*-+(?P<min>' + num + ')\\s+(?P<max>\\+' + num + ')\\s*\\)' + unit,
                 value):
