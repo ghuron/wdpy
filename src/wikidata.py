@@ -380,9 +380,9 @@ class WikiData(ABC):
             return result + '|' + str(round(Decimal(value['amount']), digits))
         elif 'precision' in standard and int(value['precision']) >= int(standard['precision']):
             if standard['precision'] == 9:
-                return value['time'][:5]
+                return value['time'][:5] + '0000'
             elif standard['precision'] == 10:
-                return value['time'][:8]
+                return value['time'][:5] + value['time'][6:8] + '00'
             elif standard['precision'] == 11:
-                return value['time'][:11]
+                return value['time'][:5] + value['time'][6:8] + value['time'][9:11]
         return float('nan')  # because NaN != NaN
