@@ -6,7 +6,6 @@ from contextlib import closing
 from decimal import InvalidOperation
 from urllib.parse import unquote
 
-import dateutil.parser
 import requests
 from astropy import coordinates
 
@@ -64,26 +63,36 @@ class ADQL(WikiData, ABC):
                         ADQL.__const = ADQL.query('SELECT DISTINCT ?n ?i {?i wdt:P31/wdt:P279* wd:Q8928; wdt:P1813 ?n}')
                     self.obtain_claim(WikiData.create_snak('P59', ADQL.__const[tla]))
 
-    __pub_dates = None
+    __pub_dates, __redirects = {'Q66617668': 19240101}, {}
 
     @staticmethod
-    def get_latest_publication_date(claim):
-        if not ADQL.__pub_dates:
-            ADQL.__pub_dates = ADQL.query('select ?i ?d { ?i wdt:P819 []; OPTIONAL { ?i wdt:P577 ?d }}')
-            ADQL.__pub_dates['Q66617668'] = '1924-01-01T00:00:00Z'
-
-        latest = dateutil.parser.parse('1800-01-01T00:00:00Z')
+    def get_latest_publication_date(claim: dict):
+        latest, p248 = 0, []
         if 'references' in claim:
-            for ref in claim['references']:
+            for ref in list(claim['references']):
                 if 'P248' in ref['snaks']:
-                    if (ref_id := ref['snaks']['P248'][0]['datavalue']['value']['id']) in ADQL.__pub_dates:
-                        if ADQL.__pub_dates[ref_id] and dateutil.parser.parse(ADQL.__pub_dates[ref_id]) > latest:
-                            latest = dateutil.parser.parse(ADQL.__pub_dates[ref_id])
+                    if (ref_id := ref['snaks']['P248'][0]['datavalue']['value']['id']) in ADQL.__redirects:
+                        ref_id = ADQL.__redirects[ref_id]
+                    if ref_id not in ADQL.__pub_dates:
+                        p577 = None
+                        if (item := WikiData.load_items([ref_id])) and ref_id in item:
+                            if 'redirects' in (entity := item[ref_id]):
+                                ADQL.__redirects[ref_id] = entity['redirects']['to']
+                                ref_id = entity['redirects']['to']
+                            if 'claims' in entity and 'P577' in entity['claims']:
+                                p577 = entity['claims']['P577'][0]['mainsnak']['datavalue']['value']
+                        ADQL.__pub_dates[ref_id] = int(WikiData.serialize_value(p577)) if p577 else None
+                    if ref_id in p248:
+                        claim['references'].remove(ref)  # remove duplicates
+                    else:
+                        p248.append(ref_id)
+                        if ADQL.__pub_dates[ref_id] and ADQL.__pub_dates[ref_id] > latest:
+                            latest = ADQL.__pub_dates[ref_id]
         return latest
 
     @staticmethod
     def get_best_value(statements):
-        latest = dateutil.parser.parse('1800-01-01T00:00:00Z')
+        latest = 0
         remaining_normal = 1  # only one statement supported by latest sources should remain existing
         for statement in statements:
             if 'datavalue' not in statement['mainsnak']:
@@ -135,7 +144,7 @@ class ADQL(WikiData, ABC):
 
         ADQL.deprecate_less_precise_values(statements)
 
-        latest = dateutil.parser.parse('1800-01-01T00:00:00Z')
+        latest = 0
         for statement in statements:
             if 'rank' not in statement or statement['rank'] == 'normal':
                 if (current := ADQL.get_latest_publication_date(statement)) > latest:
