@@ -1,6 +1,7 @@
 #!/usr/bin/python3
 import json
 import re
+from collections import OrderedDict
 from decimal import DecimalException
 from os.path import basename
 from sys import argv
@@ -159,9 +160,10 @@ class ExoplanetEu(ADQL):
 if argv[0].endswith(basename(__file__)):  # if just imported - do nothing
     ADQL.logon(argv[1], argv[2])
     updated_hosts = []
-    for ex_id, wd_item in ADQL.get_all_items('SELECT ?id ?item {?item p:P5653/ps:P5653 ?id} ORDER BY ?id').items():
-        # ex_id, wd_item = 'K03456.02', 'Q21067504'  # uncomment to debug specific item only
-        item = ExoplanetEu(ex_id, wd_item)
+    wd_items = OrderedDict(sorted(ADQL.get_all_items('SELECT ?id ?item {?item p:P5653/ps:P5653 ?id}').items()))
+    for ex_id in wd_items:
+        # ex_id = 'K03456.02'  # uncomment to debug specific item only
+        item = ExoplanetEu(ex_id, wd_items[ex_id])
         if data := item.retrieve():
             item.prepare_data(data)
             item.update()
