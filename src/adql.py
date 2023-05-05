@@ -63,7 +63,7 @@ class ADQL(WikiData, ABC):
                         ADQL.__const = ADQL.query('SELECT DISTINCT ?n ?i {?i wdt:P31/wdt:P279* wd:Q8928; wdt:P1813 ?n}')
                     self.obtain_claim(WikiData.create_snak('P59', ADQL.__const[tla]))
 
-    __pub_dates, __redirects = {'Q66617668': 19240101}, {}
+    __pub_dates, __redirects = {'Q66617668': 19240101, 'Q4026990': 99999999}, {}
 
     @staticmethod
     def get_latest_publication_date(claim: dict):
