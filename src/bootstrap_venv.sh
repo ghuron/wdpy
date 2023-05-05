@@ -12,4 +12,4 @@ source pyvenv/bin/activate
 pip install -U pip wheel
 
 # install some concrete packages
-pip install -r src/requirements.txt
+pip install -r requirements.txt
