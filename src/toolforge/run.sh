@@ -1,4 +1,5 @@
 #!/bin/bash
+git pull origin master
 ./pyvenv/bin/python ./src/${1//-/_}.py $(< ./src/toolforge/.credentials )
 mkdir --parent ./log
 mv ./$1.out log/$1.out.$(date "+%Y%m%d")
