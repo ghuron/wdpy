@@ -1,4 +1,5 @@
 ###### Requirements without Version Specifiers ######
+urllib3
 requests
 BeautifulSoup4
 astropy
