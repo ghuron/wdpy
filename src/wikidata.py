@@ -291,31 +291,31 @@ class WikiData(ABC):
         return 'batch import from [[' + self.db_ref + ']] for object ' + self.external_id
 
     def save(self):
-        data = {'maxlag': '15', 'data': json.dumps(self.entity), 'summary': self.get_summary()}
+        data = {'data': json.dumps(self.entity), 'summary': self.get_summary()}
         if 'id' in self.entity:
             data['id'] = self.entity['id']
             data['baserevid'] = self.entity['lastrevid']
         else:
             data['new'] = 'item'
 
+        if (response := self.edit(data, 'wbeditentity')) and 'nochange' not in response['entity']:
+            self.entity, self.qid = response['entity'], response['entity']['id']
+            self.trace('modified' if 'id' in data else 'created')
+            return self.qid
+
+    def edit(self, data, method):
         for retries in range(1, 3):
-            data['token'] = WikiData.token
-            if response := WikiData.api_call('wbeditentity', data):
+            if response := WikiData.api_call(method, {**data, 'maxlag': '15', 'token': WikiData.token}):
                 if 'error' not in response:
                     time.sleep(0.5)
-                    if 'nochange' not in response['entity']:
-                        self.entity = response['entity']
-                        self.qid = self.entity['id']
-                        self.trace('modified' if 'id' in data else 'created')
-                        return self.qid
-                    return  # no change
+                    return response
                 if response['error']['code'] == 'badtoken':
                     WikiData.token = WikiData.api_call('query', {'meta': 'tokens'})['query']['tokens']['csrftoken']
-                    continue
-                self.trace('error while saving: ' + response['error']['info'], 40)
-            time.sleep(10)
-            self.logon()  # just in case - re-authenticate
-        return ''
+                else:
+                    self.trace('{}\t{} response: {}'.format(self.external_id, method, response['error']['info']), 40)
+                    time.sleep(10)
+                    if response['error']['code'] != 'maxlag':
+                        self.logon()  # just in case - re-authenticate
 
     def update(self):
         if self.input_snaks is None:
