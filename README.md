@@ -1,3 +1,5 @@
+![Unit tests status](https://github.com/ghuron/wdpy/actions/workflows/test.yaml/badge.svg)
+
 Minimalistic framework for continuous replication of external sources content to wikidata.
 Few scripts demonstrate the use of the framework in practice:
 * [simbad_dap.py](/src/simbad_dap.py) replicates stars/galaxies astrometry information from https://simbad.u-strasbg.fr/simbad/ to wikidata. Data is obtained by running ADQL queries via Table Access Protocol (TAP).
@@ -6,7 +8,7 @@ Few scripts demonstrate the use of the framework in practice:
 * [yad_vashem.py](/src/yad_vashem.py) replacates basic info about [Righteous Among the Nations](https://en.wikipedia.org/wiki/Righteous_Among_the_Nations) from https://righteous.yadvashem.org/ to wikidata. Data is obtained via internal API.
 
 # Installation
-You can run them in IDE of your choice, just specify your login and password as a command line argument. Required modules can be installed by ```pip install -r src/requirements.txt```
+You can run them in IDE of your choice, just specify your login and password as a command line argument. Required modules can be installed by ```pip install -r requirements.txt```
 
 If you want to run them in [toolforge](https://wikitech.wikimedia.org/wiki/Portal:Toolforge), do the following:
 1. Open ssh session to your tool on toolforge and run the following 3 commands:
