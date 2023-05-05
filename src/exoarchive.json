@@ -32,6 +32,9 @@
       "       ra AS P6257, 'Q28390' AS P6257u, dec AS P6258, 'Q28390' AS P6258u,",
       "       discoverymethod AS P1046, disc_pubdate AS P575, 'Controversial'||pl_controv_flag AS P31",
       "  FROM ps"
+    ],
+    [
+      "SELECT DISTINCT pl_name AS id, gaia_id AS P397 FROM ps"
     ]
   ]
 }
