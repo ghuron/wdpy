@@ -162,11 +162,14 @@ class ADQL(WikiData, ABC):
     def tap_query(url, sql, result=None):
         result = {} if result is None else result
         try:
-            with closing(requests.post(url + '/sync', params={'request': 'doQuery', 'lang': 'adql', 'format': 'csv',
-                                                              'maxrec': -1, 'query': sql, }, stream=True)) as r:
-                if r.status_code != 200:
+            with closing(requests.post(url + '/sync', data={'request': 'doQuery', 'lang': 'adql', 'format': 'csv',
+                                                            'maxrec': -1, 'query': sql}, stream=True)) as r:
+                if r.status_code >= 500:
                     logging.error('Connecting {} error {}'.format(url, r.status_code))
-                    return {}
+                    return result
+                elif r.status_code != 200:
+                    logging.error('Query {}'.format(sql))
+                    return result
                 reader = csv.reader(r.iter_lines(decode_unicode='utf-8'), delimiter=',', quotechar='"')
                 header = next(reader)
                 for line in reader:
