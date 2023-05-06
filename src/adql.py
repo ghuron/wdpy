@@ -210,7 +210,8 @@ class ADQL(WikiData, ABC):
                 return
 
         if result is not None:
-            result['mespos'] = row['mespos']
+            if 'mespos' in row:
+                result['mespos'] = row['mespos']
             if col + 'u' in row:
                 result['datavalue']['value']['unit'] = 'http://www.wikidata.org/entity/' + row[col + 'u']
             reference = row[col + 'r'] if col + 'r' in row and row[col + 'r'] else None
