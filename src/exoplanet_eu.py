@@ -62,16 +62,14 @@ class ExoplanetEu(ADQL):
                 return ADQL.api_search('"{}" -haswbstatement:P31=Q1348305'.format(title))
 
     def prepare_data(self, source: BeautifulSoup = None):
-        super().prepare_data()
-        if not (parsing_planet := ('P1046' in self.properties.values())):
-            self.input_snaks = []  # do not write P5356:exoplanet_id for the host star/planet
-        current_snak = None
-
         if source:
+            super().prepare_data()
+            self.input_snaks, current_snak = [], None
+
             for td in source.find_all('td'):
                 if td.get('id') in self.properties and td.text != '—':
                     self.input_snaks += [current_snak] if current_snak else []
-                    current_snak = ExoplanetEu.parse_value(self.properties[td.get('id')], td.text)
+                    current_snak = self.parse_value(self.properties[td.get('id')], td.text)
                 elif current_snak:
                     if 'showArticle' in str(td):
                         if (ref_id := re.sub('.+\'(\\d+)\'.+', '\\g<1>', str(td), flags=re.S)) in self.articles:
@@ -82,10 +80,14 @@ class ExoplanetEu(ADQL):
                     elif 'showAllPubs' not in str(td):
                         self.input_snaks += [current_snak] if current_snak else []
                         current_snak = None
-                elif parsing_planet and len(td.attrs) == 0 and (td.parent.parent.get('id') == 'table_' + td.text):
-                    current_snak = ExoplanetEu.parse_value('P397', td.text)
+                elif (row := td.parent.text.strip()).startswith('Name') and row.endswith(td.text) and td.text:
+                    if 'P1046' in self.properties.values():  # parsing exoplanet, not hosting star
+                        if td.parent.parent.get('id') == 'table_' + td.text:
+                            current_snak = self.parse_value('P397', td.text)
+                        else:
+                            current_snak = self.create_snak(self.db_property, td.text)
 
-        self.input_snaks += [current_snak] if current_snak else []
+            self.input_snaks += [current_snak] if current_snak else []
 
     @staticmethod
     def parse_value(property_id: str, value: str):
