@@ -55,6 +55,7 @@
     "iSortCol_0": 9,
     "sEcho": 1,
     "iDisplayLength": 1000,
-    "sSortDir_0": "desc"
+    "sSortDir_0": "desc",
+    "status_1": "on"
   }
 }
