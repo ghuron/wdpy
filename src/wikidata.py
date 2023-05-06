@@ -192,6 +192,9 @@ class WikiData(ABC):
             if 'datavalue' in claim['mainsnak']:  # not novalue
                 if WikiData.serialize_value(claim['mainsnak']['datavalue']['value']) == WikiData.serialize_value(value):
                     return claim
+        if len(claims) > 0 and WikiData.get_type(claims[0]['mainsnak']['property']) == 'external-id':
+            claims[0]['mainsnak']['datavalue']['value'] = value
+            return claims[0]
 
     def __init__(self, external_id: str, qid: str = None):
         self.external_id = external_id
