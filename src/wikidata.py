@@ -14,7 +14,6 @@ from decimal import Decimal, DecimalException
 from typing import Tuple
 
 import requests
-from requests.structures import CaseInsensitiveDict
 
 
 class WikiData(ABC):
@@ -77,7 +76,7 @@ class WikiData(ABC):
 
     @staticmethod
     def query(query: str, process=lambda new, existing: new[0]):
-        result = CaseInsensitiveDict()
+        result = {}
         with requests.Session() as session:
             session.headers.update({'Accept': 'text/csv', 'User-Agent': WikiData.USER_AGENT})
             with closing(session.post('https://query.wikidata.org/sparql', params={'query': query}, stream=True)) as r:
