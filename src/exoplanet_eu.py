@@ -162,7 +162,7 @@ class ExoplanetEu(ADQL):
 if argv[0].endswith(basename(__file__)):  # if just imported - do nothing
     ADQL.logon(argv[1], argv[2])
     updated_hosts = []
-    wd_items = OrderedDict(sorted(ADQL.get_all_items('SELECT ?id ?item {?item p:P5653/ps:P5653 ?id}').items()))
+    wd_items = OrderedDict(sorted(ExoplanetEu.get_all_items('SELECT ?id ?item {?item p:P5653/ps:P5653 ?id}').items()))
     for ex_id in wd_items:
         # ex_id = 'K03456.02'  # uncomment to debug specific item only
         item = ExoplanetEu(ex_id, wd_items[ex_id])
