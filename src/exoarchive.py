@@ -13,10 +13,12 @@ class ExoArchive(ADQL):
 
     @staticmethod
     def get_next_chunk(offset):
-        if len(ExoArchive.cache) > 0:
-            return [], None
-        ExoArchive.load()
-        return ExoArchive.cache.keys(), None
+        if not offset and not ExoArchive.cache:  # load only confirmed non-controversial exoplanets
+            ExoArchive.load('P31 = \'CONFIRMED0\'')
+            return ExoArchive.cache.keys(), None
+        elif offset and ExoArchive.cache:  # try to load specific exoplanet ignoring its status
+            ExoArchive.load('id = \'{}\''.format(offset))
+        return [], None
 
     def construct_snak(self, row, col, new_col=None):
         def count_digits(idx):

@@ -1,7 +1,11 @@
 {
   "translate": {
-    "Controversial0": "Q44559",
-    "Controversial1": "Q18611609",
+    "CONFIRMED0": "Q44559",
+    "CONFIRMED1": "Q18611609",
+    "CANDIDATE0": "Q18611609",
+    "CANDIDATE1": "Q18611609",
+    "FALSE POSITIVE0": "Q18611609",
+    "FALSE POSITIVE1": "Q18611609",
     "Transit Timing Variations": "Q2945337",
     "Radial Velocity": "Q2273386",
     "Transit": "Q2069919",
@@ -13,7 +17,7 @@
   "endpoint": "https://exoplanetarchive.ipac.caltech.edu/TAP/",
   "queries": [
     [
-      "SELECT pl_name AS id, 1-default_flag AS mespos, pl_refname as reference,",
+      "SELECT pl_name AS id, 1-default_flag AS mespos, pl_refname as reference, 'CONFIRMED'||pl_controv_flag AS P31,",
       "       pl_orbeccen AS P1096, pl_orbeccenerr1 AS P1096h, pl_orbeccenerr2 AS P1096l,",
       "       pl_orbincl AS P2045, pl_orbinclerr1 AS P2045h, pl_orbinclerr2 AS P2045l, 'Q28390' AS P2045u,",
       "       pl_msinie AS E2051, pl_msinieerr1 AS E2051h, pl_msinieerr2 AS E2051l, 'Q681996' AS E2051u,",
@@ -30,14 +34,14 @@
     [
       "SELECT DISTINCT pl_name AS id, disc_refname AS reference, hostname AS P397,",
       "       ra AS P6257, 'Q28390' AS P6257u, dec AS P6258, 'Q28390' AS P6258u,",
-      "       discoverymethod AS P1046, disc_pubdate AS P575, 'Controversial'||pl_controv_flag AS P31",
+      "       discoverymethod AS P1046, disc_pubdate AS P575, 'CONFIRMED'||pl_controv_flag AS P31",
       "  FROM ps"
     ],
     [
-      "SELECT DISTINCT pl_name AS id, gaia_id AS P397 FROM ps"
+      "SELECT DISTINCT pl_name AS id, gaia_id AS P397, 'CONFIRMED'||pl_controv_flag AS P31 FROM ps"
     ],
     [
-      "SELECT pl_name AS id, 1-default_flag AS mespos, pl_refname as reference,",
+      "SELECT pl_name AS id, 1-default_flag AS mespos, pl_refname as reference, disposition||pl_controv_flag AS P31,",
       "       pl_orbeccen AS P1096, pl_orbeccenerr1 AS P1096h, pl_orbeccenerr2 AS P1096l,",
       "       pl_orbincl AS P2045, pl_orbinclerr1 AS P2045h, pl_orbinclerr2 AS P2045l, 'Q28390' AS P2045u,",
       "       pl_msinie AS E2051, pl_msinieerr1 AS E2051h, pl_msinieerr2 AS E2051l, 'Q681996' AS E2051u,",
@@ -49,16 +53,16 @@
       "       pl_orbper AS P2146, pl_orbpererr1 AS P2146h, pl_orbpererr2 AS P2146l, 'Q573' AS P2146u,",
       "       pl_orbsmax AS P2233, pl_orbsmaxerr1 AS P2233h, pl_orbsmaxerr2 AS P2233l, 'Q1811' AS P2233u,",
       "       pl_orblper AS P2248, pl_orblpererr1 AS P2248h, pl_orblpererr2 AS P2248l, 'Q28390' AS P2248u",
-      "  FROM k2pandc WHERE 'Published Confirmed' = soltype AND disposition != 'FALSE POSITIVE'"
+      "  FROM k2pandc WHERE 'Published Confirmed' = soltype"
     ],
     [
       "SELECT DISTINCT pl_name AS id, disc_refname AS reference, hostname AS P397,",
-      "       ra AS P6257, 'Q28390' AS P6257u, dec AS P6258, 'Q28390' AS P6258u,",
-      "       discoverymethod AS P1046, disc_pubdate AS P575, 'Q18611609' AS P31",
-      "  FROM k2pandc WHERE disposition = 'CANDIDATE'"
+      "       ra AS P6257, 'Q28390' AS P6257u, dec AS P6258, 'Q28390' AS P6258u, disposition||pl_controv_flag AS P31,",
+      "       discoverymethod AS P1046, disc_pubdate AS P575",
+      "  FROM k2pandc"
     ],
     [
-      "SELECT DISTINCT pl_name AS id, gaia_id AS P397 FROM k2pandc WHERE disposition != 'FALSE POSITIVE'"
+      "SELECT DISTINCT pl_name AS id, gaia_id AS P397, disposition||pl_controv_flag AS P31 FROM k2pandc"
     ]
   ]
 }
