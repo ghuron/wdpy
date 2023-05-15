@@ -1,5 +1,5 @@
 #!/usr/bin/python3
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 from os.path import basename
 from sys import argv
 from time import sleep
@@ -25,10 +25,13 @@ class ExoArchive(ADQL):
             return len(str(Decimal(row[idx]).normalize()))
 
         if not col.startswith('p'):
-            if count_digits('j' + col[1:]) > 2 + count_digits('e' + col[1:]):
-                if col.startswith('j'):
+            try:
+                if count_digits('j' + col[1:]) > 2 + count_digits('e' + col[1:]):
+                    if col.startswith('j'):
+                        return
+                elif col.startswith('e'):
                     return
-            elif col.startswith('e'):
+            except InvalidOperation:
                 return
         return super().construct_snak(row, col, 'p' + col[1:])
 
