@@ -12,6 +12,7 @@ class YadVashem(WikiData):
     config = WikiData.load_config(__file__)
     db_property, db_ref = 'P1979', 'Q77598447'
     endpoint = requests.Session()
+    endpoint.verify = False
     endpoint.headers.update({'Content-Type': 'application/json'})
     pending = []
 
