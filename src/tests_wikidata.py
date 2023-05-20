@@ -71,6 +71,7 @@ class TestWikiData(TestCase):
         self.assertEqual(11, WikiData.parse_date('2009-4-12')['precision'])
         self.assertEqual('+2009-04-02T00:00:00Z', WikiData.parse_date('2009-04-2')['time'])
         self.assertEqual('+3456-02-01T00:00:00Z', WikiData.parse_date('1/2/3456')['time'])
+        self.assertEqual('+1903-01-00T00:00:00Z', WikiData.parse_date('01/1903')['time'])
 
 
 class TestAddRefs(TestCase):
