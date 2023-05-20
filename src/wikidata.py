@@ -65,14 +65,11 @@ class WikiData(ABC):
 
     @staticmethod
     def api_search(query: str):
-        """CirrusSearch query, returns only if one element found, warns otherwise"""
+        """CirrusSearch query, :raises ValueError if more than one item found, None if nothing found, otherwise id"""
         if (response := WikiData.api_call('query', {'list': 'search', 'srsearch': query})) and 'query' in response:
-            if len(response['query']['search']) > 1:
-                logging.warning(query + ' returned ' + str(len(response['query']['search'])) + ' results')
-            elif len(response['query']['search']) == 0:
-                logging.info(query + ' not found')
-            else:
-                return response['query']['search'][0]['title']
+            if (count := len(response['query']['search'])) > 1:
+                raise ValueError(count)
+            return response['query']['search'][0]['title'] if count == 1 else None
 
     @staticmethod
     def query(query: str, process=lambda new, existing: new[0]):
@@ -354,14 +351,15 @@ class WikiData(ABC):
             return self.save()
 
     @classmethod
-    def get_by_id(cls, external_id: str, create=True):
+    def get_by_id(cls, external_id: str):
         """Attempt to find qid by external_id or create it"""
-        if qid := WikiData.api_search('haswbstatement:"{}={}"'.format(cls.db_property, external_id)):
-            return qid
-        if create:
-            instance = cls(external_id)
-            instance.prepare_data()
+        try:
+            if qid := WikiData.api_search('haswbstatement:"{}={}"'.format(cls.db_property, external_id)):
+                return qid
+            (instance := cls(external_id)).prepare_data()
             return instance.update()
+        except ValueError as e:
+            logging.warning('Found {} instances of {}="{}", skipping'.format(e.args[0], cls.db_property, external_id))
 
     @staticmethod
     def serialize_value(value: dict, standard: dict = None):

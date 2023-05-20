@@ -48,8 +48,11 @@ class ExoplanetEu(ADQL):
 
         page = BeautifulSoup(response.content, 'html.parser')
         for p in page.find_all('p', {'class': 'publication'}):
-            if p.get('id') not in ExoplanetEu.articles and (ref_id := ExoplanetEu.parse_publication(p)):
-                ExoplanetEu.articles[p.get('id')] = ref_id
+            try:
+                if p.get('id') not in ExoplanetEu.articles and (ref_id := ExoplanetEu.parse_publication(p)):
+                    ExoplanetEu.articles[p.get('id')] = ref_id
+            except ValueError as e:
+                self.trace('Found {} results while looking for source {} by title'.format(e.args[0], p.get('id')))
         return page
 
     @staticmethod
@@ -95,7 +98,6 @@ class ExoplanetEu(ADQL):
         num = '\\d[-\\+.eE\\d]+'
         unit = '\\s*(?P<unit>[A-Za-z]\\S*)?'
         if property_id == 'P397':
-            # no_parent = self.entity and 'claims' in self.entity and 'P397' not in self.entity['claims']
             return ExoplanetEu.create_snak(property_id, SimbadDAP.get_by_any_id(value))
         elif reg := re.search(
                 '(?P<value>' + num + ')\\s*\\(\\s*-+(?P<min>' + num + ')\\s+(?P<max>\\+' + num + ')\\s*\\)' + unit,

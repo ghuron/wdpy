@@ -227,11 +227,11 @@ class ADQL(WikiData, ABC):
         if url and url.strip() and (url := url.split()[0]):  # get text before first whitespace and strip
             for pattern, repl in ADQL.config['transform'].items():
                 if (query := unquote(re.sub(pattern, repl, url, flags=re.S))).startswith('P'):
-                    if query.startswith('P818='):
-                        if qid := ArXiv.get_by_id(query.replace('P818=', '')):
-                            return qid
-                    if query.startswith('P819='):
-                        if qid := ADS.get_by_id(query.replace('P819=', '')):
-                            return qid
-                    elif qid := WikiData.api_search('haswbstatement:' + query):  # fallback
+                    if query.startswith('P818=') and (qid := ArXiv.get_by_id(query.replace('P818=', ''))):
                         return qid
+                    if query.startswith('P819=') and (qid := ADS.get_by_id(query.replace('P819=', ''))):
+                        return qid
+                    try:  # fallback
+                        return WikiData.api_search('haswbstatement:' + query)
+                    except ValueError as e:
+                        logging.warning('Found {} instances of {}'.format(e.args[0], query))
