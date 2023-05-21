@@ -299,7 +299,7 @@ class WikiData(ABC):
 
         if (response := self.edit(data, 'wbeditentity')) and 'nochange' not in response['entity']:
             self.entity, self.qid = response['entity'], response['entity']['id']
-            self.trace('modified' if 'id' in data else 'created')
+            self.trace('modified' if 'id' in data else 'created for {}="{}"'.format(self.db_property, self.external_id))
             return self.qid
 
     def edit(self, data, method):
@@ -311,7 +311,7 @@ class WikiData(ABC):
                 if response['error']['code'] == 'badtoken':
                     WikiData.token = WikiData.api_call('query', {'meta': 'tokens'})['query']['tokens']['csrftoken']
                 else:
-                    self.trace('{}\t{} response: {}'.format(self.external_id, method, response['error']['info']), 40)
+                    self.trace('{} response: {}'.format(method, response['error']['info']), 40)
                     time.sleep(10)
                     if response['error']['code'] != 'maxlag':
                         self.logon()  # just in case - re-authenticate
