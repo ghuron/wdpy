@@ -118,12 +118,13 @@ class ADQL(WikiData, ABC):
             if 'rank' not in claim1 or claim1['rank'] == 'normal':
                 for claim2 in statements:
                     if claim1 != claim2 and ('rank' not in claim2 or claim2['rank'] == 'normal'):
-                        val1 = claim1['mainsnak']['datavalue']['value']
-                        val2 = claim2['mainsnak']['datavalue']['value']
-                        if ADQL.serialize_value(val2, val1) == ADQL.serialize_value(val1):
-                            claim1['rank'] = 'deprecated'
-                            claim1['qualifiers'] = {} if 'qualifiers' not in claim1 else claim1['qualifiers']
-                            claim1['qualifiers']['P2241'] = [ADQL.create_snak('P2241', 'Q42727519')]
+                        if 'datavalue' in claim1['mainsnak'] and 'datavalue' in claim2['mainsnak']:  # novalue
+                            val1 = claim1['mainsnak']['datavalue']['value']
+                            val2 = claim2['mainsnak']['datavalue']['value']
+                            if ADQL.serialize_value(val2, val1) == ADQL.serialize_value(val1):
+                                claim1['rank'] = 'deprecated'
+                                claim1['qualifiers'] = {} if 'qualifiers' not in claim1 else claim1['qualifiers']
+                                claim1['qualifiers']['P2241'] = [ADQL.create_snak('P2241', 'Q42727519')]
 
     @staticmethod
     def normalize(statements):
