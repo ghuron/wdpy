@@ -12,6 +12,7 @@
     "planet_albedo_0": "P4501",
     "planet_mass_sini_0": "P2051",
     "planet_inclination_0": "P2045",
+    "planet_tperi_0": "P11796",
     "star_0_stars__ra_0": "P6257",
     "star_0_stars__dec_0": "P6258",
     "star_0_stars__alternate_names_0": "P397"
