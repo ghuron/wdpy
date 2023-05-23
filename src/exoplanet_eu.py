@@ -171,12 +171,13 @@ if argv[0].endswith(basename(__file__)):  # if just imported - do nothing
         if data := item.retrieve():
             item.prepare_data(data)
             item.update()
-            # if item.entity and 'P397' in item.entity['claims'] and len(item.entity['claims']['P397']) == 1:
-            #     if 'datavalue' in (parent := item.entity['claims']['P397'][0]['mainsnak']):  # parent != "novalue"
-            #         host = ExoplanetEu(ex_id, parent['datavalue']['value']['id'])
-            #         host.properties = ExoplanetEu.config['star']
-            #         host.prepare_data(data)
-            #         if ExoplanetEu.db_property not in host.entity['claims'] and host.qid not in updated_hosts:
-            #             updated_hosts.append(host.update())
+            if item.entity and 'P397' in item.entity['claims'] and len(item.entity['claims']['P397']) == 1:
+                if 'datavalue' in (parent := item.entity['claims']['P397'][0]['mainsnak']):  # parent != "novalue"
+                    host = ExoplanetEu(ex_id, parent['datavalue']['value']['id'])
+                    host.properties = ExoplanetEu.config['star']
+                    host.prepare_data(data)
+                    if ExoplanetEu.db_property not in host.entity['claims'] and host.qid not in updated_hosts:
+                        host.update()
+                        updated_hosts.append(host.qid)
             data.decompose()
         sleep(4)
