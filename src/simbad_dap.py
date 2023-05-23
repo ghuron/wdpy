@@ -35,9 +35,9 @@ class SimbadDAP(ADQL):
         return snak
 
     @staticmethod
-    def get_by_any_id(ident: str):
-        query = 'SELECT main_id FROM ident JOIN basic ON oid = oidref WHERE id=\'{}\''.format(ident)
-        if len(row := SimbadDAP.tap_query(SimbadDAP.config['endpoint'], query)) == 1:
+    def get_by_any_id(ident: str) -> str:
+        q = 'SELECT main_id FROM ident JOIN basic ON oid = oidref WHERE id=\'{}\''.format(ident.replace('\'', '\'\''))
+        if len(row := SimbadDAP.tap_query(SimbadDAP.config['endpoint'], q)) == 1:
             return SimbadDAP.get_by_id(list(row.keys())[0])
 
 
