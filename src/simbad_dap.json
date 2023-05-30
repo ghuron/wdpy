@@ -217,7 +217,10 @@
     "Bla": "Q221221",
     "BLL": "Q195385",
     "OVV": "Q7073158",
-    "QSO": "Q83373"
+    "QSO": "Q83373",
+    "pc": "Q12129",
+    "kpc": "Q11929860",
+    "Mpc": "Q3773454"
   },
   "groups": [
     "As*",
@@ -307,6 +310,12 @@
       "SELECT main_id, oidref AS id, flux AS P1215, flux_prec AS P1215p, flux_err AS P1215h,  0 AS mespos,",
       "       flux_err_prec AS P1215hp, flux_err AS P1215l, flux_err_prec AS P1215lp, bibcode AS P1215r, filter",
       "  FROM flux",
+      "  JOIN basic ON oidref = oid"
+    ],
+    [
+      "SELECT main_id, oidref AS id, mespos, dist AS P2583, dist_prec AS P2583p, plus_err AS P2583h, bibcode AS P2583r,",
+      "       plus_err_prec AS P2583hp, minus_err AS P2583l, minus_err_prec AS P2583lp, unit AS P2583u",
+      "  FROM mesDistance",
       "  JOIN basic ON oidref = oid"
     ]
   ]
