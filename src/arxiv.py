@@ -14,8 +14,7 @@ from wikidata import WikiData
 
 class ArXiv(WikiData):
     arxiv = {}
-    db_property = 'P818'
-    db_ref = 'Q118398'
+    db_property, db_ref = 'P818', 'Q118398'
 
     @staticmethod
     def get_xml(url):
@@ -25,7 +24,7 @@ class ArXiv(WikiData):
                     return ElementTree.fromstring(file.read())
             except (error.HTTPError, http.client.IncompleteRead, ConnectionResetError, socket.timeout):
                 logging.error('Error while fetching ' + url)
-                time.sleep(600)
+                time.sleep(1800)
         return None
 
     @staticmethod
