@@ -160,10 +160,7 @@ class WikiData(ABC):
             except (ValueError, DecimalException, KeyError):
                 return None
         elif snak['datatype'] == 'wikibase-item':
-            text = snak['datavalue']['value']
-            if cls.config and 'translate' in cls.config and text in cls.config['translate']:
-                text = cls.config['translate'][text]
-            if not re.search('Q\\d+$', text):
+            if not (text := cls.convert_to_qid(snak['datavalue']['value'])):
                 return
             snak['datavalue'] = {'type': 'wikibase-entityid', 'value': {'entity-type': 'item', 'id': text}}
         elif snak['datatype'] == 'time':
@@ -173,6 +170,13 @@ class WikiData(ABC):
         elif snak['datatype'] == 'external-id':
             snak['datavalue']['type'] = 'string'
         return snak
+
+    @classmethod
+    def convert_to_qid(cls, text: str):
+        if cls.config and 'translate' in cls.config and text in cls.config['translate']:
+            text = cls.config['translate'][text]
+        if re.search('Q\\d+$', text):
+            return text
 
     @staticmethod
     def parse_date(i: str):

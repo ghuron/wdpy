@@ -213,8 +213,8 @@ class ADQL(WikiData, ABC):
         if result is not None:
             if 'mespos' in row:
                 result['mespos'] = row['mespos']
-            if col + 'u' in row:
-                result['datavalue']['value']['unit'] = 'http://www.wikidata.org/entity/' + row[col + 'u']
+            if col + 'u' in row and (unit := self.convert_to_qid(row[col + 'u'])):
+                result['datavalue']['value']['unit'] = 'http://www.wikidata.org/entity/' + unit
             reference = row[col + 'r'] if col + 'r' in row and row[col + 'r'] else None
             reference = row['reference'] if 'reference' in row and row['reference'] else reference
             if reference and (ref_id := ADQL.parse_url(re.sub('.*(http\\S+).*', '\\g<1>', reference))):
