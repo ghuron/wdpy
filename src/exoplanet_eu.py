@@ -154,10 +154,13 @@ class ExoplanetEu(ADQL):
         return len(target) == 0
 
     def add_refs(self, claim: dict, references: set):
-        for candidate in self.entity['claims'][claim['mainsnak']['property']]:
-            if candidate['id'] != claim['id'] and ExoplanetEu.compare_refs(candidate, references):
-                self.trace('{} replace statement'.format(claim['mainsnak']['property']), 30)
-                candidate['remove'] = 1  # A different claim had exactly the same set of references -> replace it
+        try:
+            for candidate in self.entity['claims'][claim['mainsnak']['property']]:
+                if candidate['id'] != claim['id'] and ExoplanetEu.compare_refs(candidate, references):
+                    self.trace('{} replace statement'.format(claim['mainsnak']['property']), 30)
+                    candidate['remove'] = 1  # A different claim had exactly the same set of references -> replace it
+        except KeyError:
+            self.trace('No id')  # ToDo how does this happens?
         super().add_refs(claim, references)
 
 
