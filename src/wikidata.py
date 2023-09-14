@@ -334,8 +334,7 @@ class WikiData(ABC):
 
         affected_statements = {}
         for snak in self.input_snaks:
-            claim = self.obtain_claim(snak)
-            if claim:
+            if claim := self.obtain_claim(snak):
                 if snak['property'] not in affected_statements and snak['property'] in self.entity['claims']:
                     affected_statements[snak['property']] = self.filter_by_ref(self.entity['claims'][snak['property']])
                 if claim in affected_statements[snak['property']]:
