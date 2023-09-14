@@ -208,6 +208,11 @@ class WikiData(ABC):
             self.entity = result[self.qid]
         self.input_snaks = [WikiData.create_snak(self.db_property, self.external_id)]
 
+    @staticmethod
+    def skip_statement(s: dict) -> bool:
+        """ If someone explicitly states that this is a bad statement, do not touch it"""
+        return 'rank' in s and s['rank'] == 'deprecated' and 'qualifiers' in s and 'P2241' in s['qualifiers']
+
     def obtain_claim(self, snak: dict):
         """Find or create claim, corresponding to the provided snak"""
         if snak is None:
@@ -222,9 +227,8 @@ class WikiData(ABC):
             self.entity['claims'][snak['property']] = []
 
         if claim := WikiData.find_claim(snak['datavalue']['value'], self.entity['claims'][snak['property']]):
-            if 'rank' in claim and claim['rank'] == 'deprecated':
-                if 'qualifiers' in claim and 'P2241' in claim['qualifiers']:
-                    return  # someone explicitly states that this is a bad statement, do not touch it
+            if WikiData.skip_statement(claim):
+                return
         else:
             claim = {'type': 'statement', 'mainsnak': snak}
             if 'id' in self.entity:
@@ -273,7 +277,7 @@ class WikiData(ABC):
     def filter_by_ref(self, unfiltered: list):
         filtered = []
         for statement in unfiltered:
-            if 'references' in statement:
+            if 'references' in statement and not WikiData.skip_statement(statement):
                 for ref in statement['references']:
                     if 'P248' in ref['snaks'] and ref['snaks']['P248'][0]['datavalue']['value']['id'] == self.db_ref:
                         filtered.append(statement)
