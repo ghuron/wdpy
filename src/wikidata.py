@@ -10,6 +10,7 @@ import time
 import uuid
 from abc import ABC, abstractmethod
 from contextlib import closing
+from datetime import datetime
 from decimal import Decimal, DecimalException
 from typing import Tuple
 
@@ -182,9 +183,13 @@ class WikiData(ABC):
     def parse_date(i: str):
         for p in ['(?P<d>\\d\\d?)?/?(?P<m>\\d\\d?)/(?P<y>\\d{4})', '(?P<y>\\d{4})-?(?P<m>\\d\\d?)?-?(?P<d>\\d\\d?)?']:
             if (m := re.search(p, i)) and (g := m.groupdict('0')):
+                try:  # validate parsed month and day
+                    datetime(int(g['y']), int(g['m']) if int(g['m']) else 1, int(g['d']) if int(g['d']) else 1)
+                except ValueError:
+                    return
                 return {'before': 0, 'after': 0, 'calendarmodel': 'http://www.wikidata.org/entity/Q1985727',
                         'time': '+{}-{:02d}-{:02d}T00:00:00Z'.format(int(g['y']), int(g['m']), int(g['d'])),
-                        'precision': 9 if g['m'] == '0' else 10 if g['d'] == '0' else 11, 'timezone': 0}
+                        'precision': 11 if int(g['d']) else 10 if int(g['m']) else 9, 'timezone': 0}
 
     @staticmethod
     def find_claim(value: dict, claims: list):
