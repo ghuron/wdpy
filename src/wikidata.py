@@ -19,6 +19,7 @@ import requests
 
 class WikiData(ABC):
     USER_AGENT = 'automated import by https://www.wikidata.org/wiki/User:Ghuron'
+    LOG = 'https://www.wikidata.org/wiki/{}#{}\t{}'
     api = requests.Session()
     api.headers.update({'User-Agent': USER_AGENT})
     db_property, db_ref = None, None
@@ -297,7 +298,7 @@ class WikiData(ABC):
 
     def trace(self, message: str, level=20):
         # CRITICAL: 50, ERROR: 40, WARNING: 30, INFO: 20, DEBUG: 10
-        logging.log(level, 'https://www.wikidata.org/wiki/' + self.qid + '\t' + message if self.qid else message)
+        logging.log(level, WikiData.LOG.format(self.qid, self.db_property, message) if self.qid else message)
 
     def get_summary(self):
         return 'batch import from [[' + self.db_ref + ']] for object ' + self.external_id
