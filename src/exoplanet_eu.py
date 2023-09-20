@@ -66,7 +66,7 @@ class ExoplanetEu(ADQL):
 
     def prepare_data(self, source: BeautifulSoup = None):
         if source:
-            super().prepare_data()
+            super().prepare_data(source)
             self.input_snaks, current_snak = [], None
 
             for td in source.find_all('td'):
