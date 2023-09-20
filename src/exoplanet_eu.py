@@ -23,7 +23,7 @@ class ExoplanetEu(ADQL):
         self.properties = ExoplanetEu.config['planet']
 
     def trace(self, message: str, level=20):
-        super().trace('http://exoplanet.eu/catalog/{}\t{}'.format(self.external_id.replace(' ', '_'), message))
+        super().trace('http://exoplanet.eu/catalog/{}\t{}'.format(self.external_id.replace(' ', '_'), message), level)
 
     @staticmethod
     def get_next_chunk(offset: int) -> tuple[list[str], int]:
