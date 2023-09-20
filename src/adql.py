@@ -42,6 +42,9 @@ class ADQL(WikiData, ABC):
                 for col in row:
                     if row[col] and re.search('\\d+$', col) and (snak := self.construct_snak(row, col)):
                         self.input_snaks.append(snak)
+        elif not source:  # failed to load and no explicit source provided
+            self.trace('could not be loaded, skipping update', 30)
+            self.input_snaks = None
 
     __const = None
 
