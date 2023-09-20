@@ -210,9 +210,16 @@ class WikiData(ABC):
     @abstractmethod
     def prepare_data(self, source=None) -> None:
         """Load self.entity using self.qid and prepare self.input_snaks by parsing source using self.external_id"""
-        if self.qid and (result := WikiData.load_items([self.qid])):
-            self.entity = result[self.qid]
-        self.input_snaks = [WikiData.create_snak(self.db_property, self.external_id)]
+        try:
+            if not self.qid:  # Attempt to find corresponding element via direct query
+                if qid := self.api_search('haswbstatement:"{}={}"'.format(self.db_property, self.external_id)):
+                    self.qid = qid
+            if self.qid and (result := WikiData.load_items([self.qid])):
+                self.entity = result[self.qid]
+            self.input_snaks = [WikiData.create_snak(self.db_property, self.external_id)]
+        except ValueError as e:
+            self.trace('Found {} instances of {}="{}", skipping'.format(e.args[0], self.db_property,
+                                                                        self.external_id), 30)
 
     @staticmethod
     def skip_statement(s: dict) -> bool:
