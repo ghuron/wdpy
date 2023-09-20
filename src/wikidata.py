@@ -313,7 +313,7 @@ class WikiData(ABC):
 
         if (response := self.edit(data, 'wbeditentity')) and 'nochange' not in response['entity']:
             self.entity, self.qid = response['entity'], response['entity']['id']
-            self.trace('modified' if 'id' in data else 'created for {}="{}"'.format(self.db_property, self.external_id))
+            self.trace('modified' if 'id' in data else 'created')
             return self.qid
 
     def edit(self, data, method):
