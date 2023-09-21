@@ -96,7 +96,7 @@ class WikiData(ABC):
         return [], None
 
     @classmethod
-    def get_all_items(cls, sparql: str, process=lambda new, existing: new[0]):
+    def get_all_items(cls, sparql: str, process=lambda row, result: (row[0], row[1])):
         results = WikiData.query(sparql, process)
         offset = None
         while True:
