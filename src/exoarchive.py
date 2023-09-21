@@ -35,6 +35,15 @@ class ExoArchive(ADQL):
                 return
         return super().construct_snak(row, col, 'p' + col[1:])
 
+    missing = None
+
+    def prepare_data(self, source=None):
+        if not self.qid:  # Try to reuse item from exoplanet.eu
+            if not ExoArchive.missing:  # Lazy load
+                ExoArchive.missing = ADQL.query('SELECT ?c ?i {?i wdt:P5653 ?c FILTER NOT EXISTS {?i wdt:P5667 []}}')
+            self.qid = ExoArchive.missing[self.external_id] if self.external_id in ExoArchive.missing else self.qid
+        super().prepare_data()
+
 
 if argv[0].endswith(basename(__file__)):  # if not imported
     ExoArchive.logon(argv[1], argv[2])
