@@ -39,6 +39,17 @@ class YadVashem(WikiData):
             result.append(str(case_item['BookId']))
         return result, o + len(result)
 
+    @staticmethod
+    def process_sparql_row(new, result):
+        if new[0] not in result:
+            return new[0], {new[1]: new[2]}  # create a new case
+        elif new[1] not in result[new[0]]:
+            return new[0], {**result[new[0]], new[1]: new[2]}  # add person to existing case
+        elif isinstance(result[new[0]][new[1]], int):
+            return new[0], {**result[new[0]], new[1]: 1 + result[new[0]][new[1]]}  # increment duplication count
+        else:
+            return new[0], {**result[new[0]], new[1]: 2}  # convert to duplication count
+
     def obtain_claim(self, snak):
         if snak is not None:
             if snak['property'] in ['P585', 'P27']:  # date and nationality to qualifiers for award
@@ -119,10 +130,7 @@ if sys.argv[0].endswith(basename(__file__)):  # if not imported
                    'uniqueId:"987",strSearch:"",newSearch:true,clearFilter:true,searchType:"righteous_only"')
     wd_items = YadVashem.get_all_items(
         'SELECT ?r ?n ?i { ?i wdt:P31 wd:Q5; p:P1979 ?s . ?s ps:P1979 ?r OPTIONAL {?s pq:P1810 ?n}}',
-        lambda new, existing: {new[0]: new[1]} if len(existing) == 0 else
-        {**existing, new[0]: new[1]} if new[0] not in existing else
-        {**existing, new[0]: existing[new[0]] + 1} if isinstance(existing[new[0]], int) else
-        {**existing, new[0]: 2})
+        YadVashem.process_sparql_row)
 
     for item_id in wd_items:
         # item_id = '6658068'  # uncomment to debug specific group of people

@@ -15,6 +15,7 @@
     "Pulsar Timing": "Q42364577"
   },
   "endpoint": "https://exoplanetarchive.ipac.caltech.edu/TAP/",
+  "redirects": "SELECT koi_name, pl_name FROM keplernames",
   "queries": [
     [
       "SELECT pl_name AS id, 1-default_flag AS mespos, pl_refname as reference, 'CONFIRMED'||pl_controv_flag AS P31,",

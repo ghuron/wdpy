@@ -10,6 +10,12 @@ from adql import ADQL
 class ExoArchive(ADQL):
     config = ADQL.load_config(__file__)
     db_property, db_ref = 'P5667', 'Q5420639'
+    redirect = {}
+
+    @staticmethod
+    def resolve_redirects(new, _):
+        norm_id = new[0].replace('KOI-', 'K0')
+        return (ExoArchive.redirect[norm_id][0]['pl_name'] if norm_id in ExoArchive.redirect else new[0]), new[1]
 
     @staticmethod
     def get_next_chunk(offset):
@@ -47,7 +53,8 @@ class ExoArchive(ADQL):
 
 if argv[0].endswith(basename(__file__)):  # if not imported
     ExoArchive.logon(argv[1], argv[2])
-    wd_items = ExoArchive.get_all_items('SELECT ?id ?item {?item p:P5667/ps:P5667 ?id}')
+    ExoArchive.redirect = ExoArchive.tap_query(ExoArchive.config['endpoint'], ExoArchive.config['redirects'])
+    wd_items = ExoArchive.get_all_items('SELECT ?id ?item {?item p:P5667/ps:P5667 ?id}', ExoArchive.resolve_redirects)
     for ex_id in wd_items:
         # ex_id = 'eps Tau b'
         item = ExoArchive(ex_id, wd_items[ex_id])

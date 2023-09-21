@@ -74,20 +74,20 @@ class WikiData(ABC):
             return response['query']['search'][0]['title'] if count == 1 else None
 
     @staticmethod
-    def query(query: str, process=lambda new, existing: new[0]):
+    def query(sparql: str, process=lambda row, result: (row[0], row[1])):
         result = {}
         with requests.Session() as session:
             session.headers.update({'Accept': 'text/csv', 'User-Agent': WikiData.USER_AGENT})
-            with closing(session.post('https://query.wikidata.org/sparql', params={'query': query}, stream=True)) as r:
+            with closing(session.post('https://query.wikidata.org/sparql', params={'query': sparql}, stream=True)) as r:
                 try:
                     reader = csv.reader(r.iter_lines(decode_unicode='utf-8'), delimiter=',', quotechar='"')
                     next(reader)
                     for line in reader:
-                        line = [item.replace('http://www.wikidata.org/entity/', '') for item in line]
-                        if len(line) > 1:
-                            result[line[0]] = process(line[1:], result[line[0]] if line[0] in result else [])
+                        if len(line := [item.replace('http://www.wikidata.org/entity/', '') for item in line]) > 1:
+                            key, value = process(line, result)
+                            result[key] = value
                 except requests.exceptions.ChunkedEncodingError:
-                    logging.error('Error while executing ' + query)
+                    logging.error('Error while executing ' + sparql)
         return result
 
     @staticmethod
