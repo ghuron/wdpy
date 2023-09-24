@@ -64,7 +64,13 @@ class ExoplanetEu(ADQL):
             if len(title := ' '.join(publication.find('b').text.replace('\n', ' ').rstrip('.').split())) > 24:
                 return ADQL.api_search('"{}" -haswbstatement:P31=Q1348305'.format(title))
 
+    missing = None
+
     def prepare_data(self, source: BeautifulSoup = None):
+        if not self.qid:  # Try to reuse item from NASA Exoplanet Archive
+            if not ExoplanetEu.missing:  # Lazy load
+                ExoplanetEu.missing = ADQL.query('SELECT ?c ?i {?i wdt:P5667 ?c FILTER NOT EXISTS {?i wdt:P5653 []}}')
+            self.qid = ExoplanetEu.missing[self.external_id] if self.external_id in ExoplanetEu.missing else None
         if source:
             super().prepare_data(source)
             self.input_snaks, current_snak = [], None
@@ -165,7 +171,7 @@ class ExoplanetEu(ADQL):
 
 
 if argv[0].endswith(basename(__file__)):  # if just imported - do nothing
-    ADQL.logon(argv[1], argv[2])
+    ExoplanetEu.logon(argv[1], argv[2])
     updated_hosts = []
     wd_items = OrderedDict(sorted(ExoplanetEu.get_all_items('SELECT ?id ?item {?item p:P5653/ps:P5653 ?id}').items()))
     for ex_id in wd_items:
