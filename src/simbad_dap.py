@@ -34,11 +34,17 @@ class SimbadDAP(ADQL):
                 snak['qualifiers'] = {'P1227': SimbadDAP.config['band'][row['filter']]}
         return snak
 
+    cache = {}
+
     @staticmethod
     def get_by_any_id(ident: str) -> str:
         q = 'SELECT main_id FROM ident JOIN basic ON oid = oidref WHERE id=\'{}\''.format(ident.replace('\'', '\'\''))
-        if len(row := SimbadDAP.tap_query(SimbadDAP.config['endpoint'], q)) == 1:
-            return SimbadDAP.get_by_id(list(row.keys())[0])
+        if ident and len(row := SimbadDAP.tap_query(SimbadDAP.config['endpoint'], q)) == 1:
+            if (main_id := list(row.keys())[0]) in SimbadDAP.cache:
+                return SimbadDAP.cache[main_id]
+            if qid := SimbadDAP.get_by_id(main_id):
+                SimbadDAP.cache[main_id] = qid
+            return qid
 
 
 if argv[0].endswith(basename(__file__)):  # if not imported
