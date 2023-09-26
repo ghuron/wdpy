@@ -16,10 +16,10 @@ class SimbadDAP(ADQL):
             if len(ident := SimbadDAP.tap_query(SimbadDAP.config['endpoint'], query)) == 1:
                 SimbadDAP.load('id = \'{}\''.format(list(ident.keys())[0]))
             return [], None
-        elif len(ADQL.cache) > 0:  # TODO: sliding window
+        elif len(ADQL.dataset) > 0:  # TODO: sliding window
             return [], None
         SimbadDAP.load('id BETWEEN {} AND {}'.format(0, 10000))
-        return SimbadDAP.cache.keys(), None
+        return SimbadDAP.dataset.keys(), None
 
     def construct_snak(self, row, col, new_col=None):
         if (new_col := col) == 'p397':

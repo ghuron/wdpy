@@ -19,10 +19,10 @@ class ExoArchive(ADQL):
 
     @staticmethod
     def get_next_chunk(offset):
-        if not offset and not ExoArchive.cache:  # load only confirmed non-controversial exoplanets
+        if not offset and not ExoArchive.dataset:  # load only confirmed non-controversial exoplanets
             ExoArchive.load('P31 = \'CONFIRMED0\'')
-            return ExoArchive.cache.keys(), None
-        elif offset and ExoArchive.cache:  # try to load specific exoplanet ignoring its status
+            return ExoArchive.dataset.keys(), None
+        elif offset and ExoArchive.dataset:  # try to load specific exoplanet ignoring its status
             ExoArchive.load('id = \'{}\''.format(offset))
         return [], None
 
