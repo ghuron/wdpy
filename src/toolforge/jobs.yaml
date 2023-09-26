@@ -4,20 +4,20 @@
   command: src/toolforge/run.sh exoplanet-eu
   image: tf-python39
   mem: 1Gi
-  schedule: "0 21 * * SUN"
+  schedule: "8 20 * * SUN"
 - name: exoarchive
   command: src/toolforge/run.sh exoarchive
   image: tf-python39
-  schedule: "0 21 * * MON"
+  schedule: "8 20 * * MON"
 - name: simbad-id
   command: src/toolforge/run.sh simbad-id
   image: tf-python39
-  schedule: "0 21 * * TUE"
+  schedule: "8 20 * * TUE"
 - name: arxiv
   command: src/toolforge/run.sh arxiv
   image: tf-python39
-  schedule: "0 21 * * WED"  
+  schedule: "8 20 * * WED"  
 - name: yad-vashem
   command: src/toolforge/run.sh yad-vashem
   image: tf-python39
-  schedule: "0 21 * * THU"
+  schedule: "8 20 * * THU"
