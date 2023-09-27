@@ -74,6 +74,14 @@ class TestWikiData(TestCase):
         self.assertEqual('+1903-01-00T00:00:00Z', WikiData.parse_date('01/1903')['time'])
         self.assertIsNone(WikiData.parse_date('29/16/1924'))
 
+    def test_qualifier_filter(self):
+        self.assertTrue(WikiData.qualifier_filter({'qualifiers': {}}, {}))
+        self.assertFalse(WikiData.qualifier_filter({'qualifiers': {'P972': 'Q1'}}, {}))
+        q2 = {'qualifiers': {'P972': [WikiData.create_snak('P972', 'Q2')]}}
+        self.assertFalse(WikiData.qualifier_filter({'qualifiers': {'P1227': 'Q2'}}, q2))
+        self.assertFalse(WikiData.qualifier_filter({'qualifiers': {'P972': 'Q1'}}, q2))
+        self.assertTrue(WikiData.qualifier_filter({'qualifiers': {'P972': 'Q2'}}, q2))
+
 
 class TestAddRefs(TestCase):
     @classmethod
@@ -143,5 +151,6 @@ class TestFindClaim(TestCase):
         cls.wd = WikiData('0000 0001 2197 5163')
 
     def testIgnoreInsignificantDatePart(self):
-        self.assertIsNotNone(WikiData.find_claim({'time': '+1999-12-31T00:00:00Z', 'precision': 9},
-                                                 [self.wd.obtain_claim(WikiData.create_snak('P575', '1999'))]))
+        self.assertIsNotNone(
+            WikiData.find_claim({'datavalue': {'value': {'time': '+1999-12-31T00:00:00Z', 'precision': 9}}},
+                                [self.wd.obtain_claim(WikiData.create_snak('P575', '1999'))]))

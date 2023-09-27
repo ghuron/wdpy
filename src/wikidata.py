@@ -193,13 +193,29 @@ class WikiData(ABC):
                         'precision': 11 if int(g['d']) else 10 if int(g['m']) else 9, 'timezone': 0}
 
     @staticmethod
-    def find_claim(value: dict, claims: list):
-        for claim in claims:
-            if 'datavalue' in claim['mainsnak']:  # not novalue
-                if WikiData.serialize_value(claim['mainsnak']['datavalue']['value']) == WikiData.serialize_value(value):
-                    return claim
+    def compare(claim: dict, value: dict) -> bool:
+        return 'datavalue' in claim and WikiData.serialize(claim['datavalue']['value']) == WikiData.serialize(value)
+
+    @staticmethod
+    def qualifier_filter(conditions: dict, claim: dict) -> bool:
+        for property_id in (conditions['qualifiers'] if 'qualifiers' in conditions else {}):
+            if 'qualifiers' not in claim or (property_id not in claim['qualifiers']):  # No property_id qualifier
+                return False
+            was_found = None
+            for claim in claim['qualifiers'][property_id]:
+                if was_found := WikiData.compare(claim, {'id': conditions['qualifiers'][property_id]}):
+                    break
+            if not was_found:  # Above loop did not find anything
+                return False
+        return True  # All conditions are met
+
+    @staticmethod
+    def find_claim(snak: dict, claims: list):
+        for c in claims:
+            if WikiData.qualifier_filter(snak, c) and WikiData.compare(c['mainsnak'], snak['datavalue']['value']):
+                return c
         if len(claims) > 0 and WikiData.get_type(claims[0]['mainsnak']['property']) == 'external-id':
-            claims[0]['mainsnak']['datavalue']['value'] = value
+            claims[0]['mainsnak']['datavalue']['value'] = snak['datavalue']['value']
             return claims[0]
 
     def __init__(self, external_id: str, qid: str = None):
@@ -239,7 +255,7 @@ class WikiData(ABC):
         if snak['property'] not in self.entity['claims']:
             self.entity['claims'][snak['property']] = []
 
-        if claim := WikiData.find_claim(snak['datavalue']['value'], self.entity['claims'][snak['property']]):
+        if claim := WikiData.find_claim(snak, self.entity['claims'][snak['property']]):
             if WikiData.skip_statement(claim):
                 return
         else:
@@ -382,7 +398,7 @@ class WikiData(ABC):
             logging.warning('Found {} instances of {}="{}", skipping'.format(e.args[0], cls.db_property, external_id))
 
     @staticmethod
-    def serialize_value(value: dict, standard: dict = None):
+    def serialize(value: dict, standard: dict = None):
         if isinstance(value, str):
             return value
         elif 'id' in (standard := standard if standard else value):

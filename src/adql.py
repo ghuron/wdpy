@@ -84,7 +84,7 @@ class ADQL(WikiData, ABC):
                                 ref_id = entity['redirects']['to']
                             if 'claims' in entity and 'P577' in entity['claims']:
                                 p577 = entity['claims']['P577'][0]['mainsnak']['datavalue']['value']
-                        ADQL.__pub_dates[ref_id] = int(WikiData.serialize_value(p577)) if p577 else None
+                        ADQL.__pub_dates[ref_id] = int(WikiData.serialize(p577)) if p577 else None
                     if ref_id in p248:
                         claim['references'].remove(ref)  # remove duplicates
                     else:
@@ -124,7 +124,7 @@ class ADQL(WikiData, ABC):
                         if 'datavalue' in claim1['mainsnak'] and 'datavalue' in claim2['mainsnak']:  # novalue
                             val1 = claim1['mainsnak']['datavalue']['value']
                             val2 = claim2['mainsnak']['datavalue']['value']
-                            if ADQL.serialize_value(val2, val1) == ADQL.serialize_value(val1):
+                            if ADQL.serialize(val2, val1) == ADQL.serialize(val1):
                                 claim1['rank'] = 'deprecated'
                                 claim1['qualifiers'] = {} if 'qualifiers' not in claim1 else claim1['qualifiers']
                                 claim1['qualifiers']['P2241'] = [ADQL.create_snak('P2241', 'Q42727519')]
