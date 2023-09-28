@@ -8,17 +8,18 @@ class TestExoplanetEu(TestCase):
     def setUp(cls):
         cls.exo = ExoplanetEu('55 Cnc e')
 
-    def test_obtain_existing_v_mag(self):
-        claim = self.exo.obtain_claim(ExoplanetEu.create_snak('P1215', '8.88'))
-        claim['qualifiers'] = {'P1227': [ExoplanetEu.create_snak('P1227', 'Q4892529')]}  # V diapason
-        claim = self.exo.obtain_claim(ExoplanetEu.create_snak('P1215', '9.99'))
-        self.assertIsNone(claim)
+    def test_obtain_claim(self):
+        (snak := ExoplanetEu.create_snak('P1215', '8.88'))['qualifiers'] = {'P1227': 'Q4892529'}  # V diapason
+        self.assertEqual(0, (claim := self.exo.obtain_claim(snak))['mespos'])  # mespos present and always 0
 
-    def test_ignore_existing_g_mag(self):
-        claim = self.exo.obtain_claim(ExoplanetEu.create_snak('P1215', '8.88'))
+        (snak := ExoplanetEu.create_snak('P1215', '9.99'))['qualifiers'] = {'P1227': 'Q4892529'}  # V diapason
+        self.assertIsNone(self.exo.obtain_claim(snak))  # Do not mess with existing V mag
+
         claim['qualifiers'] = {'P1227': [ExoplanetEu.create_snak('P1227', 'Q66659648')]}  # G diapason
-        claim = self.exo.obtain_claim(ExoplanetEu.create_snak('P1215', '9.99'))
-        self.assertEqual('9.99', claim['mainsnak']['datavalue']['value']['amount'])
+        self.assertEqual('9.99', self.exo.obtain_claim(snak)['mainsnak']['datavalue']['value']['amount'])
+
+        claim = self.exo.obtain_claim(ExoplanetEu.create_snak('P4501', 0.5))
+        self.assertEqual('Q2832068', claim['qualifiers']['P1013'][0]['datavalue']['value']['id'])  # Always geometric
 
     @mock.patch('wikidata.WikiData.api_search', return_value='Q50668')
     def test_get_by_id(self, api_search):

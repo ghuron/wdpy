@@ -18,9 +18,11 @@ class ADQL(WikiData, ABC):
     config = WikiData.load_config(__file__)
 
     def obtain_claim(self, snak):
-        claim = super().obtain_claim(snak)
-        if claim and 'mespos' in snak:
-            claim['mespos'] = snak['mespos']
+        if claim := super().obtain_claim(snak):
+            if 'mespos' in snak:
+                claim['mespos'] = snak['mespos']
+            if snak['property'] == 'P1215' and snak['qualifiers']['P1227'] == 'Q4892529':
+                claim['rank'] = 'preferred'  # V-magnitude is always preferred
         return claim
 
     dataset = {}

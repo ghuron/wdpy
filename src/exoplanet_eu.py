@@ -133,21 +133,17 @@ class ExoplanetEu(ADQL):
         return result
 
     def obtain_claim(self, snak):
-        if snak and self.entity and 'claims' in self.entity and snak['property'] in self.entity['claims']:
-            if self.db_property not in self.entity['claims'] and snak['property'] == 'P1215':
-                for claim in self.entity['claims']['P1215']:  # Looking for visual magnitude statement
-                    if 'qualifiers' in claim and 'P1227' in claim['qualifiers']:
-                        if claim['qualifiers']['P1227'][0]['datavalue']['value']['id'] == 'Q4892529':
-                            return  # if found - skip provided snak
-
-        if claim := super().obtain_claim(snak):
-            claim['mespos'] = 0
-            if snak['property'] == 'P4501':  # always geometric albedo
-                claim['qualifiers'] = {'P1013': [ExoplanetEu.create_snak('P1013', 'Q2832068')]}
-            elif snak['property'] == 'P1215':
-                claim['qualifiers'] = {'P1227': [ExoplanetEu.create_snak('P1227', 'Q4892529')]}
-                claim['rank'] = 'preferred'  # V-magnitude is always preferred
-        return claim
+        if snak:
+            snak['mespos'] = 0
+            if snak['property'] == 'P4501':
+                snak['qualifiers'] = {'P1013': 'Q2832068'}  # always geometric albedo
+            if self.entity and 'claims' in self.entity and 'P1215' in self.entity['claims']:
+                if snak['property'] == 'P1215' and self.db_property not in self.entity['claims']:
+                    for claim in self.entity['claims']['P1215']:  # Looking for visual magnitude statement
+                        if 'qualifiers' in claim and 'P1227' in claim['qualifiers']:
+                            if claim['qualifiers']['P1227'][0]['datavalue']['value']['id'] == 'Q4892529':
+                                return  # if found - skip provided snak
+        return super().obtain_claim(snak)
 
     @staticmethod
     def compare_refs(claim: dict, references: set):
