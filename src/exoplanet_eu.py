@@ -186,4 +186,4 @@ if argv[0].endswith(basename(__file__)):  # if just imported - do nothing
                         host.update()
                         updated_hosts.append(host.qid)
             data.decompose()
-        sleep(4)
+        sleep(3)
