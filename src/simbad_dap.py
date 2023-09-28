@@ -28,11 +28,7 @@ class SimbadDAP(ADQL):
             row[col] = row[col].replace(' ', '')
         elif col == 'p2216' and row['p2216t'] != 'v':
             return
-
-        if snak := super().construct_snak(row, col, new_col):
-            if 'filter' in row and row['filter'] in SimbadDAP.config['band']:
-                snak['qualifiers'] = {'P1227': SimbadDAP.config['band'][row['filter']]}
-        return snak
+        return super().construct_snak(row, col, new_col)
 
     cache = {}
 

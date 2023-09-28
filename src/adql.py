@@ -223,6 +223,13 @@ class ADQL(WikiData, ABC):
             if reference and (ref_id := ADQL.parse_url(re.sub('.*(http\\S+).*', '\\g<1>', reference))):
                 result['source'] = [ref_id] if 'source' not in result else result['source'] + [ref_id]
 
+            if 'qualifier' in row and col in self.config:
+                for pattern in SimbadDAP.config[col]['translate']:
+                    if row['qualifier'].startswith(pattern):
+                        result['qualifiers'] = {self.config[col]['id']: self.config[col]['translate'][pattern]}
+                        return result
+                return None
+
         return result
 
     @staticmethod
