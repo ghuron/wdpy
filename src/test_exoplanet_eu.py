@@ -27,51 +27,36 @@ class TestExoplanetEu(TestCase):
         self.assertEqual('Q50668', value)
         api_search.assert_called_with('haswbstatement:"P5653=55 Cnc e"')
 
-
-class TestParseValue(TestCase):
-    def test_parse_simple_float(self):
+    def test_parse_value(self):
         value = ExoplanetEu.parse_value('P1096', '0.98')['datavalue']['value']
-        self.assertEqual('0.98', value['amount'])
-        self.assertEqual('1', value['unit'])
+        self.assertDictEqual({'unit': '1', 'amount': '0.98'}, value)
 
-    def test_parse_exp_float_unit(self):
         value = ExoplanetEu.parse_value('P2120', '2e-06 RJ')['datavalue']['value']
-        self.assertEqual('0.000002', value['amount'])
-        self.assertEqual('http://www.wikidata.org/entity/Q3421309', value['unit'])
+        self.assertDictEqual({'unit': 'http://www.wikidata.org/entity/Q3421309', 'amount': '0.000002'}, value)
 
-    def test_parse_error_unit(self):
         value = ExoplanetEu.parse_value('P2051', '0.082 (± 0.0041)  MJ')['datavalue']['value']
-        self.assertEqual('0.082', value['amount'])
-        self.assertEqual('0.0779', value['lowerBound'])
-        self.assertEqual('0.0861', value['upperBound'])
-        self.assertEqual('http://www.wikidata.org/entity/Q651336', value['unit'])
+        self.assertDictEqual({'unit': 'http://www.wikidata.org/entity/Q651336', 'amount': '0.082',
+                              'lowerBound': '0.0779', 'upperBound': '0.0861'}, value)
 
-    def test_parse_exp_error(self):
-        value = ExoplanetEu.parse_value('P2146', '1.30618608 (± 3.8e-07) day')['datavalue']['value']
-        self.assertEqual('1.30618608', value['amount'])
-        self.assertEqual('1.3061857', value['lowerBound'])
-        self.assertEqual('1.30618646', value['upperBound'])
+        value = ExoplanetEu.parse_value('P1096', '1.30618608 (± 3.8e-07)')['datavalue']['value']
+        self.assertDictEqual({'unit': '1', 'amount': '1.30618608',
+                              'lowerBound': '1.3061857', 'upperBound': '1.30618646'}, value)
 
-    def test_parse_diff_min_max(self):
         value = ExoplanetEu.parse_value('P2216', '353.0(-88.0 +73.0) m/s')['datavalue']['value']
-        self.assertEqual('353', value['amount'])
-        self.assertEqual('265', value['lowerBound'])
-        self.assertEqual('426', value['upperBound'])
-        self.assertEqual('http://www.wikidata.org/entity/Q182429', value['unit'])
+        self.assertDictEqual({'unit': 'http://www.wikidata.org/entity/Q182429', 'amount': '353',
+                              'lowerBound': '265', 'upperBound': '426'}, value)
 
-    def test_parse_one_letter_unit(self):
         value = ExoplanetEu.parse_value('P2216', '5991.0 (± 50.0) K')['datavalue']['value']
-        self.assertEqual('http://www.wikidata.org/entity/Q11579', value['unit'])
+        self.assertDictEqual({'unit': 'http://www.wikidata.org/entity/Q11579', 'amount': '5991',
+                              'lowerBound': '5941', 'upperBound': '6041'}, value)
 
-    def test_ra_fraction_seconds(self):
         value = ExoplanetEu.parse_value('P6257', '18:57:39.0')['datavalue']['value']
-        self.assertEqual('284.4125', value['amount'])
-        self.assertEqual('http://www.wikidata.org/entity/Q28390', value['unit'])
+        self.assertDictEqual({'unit': 'http://www.wikidata.org/entity/Q28390', 'amount': '284.4125'}, value)
 
-    def test_dec_negative_seconds(self):
         value = ExoplanetEu.parse_value('P6258', '-41:32:09')['datavalue']['value']
-        self.assertEqual('-41.536', value['amount'])
+        self.assertDictEqual({'unit': 'http://www.wikidata.org/entity/Q28390', 'amount': '-41.536'}, value)
 
-    def test_parse_junk(self):
         self.assertIsNone(ExoplanetEu.parse_value('P6257', 'aa:bb:cc'))
+
+    def test_create_snak(self):
         self.assertEqual('aa:bb:cc', ExoplanetEu.create_snak('P213', 'aa:bb:cc')['datavalue']['value'])
