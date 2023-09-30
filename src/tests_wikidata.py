@@ -25,12 +25,12 @@ class TestWikiData(TestCase):
     @mock.patch('wikidata.WikiData.api_call', return_value=None)
     def test_load_items_none(self, api_call):
         self.assertIsNone(WikiData.load_items(['Q1', 'Q2']))
-        api_call.assert_called_with('wbgetentities', {'props': 'claims|info|labels', 'ids': 'Q1|Q2'})
+        api_call.assert_called_with('wbgetentities', {'props': 'claims|info|labels|aliases', 'ids': 'Q1|Q2'})
 
     @mock.patch('wikidata.WikiData.api_call', return_value=None)
     def test_load_items_single(self, api_call):
         self.assertIsNone(WikiData.load_items(['Q3']))
-        api_call.assert_called_with('wbgetentities', {'props': 'claims|info|labels', 'ids': 'Q3'})
+        api_call.assert_called_with('wbgetentities', {'props': 'claims|info|labels|aliases', 'ids': 'Q3'})
 
     @mock.patch('logging.log')
     def test_trace_without_entity(self, info):

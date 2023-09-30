@@ -62,7 +62,7 @@ class WikiData(ABC):
     def load_items(ids: list[str]):
         """Load up to 50 wikidata entities, returns None in case of error"""
         if len(ids) > 0:
-            result = WikiData.api_call('wbgetentities', {'props': 'claims|info|labels', 'ids': '|'.join(ids)})
+            result = WikiData.api_call('wbgetentities', {'props': 'claims|info|labels|aliases', 'ids': '|'.join(ids)})
             return result['entities'] if result is not None and 'entities' in result else None
 
     @staticmethod
