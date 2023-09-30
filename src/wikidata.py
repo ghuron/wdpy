@@ -327,6 +327,11 @@ class WikiData(ABC):
         return 'batch import from [[' + self.db_ref + ']] for object ' + self.external_id
 
     def save(self):
+        if 'labels' in self.entity and 'ak' in self.entity['labels']:
+            self.entity['labels'].pop('ak')
+        if 'aliases' in self.entity and 'ak' in self.entity['aliases']:
+            self.entity['aliases'].pop('ak')
+
         data = {'data': json.dumps(self.entity), 'summary': self.get_summary()}
         if 'id' in self.entity:
             data['id'] = self.entity['id']
