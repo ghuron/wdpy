@@ -14,6 +14,13 @@
     "Microlensing": "Q1028022",
     "Pulsar Timing": "Q42364577"
   },
+  "p528": {
+    "id": "P972",
+    "translate": {
+      "Kepler-": "Q122841443",
+      "KOI-": "Q6393205"
+    }
+  },
   "endpoint": "https://exoplanetarchive.ipac.caltech.edu/TAP/",
   "redirects": "SELECT koi_name, pl_name FROM keplernames",
   "queries": [

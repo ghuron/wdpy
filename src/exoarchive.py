@@ -50,6 +50,19 @@ class ExoArchive(ADQL):
                 ExoArchive.missing = ADQL.query('SELECT ?c ?i {?i wdt:P5653 ?c FILTER NOT EXISTS {?i wdt:P5667 []}}')
             self.qid = ExoArchive.missing[self.external_id] if self.external_id in ExoArchive.missing else self.qid
         super().prepare_data()
+        prefix = 'https://exoplanetarchive.ipac.caltech.edu/cgi-bin/Lookup/nph-aliaslookup.py?objname='
+        if (response := self.request(prefix + self.external_id)) and 'system' in response.json():
+            data = response.json()['system']['objects']['planet_set']['planets'][self.external_id]
+            for code in data['alias_set']['aliases']:
+                if snak := self.construct_snak({'p528': code}, 'p528'):
+                    self.input_snaks.append(snak)
+
+    def obtain_claim(self, snak):
+        if snak and snak['property'] == 'P528':  # All catalogue codes for exoplanets should be aliases
+            self.entity['aliases'] = {} if 'aliases' not in self.entity else self.entity['aliases']
+            self.entity['aliases']['en'] = [] if 'en' not in self.entity['aliases'] else self.entity['aliases']['en']
+            self.entity['aliases']['en'].append({'value': snak['datavalue']['value'], 'language': 'en'})
+        return super().obtain_claim(snak)
 
 
 if argv[0].endswith(basename(__file__)):  # if not imported
