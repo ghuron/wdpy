@@ -13,8 +13,6 @@ class TestWikiData(TestCase):
 
     def test_format_float(self):
         self.assertEqual('0.12345679', WikiData.format_float('0.123456789', 8))
-
-    def test_format_zero(self):
         self.assertEqual(0, Decimal(WikiData.format_float('+0E-7', 8)))
 
     def test_obtain_claims_empty_entity(self):
