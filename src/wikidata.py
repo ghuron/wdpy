@@ -38,6 +38,15 @@ class WikiData(ABC):
             return
 
     @staticmethod
+    def request(url: str):
+        try:
+            if (response := requests.get(url)).status_code != 200:
+                logging.log(40, 'Get {} responded: {}'.format(url, response.status_code))
+            return response
+        except requests.exceptions.RequestException as e:
+            logging.log(40, 'Get {} exception: {}'.format(url, e.__str__()))
+
+    @staticmethod
     def api_call(action: str, params: dict[str, str]) -> dict:
         """Wikidata API call with JSON format, see https://wikidata.org/w/api.php"""
         WD_API = 'https://www.wikidata.org/w/api.php'

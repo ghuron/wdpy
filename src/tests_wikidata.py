@@ -1,6 +1,7 @@
 #!/usr/bin/python3
 from decimal import Decimal
 from unittest import TestCase, mock
+from unittest.mock import MagicMock
 
 from wikidata import WikiData
 
@@ -10,6 +11,10 @@ class TestWikiData(TestCase):
     @mock.patch.multiple(WikiData, __abstractmethods__=set())
     def setUp(cls):
         cls.wd = WikiData('0000 0001 2197 5163')
+
+    @mock.patch('requests.get', return_value=MagicMock(status_code=200, content='response'))
+    def test_request(self, get):
+        self.assertEqual('response', WikiData.request("https://test.test").content)
 
     def test_format_float(self):
         self.assertEqual('0.12345679', WikiData.format_float('0.123456789', 8))
