@@ -203,7 +203,7 @@ class ADQL(WikiData, ABC):
         if WikiData.get_type(new_col) != 'quantity':
             if col == 'p397' and (qid := SimbadDAP.get_by_any_id(row[col])):
                 row[col] = qid
-            return self.create_snak(new_col, row[col])
+            result = self.create_snak(new_col, row[col])
         elif col + 'h' not in row or row[col + 'h'] == '':
             result = self.create_snak(new_col, ADQL.format_figure(row, col))
         else:
