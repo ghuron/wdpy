@@ -12,9 +12,17 @@ class TestWikiData(TestCase):
     def setUp(cls):
         cls.wd = WikiData('0000 0001 2197 5163')
 
-    @mock.patch('requests.get', return_value=MagicMock(status_code=200, content='response'))
-    def test_request(self, get):
-        self.assertEqual('response', WikiData.request("https://test.test").content)
+    @mock.patch('requests.Session.get', return_value=MagicMock(status_code=200, content='get-response'))
+    def test_request_get_200(self, get):
+        self.assertEqual('get-response', WikiData.request("https://test.test").content)
+
+    @mock.patch('requests.Session.get', return_value=MagicMock(status_code=400, content='get-response'))
+    def test_request_get_404(self, get):
+        self.assertIsNone(WikiData.request("https://test.test"))
+
+    @mock.patch('requests.Session.post', return_value=MagicMock(status_code=200, content='post-response'))
+    def test_request_post_200(self, post):
+        self.assertEqual('post-response', WikiData.request("https://test.test", data={'1': 1}).content)
 
     def test_format_float(self):
         self.assertEqual('0.12345679', WikiData.format_float('0.123456789', 8))

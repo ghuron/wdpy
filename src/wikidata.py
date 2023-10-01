@@ -20,8 +20,8 @@ import requests
 class WikiData(ABC):
     USER_AGENT = 'automated import by https://www.wikidata.org/wiki/User:Ghuron'
     LOG = 'https://www.wikidata.org/wiki/{}#{}\t{}'
-    api = requests.Session()
-    api.headers.update({'User-Agent': USER_AGENT})
+    __api = requests.Session()
+    __api.headers.update({'User-Agent': USER_AGENT})
     db_property, db_ref = None, None
     login, password, token = '', '', 'bad'
     __types: dict[str, str] = None
@@ -38,24 +38,27 @@ class WikiData(ABC):
             return
 
     @staticmethod
-    def request(url: str):
+    def request(url: str, session=requests.Session(), **kwargs):
         try:
-            if (response := requests.get(url)).status_code != 200:
-                logging.log(40, 'Get {} responded: {}'.format(url, response.status_code))
+            if len(kwargs):
+                if (response := session.post(url, **kwargs)).status_code != 200:
+                    logging.log(40, '{} POST {} responded: {}'.format(url, json.dumps(kwargs), response.status_code))
+                    return
+            elif (response := session.get(url)).status_code != 200:
+                logging.log(40, '{} responded: {}'.format(url, response.status_code))
+                return
             return response
         except requests.exceptions.RequestException as e:
-            logging.log(40, 'Get {} exception: {}'.format(url, e.__str__()))
+            logging.log(40, '{} POST {} exception: {}'.format(url, json.dumps(kwargs), e.__str__()))
 
     @staticmethod
     def api_call(action: str, params: dict[str, str]) -> dict:
         """Wikidata API call with JSON format, see https://wikidata.org/w/api.php"""
         WD_API = 'https://www.wikidata.org/w/api.php'
         try:
-            return WikiData.api.post(WD_API, data={**params, 'format': 'json', 'action': action}).json()
+            return WikiData.request(WD_API, WikiData.__api, data={**params, 'format': 'json', 'action': action}).json()
         except json.decoder.JSONDecodeError:
             logging.error('Cannot decode {} response for {}'.format(action, params))
-        except (requests.exceptions.ConnectionError, requests.exceptions.RequestException):
-            logging.error('Connection error while calling {} for {}'.format(action, params))
 
     @staticmethod
     def logon(login: str = None, password: str = None):

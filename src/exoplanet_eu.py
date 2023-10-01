@@ -1,5 +1,4 @@
 #!/usr/bin/python3
-import json
 import re
 from collections import OrderedDict
 from decimal import DecimalException
@@ -7,7 +6,6 @@ from os.path import basename
 from sys import argv
 from time import sleep
 
-import requests
 from bs4 import BeautifulSoup, element
 
 from adql import ADQL
@@ -28,9 +26,9 @@ class ExoplanetEu(ADQL):
     @staticmethod
     def get_next_chunk(offset: int) -> tuple[list[str], int]:
         identifiers, offset = [], 0 if offset is None else offset
-        params = {**ExoplanetEu.config['post'], **{'iDisplayStart': offset}}
-        if (result := requests.post('http://exoplanet.eu/catalog/json/', params)).status_code == 200:
-            for record in json.loads(result.content)['aaData']:
+        params = {**{'iDisplayStart': offset}, **ExoplanetEu.config['post']}
+        if result := ADQL.request('http://exoplanet.eu/catalog/json/', data=params):
+            for record in result.json()['aaData']:
                 identifiers.append(re.sub('<[^<]+?>', '', record[0]))
         return identifiers, offset + params['iDisplayLength']
 
@@ -38,22 +36,15 @@ class ExoplanetEu(ADQL):
 
     def retrieve(self):
         """Load page corresponding to self.external_id and update Exoplanet.articles with parsed sources"""
-        try:
-            if (response := requests.get("http://exoplanet.eu/catalog/" + self.external_id)).status_code != 200:
-                self.trace('http response: {}'.format(response.status_code), 40)
-                return
-        except requests.exceptions.RequestException as e:
-            self.trace(e.__str__(), 40)
-            return
-
-        page = BeautifulSoup(response.content, 'html.parser')
-        for p in page.find_all('p', {'class': 'publication'}):
-            try:
-                if p.get('id') not in ExoplanetEu.articles and (ref_id := ExoplanetEu.parse_publication(p)):
-                    ExoplanetEu.articles[p.get('id')] = ref_id
-            except ValueError as e:
-                self.trace('Found {} results while looking for source {} by title'.format(e.args[0], p.get('id')))
-        return page
+        if response := ADQL.request("http://exoplanet.eu/catalog/" + self.external_id):
+            page = BeautifulSoup(response.content, 'html.parser')
+            for p in page.find_all('p', {'class': 'publication'}):
+                try:
+                    if p.get('id') not in ExoplanetEu.articles and (ref_id := ExoplanetEu.parse_publication(p)):
+                        ExoplanetEu.articles[p.get('id')] = ref_id
+                except ValueError as e:
+                    self.trace('Found {} results while looking for source {} by title'.format(e.args[0], p.get('id')))
+            return page
 
     @staticmethod
     def parse_publication(publication: element.Tag):
