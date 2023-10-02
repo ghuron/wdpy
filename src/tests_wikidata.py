@@ -3,6 +3,8 @@ from decimal import Decimal
 from unittest import TestCase, mock
 from unittest.mock import MagicMock
 
+from requests import exceptions
+
 from wikidata import WikiData
 
 
@@ -13,12 +15,20 @@ class TestWikiData(TestCase):
         cls.wd = WikiData('0000 0001 2197 5163')
 
     @mock.patch('requests.Session.get', return_value=MagicMock(status_code=200, content='get-response'))
-    def test_request_get_200(self, get):
-        self.assertEqual('get-response', WikiData.request("https://test.test").content)
+    def test_request_get_200(self, mock_get):
+        self.assertEqual('get-response', WikiData.request('https://test.test').content)
+        mock_get.assert_called_with('https://test.test')
 
     @mock.patch('requests.Session.get', return_value=MagicMock(status_code=400, content='get-response'))
     def test_request_get_404(self, get):
-        self.assertIsNone(WikiData.request("https://test.test"))
+        self.assertIsNone(WikiData.request('https://test.test'))
+
+    @mock.patch('requests.Session.get', side_effect=exceptions.ConnectionError)
+    @mock.patch('logging.log')
+    def test_request_get_exception(self, mock_error, mock_get):
+        self.assertIsNone(WikiData.request('https://test.test'))
+        mock_get.assert_called_with('https://test.test')
+        mock_error.assert_called_with(40, 'https://test.test POST {} exception: ')
 
     @mock.patch('requests.Session.post', return_value=MagicMock(status_code=200, content='post-response'))
     def test_request_post_200(self, post):
