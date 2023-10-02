@@ -54,11 +54,12 @@ class WikiData(ABC):
     @staticmethod
     def api_call(action: str, params: dict[str, str]) -> dict:
         """Wikidata API call with JSON format, see https://wikidata.org/w/api.php"""
-        WD_API = 'https://www.wikidata.org/w/api.php'
-        try:
-            return WikiData.request(WD_API, WikiData.__api, data={**params, 'format': 'json', 'action': action}).json()
-        except json.decoder.JSONDecodeError:
-            logging.error('Cannot decode {} response for {}'.format(action, params))
+        if result := WikiData.request('https://www.wikidata.org/w/api.php', WikiData.__api,
+                                      data={**params, 'format': 'json', 'action': action}):
+            try:
+                return result.json()
+            except json.decoder.JSONDecodeError:
+                logging.error('Cannot decode {} response for {}'.format(action, params))
 
     @staticmethod
     def logon(login: str = None, password: str = None):

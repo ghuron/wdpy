@@ -43,6 +43,10 @@ class TestWikiData(TestCase):
         self.assertIsNone(WikiData.load_items(['Q3']))
         api_call.assert_called_with('wbgetentities', {'props': 'claims|info|labels|aliases', 'ids': 'Q3'})
 
+    @mock.patch('wikidata.WikiData.request', return_value=None)
+    def test_failed_api_call(self, _):
+        WikiData.api_call('action', {'1': '1'})
+
     @mock.patch('logging.log')
     def test_trace_without_entity(self, info):
         self.wd.trace('test')
