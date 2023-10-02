@@ -54,7 +54,7 @@ class ExoArchive(ADQL):
         if (response := self.request(prefix + self.external_id)) and 'system' in response.json():
             data = response.json()['system']['objects']['planet_set']['planets'][self.external_id]
             for code in data['alias_set']['aliases']:
-                if snak := self.construct_snak({'p528': code}, 'p528'):
+                if snak := self.construct_snak({'p528': code.replace(' ', '')}, 'p528'):
                     self.input_snaks.append(snak)
 
     def obtain_claim(self, snak):
