@@ -363,11 +363,11 @@ class WikiData(ABC):
                     return response
                 if response['error']['code'] == 'badtoken':
                     WikiData.token = WikiData.api_call('query', {'meta': 'tokens'})['query']['tokens']['csrftoken']
-                else:
-                    self.trace('{} response: {}'.format(method, response['error']['info']), 40)
-                    time.sleep(10)
-                    if response['error']['code'] != 'maxlag':
-                        self.logon()  # just in case - re-authenticate
+                    continue
+                self.trace('{} response: {}'.format(method, response['error']['info']), 40)
+            time.sleep(10)
+            if response and (response['error']['code'] != 'maxlag'):
+                self.logon()  # just in case - re-authenticate
 
     def update(self):
         if self.input_snaks is None:
