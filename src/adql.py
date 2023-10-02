@@ -6,7 +6,6 @@ from contextlib import closing
 from decimal import InvalidOperation
 from urllib.parse import unquote
 
-import requests
 from astropy import coordinates
 
 from ads import ADS
@@ -167,15 +166,9 @@ class ADQL(WikiData, ABC):
     @staticmethod
     def tap_query(url, sql, result=None):
         result = {} if result is None else result
-        try:
-            with closing(requests.post(url + '/sync', data={'request': 'doQuery', 'lang': 'adql', 'format': 'csv',
-                                                            'maxrec': -1, 'query': sql}, stream=True)) as r:
-                if r.status_code >= 500:
-                    logging.error('Connecting {} error {}'.format(url, r.status_code))
-                    return result
-                elif r.status_code != 200:
-                    logging.error('Query {}'.format(sql))
-                    return result
+        if response := ADQL.request(url + '/sync', data={'request': 'doQuery', 'lang': 'adql', 'format': 'csv',
+                                                         'maxrec': -1, 'query': sql}, stream=True):
+            with closing(response) as r:
                 reader = csv.reader(r.iter_lines(decode_unicode='utf-8'), delimiter=',', quotechar='"')
                 header = next(reader)
                 for line in reader:
@@ -188,8 +181,6 @@ class ADQL(WikiData, ABC):
                             result[object_id].append(row)
                         else:
                             result[object_id] = [row]
-        except requests.exceptions.ConnectionError:
-            logging.error('Error while retrieving results of the query: ' + sql)
         return result
 
     @staticmethod
