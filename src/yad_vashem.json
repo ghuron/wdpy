@@ -504,6 +504,11 @@
     "WRITER": "Q36180",
     "YUGOSLAVIA": "Q36704"
   },
+  "api": {
+    "BuildQuery": "{{lang:\"eng\",uniqueId:\"987\", strSearch:\"\",newSearch:true,clearFilter:true,searchType:\"righteous_only\"}}",
+    "GetRighteousList": "{{lang:\"eng\",uniqueId:\"987\",searchType:\"righteous_only\",rowNum:{},sort:{{dir:\"\",field:\"\"}}}}",
+    "GetPersonDetailsBySession": "{{lang:\"eng\",bookId:\"{}\"}}"
+  },
   "properties": {
     "recognition_date": "P585",
     "nationality": "P27",

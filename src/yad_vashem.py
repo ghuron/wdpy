@@ -1,4 +1,5 @@
 #!/usr/bin/python3
+import json
 import logging
 import sys
 from os.path import basename
@@ -11,9 +12,6 @@ from wikidata import WikiData
 class YadVashem(WikiData):
     config = WikiData.load_config(__file__)
     db_property, db_ref = 'P1979', 'Q77598447'
-    endpoint = requests.Session()
-    endpoint.verify = False
-    endpoint.headers.update({'Content-Type': 'application/json'})
     pending = []
 
     def __init__(self, group_id, named_as):
@@ -24,20 +22,27 @@ class YadVashem(WikiData):
     def get_summary(self):
         return 'basic facts about: ' + self.named_as + ' from Yad Vashem database entry ' + self.external_id
 
-    @staticmethod
-    def post(method, params):
-        return YadVashem.endpoint.post('https://righteous.yadvashem.org/RighteousWS.asmx/' + method,
-                                       data='{lang:"eng",' + params + '}').json()
+    __endpoint = requests.Session()
+    __endpoint.verify = False
+    __endpoint.headers.update({'Content-Type': 'application/json'})
 
     @staticmethod
-    def get_next_chunk(o):
-        o = 0 if o is None else o
-        page = YadVashem.post('GetRighteousList',
-                              'uniqueId:"987",searchType:"righteous_only",rowNum:' + str(o) + ',sort:{dir:"",field:""}')
+    def post(method: str, num=0):
+        try:
+            if response := YadVashem.request('https://righteous.yadvashem.org/RighteousWS.asmx/' + method,
+                                             YadVashem.__endpoint, data=YadVashem.config['api'][method].format(num)):
+                return response.json()
+        except json.decoder.JSONDecodeError:
+            logging.error('Cannot decode {} response for {}'.format(method, num))
+
+    @staticmethod
+    def get_next_chunk(offset):
+        offset = 0 if offset is None else offset
+        page = YadVashem.post('GetRighteousList', offset)
         result = []
         for case_item in page['d']:
             result.append(str(case_item['BookId']))
-        return result, o + len(result)
+        return result, offset + len(result)
 
     @staticmethod
     def process_sparql_row(new, result):
@@ -126,8 +131,7 @@ class YadVashem(WikiData):
 
 if sys.argv[0].endswith(basename(__file__)):  # if not imported
     YadVashem.logon(sys.argv[1], sys.argv[2])
-    YadVashem.post('BuildQuery',
-                   'uniqueId:"987",strSearch:"",newSearch:true,clearFilter:true,searchType:"righteous_only"')
+    YadVashem.post('BuildQuery')
     wd_items = YadVashem.get_all_items(
         'SELECT ?r ?n ?i { ?i wdt:P31 wd:Q5; p:P1979 ?s . ?s ps:P1979 ?r OPTIONAL {?s pq:P1810 ?n}}',
         YadVashem.process_sparql_row)
@@ -138,7 +142,7 @@ if sys.argv[0].endswith(basename(__file__)):  # if not imported
         if (group := YadVashem.load_items(list(filter(lambda x: isinstance(x, str), qids)))) is None:
             continue
         YadVashem.pending = []
-        case = YadVashem.post('GetPersonDetailsBySession', 'bookId:"' + item_id + '"')
+        case = YadVashem.post('GetPersonDetailsBySession', item_id)
         for row in case['d']['Individuals']:
             if row['Title'] is not None:
                 row['Title'] = ' '.join(row['Title'].split())
