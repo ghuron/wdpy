@@ -86,6 +86,11 @@ class WikiData(ABC):
                 raise ValueError(count)
             return response['query']['search'][0]['title'] if count == 1 else None
 
+    @classmethod
+    def haswbstatement(cls, external_id, property_id=None):
+        if external_id and (property_id := property_id if property_id else cls.db_property):
+            return WikiData.api_search('haswbstatement:"{}={}"'.format(property_id, external_id))
+
     @staticmethod
     def query(sparql: str, process=lambda row, result: (row[0], row[1])):
         WDQS = 'https://query.wikidata.org/sparql'
@@ -239,8 +244,7 @@ class WikiData(ABC):
         """Load self.entity using self.qid and prepare self.input_snaks by parsing source using self.external_id"""
         try:
             if not self.qid:  # Attempt to find corresponding element via direct query
-                if qid := self.api_search('haswbstatement:"{}={}"'.format(self.db_property, self.external_id)):
-                    self.qid = qid
+                self.qid = self.haswbstatement(self.external_id)
             if self.qid and (result := WikiData.load_items([self.qid])):
                 self.entity = result[self.qid]
             self.input_snaks = [WikiData.create_snak(self.db_property, self.external_id)]
@@ -406,7 +410,7 @@ class WikiData(ABC):
     def get_by_id(cls, external_id: str):
         """Attempt to find qid by external_id or create it"""
         try:
-            if qid := WikiData.api_search('haswbstatement:"{}={}"'.format(cls.db_property, external_id)):
+            if qid := cls.haswbstatement(external_id):
                 return qid
             (instance := cls(external_id)).prepare_data()
             return instance.update()

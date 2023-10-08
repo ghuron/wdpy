@@ -74,9 +74,13 @@ class ArXiv(WikiData):
                 self.doi = doi[0].text.upper()
                 self.input_snaks.append(self.create_snak('P356', self.doi))
 
-        if self.doi and self.entity is None and (qid := ArXiv.api_search('haswbstatement:"P356={}"'.format(self.doi))):
-            if result := ArXiv.load_items([qid]):
-                self.entity = result[qid]
+        if self.doi and self.qid is None and self.entity is None:
+            try:
+                self.qid = ArXiv.haswbstatement(self.doi, 'P356')
+                if self.qid and (result := ArXiv.load_items([self.qid])):
+                    self.entity = result[self.qid]
+            except ValueError as e:
+                self.trace('Found {} instances with DOI "{}", skipping'.format(e.args[0], self.doi), 30)
 
     def obtain_claim(self, snak):
         if snak is not None:
@@ -90,13 +94,17 @@ class ArXiv(WikiData):
                                 if claim['qualifiers']['P1545'][0]['datavalue']['value'] == snak['qualifiers']['P1545']:
                                     return
             if snak['property'] == 'P356':
-                if 'P356' in self.entity['claims']:
-                    doi = self.entity['claims']['P356'][0]['mainsnak']['datavalue']['value']
-                    if snak['datavalue']['value'] != doi:
-                        self.trace('has DOI {}, but arxiv {} contains {}'.format(doi, self.external_id, self.doi))
+                try:
+                    if 'P356' in self.entity['claims']:
+                        doi = self.entity['claims']['P356'][0]['mainsnak']['datavalue']['value']
+                        if snak['datavalue']['value'] != doi:
+                            self.trace('has DOI {}, but arxiv states {}, skipping'.format(doi, self.doi), 30)
+                            return
+                    elif qid := ArXiv.haswbstatement(self.doi, 'P356'):
+                        self.trace('DOI {} already assigned to {}, skipping'.format(self.doi, qid), 30)
                         return
-                elif qid := ArXiv.api_search('haswbstatement:"P356={}"'.format(self.doi)):
-                    self.trace('arxiv {}, DOI {} already assigned to {}'.format(self.external_id, self.doi, qid))
+                except ValueError as e:
+                    self.trace('Found {} instances with DOI "{}", skipping'.format(e.args[0], self.doi), 30)
                     return
 
         claim = super().obtain_claim(snak)

@@ -1,4 +1,6 @@
 #!/usr/bin/python3
+import logging
+
 from wikidata import WikiData
 
 
@@ -13,13 +15,17 @@ class ADS(WikiData):
 
     @classmethod
     def get_by_id(cls, external_id: str, create=True):
-        if qid := WikiData.api_search('haswbstatement:"{}={}"'.format(cls.db_property, external_id)):
-            return qid
+        try:
+            if qid := cls.haswbstatement(external_id):
+                return qid
 
-        query = 'SELECT bibcode, doi AS P356, "year" AS P577 FROM ref WHERE bibcode=\'{}\''.format(external_id)
-        from adql import ADQL  # to avoid circular import
-        if len(result := ADQL.tap_query('https://simbad.u-strasbg.fr/simbad/sim-tap', query)) == 1:
-            if qid := WikiData.api_search('haswbstatement:"P356={}"'.format(result[external_id][0]['p356'])):
-                instance = ADS(external_id, qid)
-                instance.prepare_data(result[external_id][0])
-                return instance.update()
+            query = 'SELECT bibcode, doi AS P356, "year" AS P577 FROM ref WHERE bibcode=\'{}\''.format(external_id)
+            from adql import ADQL  # to avoid circular import
+            if len(result := ADQL.tap_query('https://simbad.u-strasbg.fr/simbad/sim-tap', query)) == 1:
+                if qid := cls.haswbstatement(result[external_id][0]['p356'], 'P356'):
+                    instance = ADS(external_id, qid)
+                    instance.prepare_data(result[external_id][0])
+                    return instance.update()
+                # ToDo: create a new source
+        except ValueError as e:
+            logging.warning('Found {} instances of {}="{}", skipping'.format(e.args[0], cls.db_property, external_id))
