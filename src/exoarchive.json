@@ -21,7 +21,7 @@
       "KOI-": "Q6393205"
     }
   },
-  "endpoint": "https://exoplanetarchive.ipac.caltech.edu/TAP/",
+  "endpoint": "https://exoplanetarchive.ipac.caltech.edu/TAP",
   "redirects": "SELECT koi_name, pl_name FROM keplernames",
   "queries": [
     [
