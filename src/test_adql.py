@@ -3,7 +3,7 @@ from unittest import TestCase, mock
 from adql import ADQL
 
 
-class TestGetBestValue(TestCase):
+class TestADQL(TestCase):
     @classmethod
     @mock.patch.multiple(ADQL, __abstractmethods__=set())
     def setUp(cls):
@@ -16,6 +16,13 @@ class TestGetBestValue(TestCase):
         self.adql.obtain_claim(ADQL.create_snak('P6257', 0))
         self.adql.entity['claims']['P6257'].append({'mainsnak': {}})
         self.assertNotIn('datavalue', ADQL.get_best_value(self.adql.entity['claims']['P6257'])[0]['mainsnak'])
+
+    @mock.patch('adql.ADQL.request', return_value=None)
+    def test_tap_query(self, _):
+        self.assertIsNone(ADQL.tap_query('https://simbad.u-strasbg.fr/simbad/sim-tap',
+                                         'select main_id from basic where main_id=\'HD 1\''))
+        self.assertDictEqual({}, ADQL.tap_query('https://simbad.u-strasbg.fr/simbad/sim-tap',
+                                                'select main_id from basic where main_id=\'HD 1\'', {}))
 
 
 class TestDeprecateLessPreciseValues(TestCase):

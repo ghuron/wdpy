@@ -165,12 +165,12 @@ class ADQL(WikiData, ABC):
 
     @staticmethod
     def tap_query(url, sql, result=None):
-        result = {} if result is None else result
         if response := ADQL.request(url + '/sync', data={'request': 'doQuery', 'lang': 'adql', 'format': 'csv',
                                                          'maxrec': -1, 'query': sql}, stream=True):
             with closing(response) as r:
                 reader = csv.reader(r.iter_lines(decode_unicode='utf-8'), delimiter=',', quotechar='"')
                 header = next(reader)
+                result = {} if result is None else result
                 for line in reader:
                     if len(line) > 0:
                         row = {}
