@@ -34,12 +34,15 @@ class SimbadDAP(ADQL):
 
     @staticmethod
     def get_by_any_id(ident: str) -> str:
+        if ident in SimbadDAP.cache:
+            return SimbadDAP.cache[ident]
         q = 'SELECT main_id FROM ident JOIN basic ON oid = oidref WHERE id=\'{}\''.format(ident.replace('\'', '\'\''))
         if ident and len(row := SimbadDAP.tap_query(SimbadDAP.config['endpoint'], q)) == 1:
             if (main_id := list(row.keys())[0]) in SimbadDAP.cache:
+                SimbadDAP.cache[ident] = SimbadDAP.cache[main_id]
                 return SimbadDAP.cache[main_id]
             if qid := SimbadDAP.get_by_id(main_id):
-                SimbadDAP.cache[main_id] = qid
+                SimbadDAP.cache[ident], SimbadDAP.cache[main_id] = qid, qid
             return qid
 
 
