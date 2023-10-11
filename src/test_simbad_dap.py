@@ -24,6 +24,10 @@ class TestSimbad(TestCase):
         self.assertEqual('Q2', SimbadDAP.get_by_any_id('HIP 2'))
         self.assertDictEqual({'HD 2': 'Q2', 'HIP 2': 'Q2'}, SimbadDAP.cache)
 
+    @mock.patch('adql.ADQL.tap_query', return_value=None)
+    def test_get_by_incorrect_id(self, _):
+        self.assertIsNone(SimbadDAP.get_by_any_id('QQQ'))
+
     @mock.patch('adql.ADQL.request', return_value=None)
     def test_tap_query_exception(self, mock_post):
         self.assertIsNone(SimbadDAP.tap_query('https://simbad.u-strasbg.fr/simbad/sim-tap', 'select * from basic'))
