@@ -42,14 +42,14 @@ class WikiData(ABC):
         try:
             if len(kwargs):
                 if (response := session.post(url, **kwargs)).status_code != 200:
-                    logging.log(40, '{} POST {} responded: {}'.format(url, json.dumps(kwargs), response.status_code))
+                    logging.log(40, '{} response: {} POST {}'.format(url, response.status_code, json.dumps(kwargs)))
                     return
             elif (response := session.get(url)).status_code != 200:
-                logging.log(40, '{} responded: {}'.format(url, response.status_code))
+                logging.log(40, '{} response: {}'.format(url, response.status_code))
                 return
             return response
         except requests.exceptions.RequestException as e:
-            logging.log(40, '{} POST {} exception: {}'.format(url, json.dumps(kwargs), e.__str__()))
+            logging.log(40, '{} exception: {} POST {}'.format(url, e.__str__(), json.dumps(kwargs)))
 
     @staticmethod
     def api_call(action: str, params: dict[str, str]) -> dict:

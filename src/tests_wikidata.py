@@ -28,7 +28,7 @@ class TestWikiData(TestCase):
     def test_request_get_exception(self, mock_error, mock_get):
         self.assertIsNone(WikiData.request('https://test.test'))
         mock_get.assert_called_with('https://test.test')
-        mock_error.assert_called_with(40, 'https://test.test POST {} exception: ')
+        mock_error.assert_called_with(40, 'https://test.test exception:  POST {}')
 
     @mock.patch('requests.Session.post', return_value=MagicMock(status_code=200, content='post-response'))
     def test_request_post_200(self, post):
