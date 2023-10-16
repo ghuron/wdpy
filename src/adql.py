@@ -20,8 +20,9 @@ class ADQL(WikiData, ABC):
         if claim := super().obtain_claim(snak):
             if 'mespos' in snak:
                 claim['mespos'] = snak['mespos']
-            if snak['property'] == 'P1215' and snak['qualifiers']['P1227'] == 'Q4892529':
-                claim['rank'] = 'preferred'  # V-magnitude is always preferred
+            if snak['property'] == 'P1215':
+                if 'qualifiers' in snak and 'P1227' in snak['qualifiers'] and snak['qualifiers']['P1227'] == 'Q4892529':
+                    claim['rank'] = 'preferred'  # V-magnitude is always preferred
         return claim
 
     dataset = {}
