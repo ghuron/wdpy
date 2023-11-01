@@ -94,16 +94,18 @@ class WikiData(ABC):
     @staticmethod
     def query(sparql: str, process=lambda row, result: (row[0], row[1])):
         WDQS = 'https://query.wikidata.org/sparql'
-        result = {}
+        result = None
         with requests.Session() as session:
             session.headers.update({'Accept': 'text/csv', 'User-Agent': WikiData.USER_AGENT})
-            with closing(WikiData.request(WDQS, session, params={'query': sparql}, stream=True)) as r:
-                reader = csv.reader(r.iter_lines(decode_unicode='utf-8'), delimiter=',', quotechar='"')
-                next(reader)
-                for line in reader:
-                    if len(line := [item.replace('http://www.wikidata.org/entity/', '') for item in line]) > 1:
-                        key, value = process(line, result)
-                        result[key] = value
+            if request := WikiData.request(WDQS, session, params={'query': sparql}, stream=True):
+                with closing(request) as r:
+                    reader = csv.reader(r.iter_lines(decode_unicode='utf-8'), delimiter=',', quotechar='"')
+                    next(reader)
+                    result = {}
+                    for line in reader:
+                        if len(line := [item.replace('http://www.wikidata.org/entity/', '') for item in line]) > 1:
+                            key, value = process(line, result)
+                            result[key] = value
         return result
 
     @staticmethod
