@@ -216,16 +216,16 @@ class ADQL(WikiData, ABC):
             reference = row['reference'] if 'reference' in row and row['reference'] else reference
             if reference and (ref_id := ADQL.parse_url(re.sub('.*(http\\S+).*', '\\g<1>', reference))):
                 result['source'] = [ref_id] if 'source' not in result else result['source'] + [ref_id]
+        return self.enrich_qualifier(result, row['qualifier'] if 'qualifier' in row else row[col])
 
-            if col in self.config:  # Qualifier must be present
-                value = row['qualifier'] if 'qualifier' in row else row[col]
-                for pattern in self.config[col]['translate']:
-                    if value.startswith(pattern):
-                        result['qualifiers'] = {self.config[col]['id']: self.config[col]['translate'][pattern]}
-                        return result
-                return None
-
-        return result
+    @classmethod
+    def enrich_qualifier(cls, snak, value):
+        if not snak or snak['property'].upper() not in cls.config:
+            return snak
+        for pattern in (config := cls.config[snak['property'].upper()])['translate']:
+            if value.startswith(pattern):
+                snak['qualifiers'] = {config['id']: config['translate'][pattern]}
+                return snak
 
     @staticmethod
     def parse_url(url: str) -> str:

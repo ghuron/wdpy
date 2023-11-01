@@ -51,6 +51,13 @@
     "K": "Q11579",
     "MSun": "Q180892"
   },
+  "P528": {
+    "id": "P972",
+    "translate": {
+      "Kepler-": "Q122841443",
+      "KOI-": "Q6393205"
+    }
+  },
   "post": {
     "sSearch": "",
     "iSortCol_0": 9,
