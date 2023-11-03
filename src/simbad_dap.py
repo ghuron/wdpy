@@ -1,4 +1,5 @@
 #!/usr/bin/python3
+import logging
 from os.path import basename
 from sys import argv
 

@@ -1,5 +1,7 @@
 from unittest import TestCase, mock
 
+from bs4 import BeautifulSoup
+
 from exoplanet_eu import ExoplanetEu
 
 
@@ -60,3 +62,18 @@ class TestExoplanetEu(TestCase):
 
     def test_create_snak(self):
         self.assertEqual('aa:bb:cc', ExoplanetEu.create_snak('P213', 'aa:bb:cc')['datavalue']['value'])
+
+    @mock.patch('wikidata.WikiData.api_search', return_value=None)
+    def test_prepare_data(self, _):
+        page = BeautifulSoup('''<div id="planet-detail-basic-info"><dd class="col-sm-8"> Kepler-338 d </dd>
+            <div class="row d-flex justify-content-between "><span>2022</span></div>
+            <div class="row collapse" id="planet_field_publications_discovered"><ul class="list-group">
+            <li class="list-group-item">
+                <a href="#publication_2540">
+                    <i class="bi-file-earmark-text" aria-hidden="true" aria-label="document icon"></i>
+                    TOI-969: a late-K dwarf with a hot mini-Neptune in the desert and an eccentric cold Jupiter
+            </a></li></ul></div></div''', 'html.parser')
+        self.exo.properties = {'planet_field_publications_discovered': 'P575'}
+        self.exo.prepare_data(page)
+        self.assertEqual('+2022-00-00T00:00:00Z', self.exo.input_snaks[3]['datavalue']['value']['time'])
+        self.assertEqual(['Q54012702'], self.exo.input_snaks[3]['source'])
