@@ -71,7 +71,8 @@ class ExoArchive(ADQL):
 if argv[0].endswith(basename(__file__)):  # if not imported
     ExoArchive.logon(argv[1], argv[2])
     ExoArchive.redirect = ExoArchive.tap_query(ExoArchive.config['endpoint'], ExoArchive.config['redirects'])
-    SimbadDAP.cache = ExoArchive.query('SELECT DISTINCT ?c ?i {?i wdt:P3083 ?c; ^ps:P397/^p:P397/p:P5667 []}')
+    SimbadDAP.cache = ExoArchive.query('SELECT DISTINCT ?c ?i { ?i ^ps:P397 []; wdt:P528 ?c }',
+                                       lambda row, _: (row[0].lower(), row[1]))
     wd_items = ExoArchive.get_all_items('SELECT ?id ?item {?item p:P5667/ps:P5667 ?id}', ExoArchive.resolve_redirects)
     for ex_id in wd_items:
         # ex_id = 'eps Tau b'
