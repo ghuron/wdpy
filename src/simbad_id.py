@@ -16,5 +16,5 @@ while (offset := offset + size) >= 0:
                     p3083 = (item := ADQL(new_id)).obtain_claim(ADQL.create_snak('P3083', new_id))
                     p3083['id'] = chunk[simbad_id].replace('-', '$', 1).replace('statement/', '')
                     item.edit(data={'summary': 'was ' + simbad_id, 'claim': dumps(p3083)}, method='wbsetclaim')
-    elif len(chunk) == 0:
+    elif chunk is not None and len(chunk) == 0:
         break
