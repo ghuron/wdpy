@@ -11,6 +11,7 @@ from bs4 import BeautifulSoup, element
 
 from adql import ADQL
 from simbad_dap import SimbadDAP
+from wd import Wikidata
 
 
 class ExoplanetEu(ADQL):
@@ -30,13 +31,13 @@ class ExoplanetEu(ADQL):
     def get_next_chunk(offset: int) -> tuple[list[str], int]:
         if not ExoplanetEu.session:
             ExoplanetEu.session = requests.Session()
-            ADQL.request('https://exoplanet.eu/catalog/', ExoplanetEu.session)  # obtain csrftoken cookie
+            Wikidata.request('https://exoplanet.eu/catalog/', ExoplanetEu.session)  # obtain csrftoken cookie
             ExoplanetEu.session.headers.update({'X-Csrftoken': ExoplanetEu.session.cookies.get('csrftoken'),
                                                 'Referer': 'https://exoplanet.eu/catalog/'})
 
         identifiers, offset = [], 0 if offset is None else offset
         params = {**{'iDisplayStart': offset}, **ExoplanetEu.config['post']}
-        if result := ADQL.request('https://exoplanet.eu/catalog/json/', ExoplanetEu.session, data=params):
+        if result := Wikidata.request('https://exoplanet.eu/catalog/json/', ExoplanetEu.session, data=params):
             if (response := result.json()) and (offset < response['iTotalRecords']):
                 for record in response['aaData']:
                     identifiers.append(re.findall('catalog/([^/]+)', record[0])[0])
@@ -46,7 +47,7 @@ class ExoplanetEu(ADQL):
 
     def retrieve(self):
         """Load page corresponding to self.external_id and update Exoplanet.articles with parsed sources"""
-        if response := ADQL.request("https://exoplanet.eu/catalog/" + self.external_id):
+        if response := Wikidata.request("https://exoplanet.eu/catalog/" + self.external_id):
             page = BeautifulSoup(response.content, 'html.parser')
             for p in page.find_all('li', {'class': 'publication'}):
                 try:
@@ -63,7 +64,7 @@ class ExoplanetEu(ADQL):
                 return ref_id
         if (raw := publication.find('h5').text) and "Data Validation (DV) Report for Kepler" not in raw:
             if len(title := ' '.join(raw.replace('\n', ' ').strip('.').split())) > 24:
-                return ADQL.api_search('"{}" -haswbstatement:P31=Q1348305'.format(title))
+                return Wikidata.search('"{}" -haswbstatement:P31=Q1348305'.format(title))
 
     def prepare_data(self, source: BeautifulSoup = None):
         if source:
@@ -183,11 +184,11 @@ class ExoplanetEu(ADQL):
 
 
 if argv[0].endswith(basename(__file__)):  # if just imported - do nothing
-    ExoplanetEu.logon(argv[1], argv[2])
+    Wikidata.logon(argv[1], argv[2])
     updated_hosts = []
     wd_items = OrderedDict(sorted(ExoplanetEu.get_all_items('SELECT ?id ?item {?item p:P5653/ps:P5653 ?id}').items()))
-    SimbadDAP.cache = ExoplanetEu.query('SELECT DISTINCT ?c ?i { ?i ^ps:P397 []; wdt:P528 ?c }',
-                                        lambda row, _: (row[0].lower(), row[1]))
+    SimbadDAP.cache = Wikidata.query('SELECT DISTINCT ?c ?i { ?i ^ps:P397 []; wdt:P528 ?c }',
+                                     lambda row, _: (row[0].lower(), row[1]))
     for ex_id in wd_items:
         # ex_id = '2mass_j0249_0557_ab_c--6790'  # uncomment to debug specific item only
         # if not wd_items[ex_id]:  # Try to reuse item from NASA Exoplanet Archive

@@ -23,7 +23,7 @@ class TestYadVashem(TestCase):
         self.assertEqual(6, get_value([9, 'John Doe', 'Q5'], {9: {'John Doe': 5}})['John Doe'])
         self.assertEqual(2, get_value([9, 'John Doe', 'Q5'], {9: {'John Doe': 'Q5'}})['John Doe'])
 
-    @mock.patch('yad_vashem.YadVashem.request', return_value=mock.MagicMock(json=lambda: {'d': 0}))
+    @mock.patch('wd.Wikidata.request', return_value=mock.MagicMock(json=lambda: {'d': 0}))
     def test_post(self, _):
         self.assertIn('d', YadVashem.post('BuildQuery'))
         self.assertIn('d', YadVashem.post('GetRighteousList', 0))

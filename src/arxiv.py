@@ -9,10 +9,10 @@ import time
 from urllib import request, error
 from xml.etree import ElementTree
 
-from wikidata import WikiData
+from wd import Wikidata, Element
 
 
-class ArXiv(WikiData):
+class ArXiv(Element):
     arxiv = {}
     db_property, db_ref = 'P818', 'Q118398'
 
@@ -77,7 +77,7 @@ class ArXiv(WikiData):
         if self.doi and self.qid is None and self.entity is None:
             try:
                 self.qid = ArXiv.haswbstatement(self.doi, 'P356')
-                if self.qid and (result := ArXiv.load_items([self.qid])):
+                if self.qid and (result := Wikidata.load([self.qid])):
                     self.entity = result[self.qid]
             except ValueError as e:
                 self.trace('Found {} instances with DOI "{}", skipping'.format(e.args[0], self.doi), 30)
@@ -122,8 +122,8 @@ class ArXiv(WikiData):
 
 
 if sys.argv[0].endswith(os.path.basename(__file__)):  # if not imported
-    ArXiv.logon(sys.argv[1], sys.argv[2])
-    wd_items = ArXiv.query('SELECT ?id (SAMPLE(?i) AS ?a) {?i wdt:P818 ?id} GROUP BY ?id')
+    Wikidata.logon(sys.argv[1], sys.argv[2])
+    wd_items = Wikidata.query('SELECT ?id (SAMPLE(?i) AS ?a) {?i wdt:P818 ?id} GROUP BY ?id')
     offset = None
     while True:
         chunk, offset = ArXiv.get_next_chunk(offset)

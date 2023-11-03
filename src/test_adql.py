@@ -17,7 +17,7 @@ class TestADQL(TestCase):
         self.adql.entity['claims']['P6257'].append({'mainsnak': {}})
         self.assertNotIn('datavalue', ADQL.get_best_value(self.adql.entity['claims']['P6257'])[0]['mainsnak'])
 
-    @mock.patch('adql.ADQL.request', return_value=None)
+    @mock.patch('wd.Wikidata.request', return_value=None)
     def test_tap_query(self, _):
         self.assertIsNone(ADQL.tap_query('https://simbad.u-strasbg.fr/simbad/sim-tap',
                                          'select main_id from basic where main_id=\'HD 1\''))
@@ -91,7 +91,7 @@ class TestDeprecateLessPreciseValues(TestCase):
 
 
 class TestParseUrl(TestCase):
-    @mock.patch('wikidata.WikiData.api_search', return_value='Q55882019')
+    @mock.patch('wd.Wikidata.search', return_value='Q55882019')
     def test_parse_ads_encoded(self, api_search):
         value = ADQL.parse_url('https://ui.adsabs.harvard.edu/abs/2018A%26A...609A.117T/abstract')
         self.assertEqual('Q55882019', value)
@@ -133,67 +133,67 @@ class TestParseUrl(TestCase):
         self.assertEqual('Q114140841', value)
         get_by_id.assert_called_with('2207.00101')
 
-    @mock.patch('wikidata.WikiData.api_search', return_value='Q69036440')
+    @mock.patch('wd.Wikidata.search', return_value='Q69036440')
     def test_parse_doi_trailing_slash(self, api_search):
         value = ADQL.parse_url('http://iopscience.iop.org/0004-637X/757/1/6/')
         self.assertEqual('Q69036440', value)
         api_search.assert_called_with('haswbstatement:P356=10.1088/0004-637X/757/1/6')
 
-    @mock.patch('wikidata.WikiData.api_search', return_value='Q38459152')
+    @mock.patch('wd.Wikidata.search', return_value='Q38459152')
     def test_parse_doi_url_with_params(self, api_search):
         value = ADQL.parse_url('http://online.liebertpub.com/doi/abs/10.1089/ast.2011.0708?ai=sw&ui=10uu2&af=H')
         self.assertEqual('Q38459152', value)
         api_search.assert_called_with('haswbstatement:P356=10.1089/ast.2011.0708')
 
-    @mock.patch('wikidata.WikiData.api_search', return_value='Q68980169')
+    @mock.patch('wd.Wikidata.search', return_value='Q68980169')
     def test_parse_doi_param(self, api_search):
         value = ADQL.parse_url('ex.php?option=com_article&access=doi&doi=10.1051/0004-6361/200912789&Itemid=129')
         self.assertEqual('Q68980169', value)
         api_search.assert_called_with('haswbstatement:P356=10.1051/0004-6361/200912789')
 
-    @mock.patch('wikidata.WikiData.api_search', return_value='Q113365192')
+    @mock.patch('wd.Wikidata.search', return_value='Q113365192')
     def test_parse_isbn_param(self, api_search):
         value = ADQL.parse_url('http://www.cup.cam.ac.uk/aus/catalogue/catalogue.asp?isbn=9780521765596')
         self.assertEqual('Q113365192', value)
         api_search.assert_called_with('haswbstatement:P212=978-0-521-76559-6')
 
-    @mock.patch('wikidata.WikiData.api_search', return_value='Q68487809')
+    @mock.patch('wd.Wikidata.search', return_value='Q68487809')
     def test_parse_doi_io(self, api_search):
         value = ADQL.parse_url('http://www.iop.org/EJ/abstract/0004-637X/698/1/451')
         self.assertEqual('Q68487809', value)
         api_search.assert_called_with('haswbstatement:P356=10.1088/0004-637X/698/1/451')
 
-    @mock.patch('wikidata.WikiData.api_search', return_value='Q114417499')
+    @mock.patch('wd.Wikidata.search', return_value='Q114417499')
     def test_parse_doi_physica_scripta(self, api_search):
         value = ADQL.parse_url('http://www.iop.org/EJ/abstract/1402-4896/2008/T130/014010/')
         self.assertEqual('Q114417499', value)
         api_search.assert_called_with('haswbstatement:P356=10.1088/0031-8949/2008/T130/014010')
 
-    @mock.patch('wikidata.WikiData.api_search', return_value='Q68487090')
+    @mock.patch('wd.Wikidata.search', return_value='Q68487090')
     def test_parse_doi_1538_4357(self, api_search):
         value = ADQL.parse_url('http://www.iop.org/EJ/abstract/1538-4357/696/1/L1')
         self.assertEqual('Q68487090', value)
         api_search.assert_called_with('haswbstatement:P356=10.1088/0004-637X/696/1/L1')
 
-    @mock.patch('wikidata.WikiData.api_search', return_value='Q29028722')
+    @mock.patch('wd.Wikidata.search', return_value='Q29028722')
     def test_parse_doi_edpsciences(self, api_search):
         value = ADQL.parse_url('http://www.edpsciences.org/articles/aa/abs/2006/14/aa4611-05/aa4611-05.html')
         self.assertEqual('Q29028722', value)
         api_search.assert_called_with('haswbstatement:P356=10.1051/0004-6361:20054611')
 
-    @mock.patch('wikidata.WikiData.api_search', return_value='Q46025494')
+    @mock.patch('wd.Wikidata.search', return_value='Q46025494')
     def test_parse_doi_nature(self, api_search):
         value = ADQL.parse_url('http://www.nature.com/nature/journal/v463/n7281/abs/nature08775.html')
         self.assertEqual('Q46025494', value)
         api_search.assert_called_with('haswbstatement:P356=10.1038/nature08775')
 
-    @mock.patch('wikidata.WikiData.api_search', return_value='Q68676988')
+    @mock.patch('wd.Wikidata.search', return_value='Q68676988')
     def test_parse_doi_aa(self, api_search):
         value = ADQL.parse_url('https://www.aanda.org/articles/aa/abs/2009/35/aa10097-08/aa10097-08.html')
         self.assertEqual('Q68676988', value)
         api_search.assert_called_with('haswbstatement:P356=10.1051/0004-6361:200810097')
 
-    @mock.patch('wikidata.WikiData.api_search', return_value='Q53953306')
+    @mock.patch('wd.Wikidata.search', return_value='Q53953306')
     def test_aa_959(self, api_search):
         value = ADQL.parse_url('http://www.aanda.org/....url=/articles/aa/abs/2004/18/aa0959/aa0959.html')
         self.assertEqual('Q53953306', value)

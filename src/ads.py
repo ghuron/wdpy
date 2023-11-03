@@ -1,10 +1,10 @@
 #!/usr/bin/python3
 import logging
 
-from wikidata import WikiData
+from wd import Element
 
 
-class ADS(WikiData):
+class ADS(Element):
     db_property, db_ref = 'P819', 'Q654724'
 
     def prepare_data(self, source=None) -> None:

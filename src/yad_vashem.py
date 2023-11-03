@@ -6,11 +6,11 @@ from os.path import basename
 
 import requests
 
-from wikidata import WikiData
+from wd import Wikidata, Element
 
 
-class YadVashem(WikiData):
-    config = WikiData.load_config(__file__)
+class YadVashem(Element):
+    config = Element.load_config(__file__)
     db_property, db_ref = 'P1979', 'Q77598447'
     pending = []
 
@@ -29,8 +29,8 @@ class YadVashem(WikiData):
     @staticmethod
     def post(method: str, num=0):
         try:
-            if response := YadVashem.request('https://righteous.yadvashem.org/RighteousWS.asmx/' + method,
-                                             YadVashem.__endpoint, data=YadVashem.config['api'][method].format(num)):
+            if response := Wikidata.request('https://righteous.yadvashem.org/RighteousWS.asmx/' + method,
+                                            YadVashem.__endpoint, data=YadVashem.config['api'][method].format(num)):
                 return response.json()
         except json.decoder.JSONDecodeError:
             logging.error('Cannot decode {} response for {}'.format(method, num))
@@ -83,7 +83,7 @@ class YadVashem(WikiData):
         logging.info('https://righteous.yadvashem.org/?itemId=' + book_id + '\t"' + named_as + '"\t' + message)
 
     def prepare_data(self, source=None):
-        self.input_snaks = [WikiData.create_snak(self.db_property, self.external_id)]
+        self.input_snaks = [Element.create_snak(self.db_property, self.external_id)]
         self.input_snaks[0]['qualifiers'] = {'P1810': self.named_as}
         self.input_snaks.append(self.create_snak('P31', 'Q5'))
         for element in source:
@@ -130,7 +130,7 @@ class YadVashem(WikiData):
 
 
 if sys.argv[0].endswith(basename(__file__)):  # if not imported
-    YadVashem.logon(sys.argv[1], sys.argv[2])
+    Wikidata.logon(sys.argv[1], sys.argv[2])
     YadVashem.post('BuildQuery')
     wd_items = YadVashem.get_all_items(
         'SELECT ?r ?n ?i { ?i wdt:P31 wd:Q5; p:P1979 ?s . ?s ps:P1979 ?r OPTIONAL {?s pq:P1810 ?n}}',
@@ -139,7 +139,7 @@ if sys.argv[0].endswith(basename(__file__)):  # if not imported
     for item_id in wd_items:
         # item_id = '6658068'  # uncomment to debug specific group of people
         qids = wd_items[item_id].values() if wd_items[item_id] is not None else []
-        if (group := YadVashem.load_items(list(filter(lambda x: isinstance(x, str), qids)))) is None:
+        if (group := Wikidata.load(list(filter(lambda x: isinstance(x, str), qids)))) is None:
             continue
         YadVashem.pending = []
         case = YadVashem.post('GetPersonDetailsBySession', item_id)

@@ -4,6 +4,7 @@ from os.path import basename
 from sys import argv
 
 from adql import ADQL
+from wd import Wikidata
 
 
 class SimbadDAP(ADQL):
@@ -50,7 +51,7 @@ class SimbadDAP(ADQL):
 
 
 if argv[0].endswith(basename(__file__)):  # if not imported
-    SimbadDAP.logon(argv[1], argv[2])
+    Wikidata.logon(argv[1], argv[2])
     wd_items = SimbadDAP.get_all_items('SELECT DISTINCT ?id ?item {?item wdt:P3083 ?id; ^wdt:P397 []}')
     for simbad_id in wd_items:
         # simbad_id = '* 51 Eri b'

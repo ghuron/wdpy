@@ -6,6 +6,7 @@ from time import sleep
 
 from adql import ADQL
 from simbad_dap import SimbadDAP
+from wd import Wikidata
 
 
 class ExoArchive(ADQL):
@@ -47,12 +48,13 @@ class ExoArchive(ADQL):
     def prepare_data(self, source=None):
         if not self.qid:  # Try to reuse item from exoplanet.eu
             if not ExoArchive.missing:  # Lazy load
-                ExoArchive.missing = ADQL.query('SELECT ?c ?i {?i wdt:P5653 ?c FILTER NOT EXISTS {?i wdt:P5667 []}}')
+                ExoArchive.missing = Wikidata.query(
+                    'SELECT ?c ?i {?i wdt:P5653 ?c FILTER NOT EXISTS {?i wdt:P5667 []}}')
             self.qid = ExoArchive.missing[self.external_id] if self.external_id in ExoArchive.missing else self.qid
         super().prepare_data()
         if self.input_snaks:
             prefix = 'https://exoplanetarchive.ipac.caltech.edu/cgi-bin/Lookup/nph-aliaslookup.py?objname='
-            if (response := self.request(prefix + self.external_id)) and 'system' in response.json():
+            if (response := Wikidata.request(prefix + self.external_id)) and 'system' in response.json():
                 if self.external_id in (data := response.json()['system']['objects']['planet_set']['planets']):
                     for code in data[self.external_id]['alias_set']['aliases']:
                         if snak := self.construct_snak({'p528': code.replace(' ', '')}, 'p528'):
@@ -69,10 +71,10 @@ class ExoArchive(ADQL):
 
 
 if argv[0].endswith(basename(__file__)):  # if not imported
-    ExoArchive.logon(argv[1], argv[2])
+    Wikidata.logon(argv[1], argv[2])
     ExoArchive.redirect = ExoArchive.tap_query(ExoArchive.config['endpoint'], ExoArchive.config['redirects'])
-    SimbadDAP.cache = ExoArchive.query('SELECT DISTINCT ?c ?i { ?i ^ps:P397 []; wdt:P528 ?c }',
-                                       lambda row, _: (row[0].lower(), row[1]))
+    SimbadDAP.cache = Wikidata.query('SELECT DISTINCT ?c ?i { ?i ^ps:P397 []; wdt:P528 ?c }',
+                                     lambda row, _: (row[0].lower(), row[1]))
     wd_items = ExoArchive.get_all_items('SELECT ?id ?item {?item p:P5667/ps:P5667 ?id}', ExoArchive.resolve_redirects)
     for ex_id in wd_items:
         # ex_id = 'eps Tau b'

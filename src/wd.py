@@ -1,4 +1,3 @@
-#!/usr/bin/python3
 import csv
 import json
 import logging
@@ -17,45 +16,33 @@ from typing import Tuple
 import requests
 
 
-class WikiData(ABC):
+class Wikidata:
     USER_AGENT = 'automated import by https://www.wikidata.org/wiki/User:Ghuron'
-    LOG = 'https://www.wikidata.org/wiki/{}#{}\t{}'
-    __api = requests.Session()
-    __api.headers.update({'User-Agent': USER_AGENT})
-    db_property, db_ref = None, None
-    login, password, token = '', '', 'bad'
+    (__api := requests.Session()).headers.update({'User-Agent': USER_AGENT})
+    __login, __password, __token = '', '', 'bad'
     __types: dict[str, str] = None
-    config = {}
     logging.basicConfig(format="%(asctime)s: %(levelname)s - %(message)s", stream=sys.stdout,
                         level=os.environ.get('LOGLEVEL', 'INFO').upper())
-
-    @classmethod
-    def load_config(cls, file_name: str):
-        try:
-            with open(os.path.splitext(file_name)[0] + '.json') as file:
-                return {**cls.config, **json.load(file)}
-        except OSError:
-            return
 
     @staticmethod
     def request(url: str, session=requests.Session(), **kwargs):
         try:
             if len(kwargs):
                 if (response := session.post(url, **kwargs)).status_code != 200:
-                    logging.log(40, '{} response: {} POST {}'.format(url, response.status_code, json.dumps(kwargs)))
+                    logging.error('{} response: {} POST {}'.format(url, response.status_code, json.dumps(kwargs)))
                     return
             elif (response := session.get(url)).status_code != 200:
-                logging.log(40, '{} response: {}'.format(url, response.status_code))
+                logging.error('{} response: {}'.format(url, response.status_code))
                 return
             return response
         except requests.exceptions.RequestException as e:
-            logging.log(40, '{} exception: {} POST {}'.format(url, e.__str__(), json.dumps(kwargs)))
+            logging.error('{} exception: {} POST {}'.format(url, e.__str__(), json.dumps(kwargs)))
 
     @staticmethod
-    def api_call(action: str, params: dict[str, str]) -> dict:
+    def call(action: str, params: dict[str, str]) -> dict:
         """Wikidata API call with JSON format, see https://wikidata.org/w/api.php"""
-        if result := WikiData.request('https://www.wikidata.org/w/api.php', WikiData.__api,
-                                      data={**params, 'format': 'json', 'action': action}):
+        ENDPOINT = 'https://www.wikidata.org/w/api.php'
+        if result := Wikidata.request(ENDPOINT, Wikidata.__api, data={**params, 'format': 'json', 'action': action}):
             try:
                 return result.json()
             except json.decoder.JSONDecodeError:
@@ -66,38 +53,48 @@ class WikiData(ABC):
         """Wikidata logon, see https://wikidata.org/w/api.php?action=help&modules=login
         and store credentials for future use. Performs wikidata re-logon if called subsequently without parameters.
         All further API calls will be performed on behalf on logged user"""
-        WikiData.login = login if login else WikiData.login
-        WikiData.password = password if password else WikiData.password
-        token = WikiData.api_call('query', {'meta': 'tokens', 'type': 'login'})['query']['tokens']['logintoken']
-        WikiData.api_call('login', {'lgtoken': token, 'lgname': WikiData.login, 'lgpassword': WikiData.password})
+        Wikidata.__login = login if login else Wikidata.__login
+        Wikidata.__password = password if password else Wikidata.__password
+        token = Wikidata.call('query', {'meta': 'tokens', 'type': 'login'})['query']['tokens']['logintoken']
+        Wikidata.call('login', {'lgtoken': token, 'lgname': Wikidata.__login, 'lgpassword': Wikidata.__password})
 
     @staticmethod
-    def load_items(ids: list[str]):
+    def load(items: list[str]):
         """Load up to 50 wikidata entities, returns None in case of error"""
-        if len(ids) > 0:
-            result = WikiData.api_call('wbgetentities', {'props': 'claims|info|labels|aliases', 'ids': '|'.join(ids)})
-            return result['entities'] if result is not None and 'entities' in result else None
+        if len(items) > 0:
+            result = Wikidata.call('wbgetentities', {'props': 'claims|info|labels|aliases', 'ids': '|'.join(items)})
+            return result['entities'] if (result is not None) and ('entities' in result) else None
 
     @staticmethod
-    def api_search(query: str):
+    def search(query: str):
         """CirrusSearch query, :raises ValueError if more than one item found, None if nothing found, otherwise id"""
-        if (response := WikiData.api_call('query', {'list': 'search', 'srsearch': query})) and 'query' in response:
+        if (response := Wikidata.call('query', {'list': 'search', 'srsearch': query})) and 'query' in response:
             if (count := len(response['query']['search'])) > 1:
                 raise ValueError(count)
             return response['query']['search'][0]['title'] if count == 1 else None
 
-    @classmethod
-    def haswbstatement(cls, external_id, property_id=None):
-        if external_id and (property_id := property_id if property_id else cls.db_property):
-            return WikiData.api_search('haswbstatement:"{}={}"'.format(property_id, external_id))
+    @staticmethod
+    def edit(data, method):
+        for retries in range(1, 3):
+            if response := Wikidata.call(method, {**data, 'maxlag': '15', 'token': Wikidata.__token}):
+                if 'error' not in response:
+                    time.sleep(0.5)
+                    return response
+                if response['error']['code'] == 'badtoken':
+                    Wikidata.__token = Wikidata.call('query', {'meta': 'tokens'})['query']['tokens']['csrftoken']
+                    continue
+                logging.error('{} response: {}'.format(method, response['error']['info']), 40)
+            time.sleep(10)
+            if response and (response['error']['code'] != 'maxlag'):
+                Wikidata.logon()  # just in case - re-authenticate
 
     @staticmethod
     def query(sparql: str, process=lambda row, result: (row[0], row[1])):
-        WDQS = 'https://query.wikidata.org/sparql'
+        ENDPOINT = 'https://query.wikidata.org/sparql'
         result = None
         with requests.Session() as session:
-            session.headers.update({'Accept': 'text/csv', 'User-Agent': WikiData.USER_AGENT})
-            if request := WikiData.request(WDQS, session, params={'query': sparql}, stream=True):
+            session.headers.update({'Accept': 'text/csv', 'User-Agent': Wikidata.USER_AGENT})
+            if request := Wikidata.request(ENDPOINT, session, params={'query': sparql}, stream=True):
                 with closing(request) as r:
                     reader = csv.reader(r.iter_lines(decode_unicode='utf-8'), delimiter=',', quotechar='"')
                     next(reader)
@@ -109,22 +106,20 @@ class WikiData(ABC):
         return result
 
     @staticmethod
-    def get_next_chunk(offset: any) -> Tuple[list[str], any]:
-        """Fetch array of external identifiers starting from specified offset"""
-        return [], None
+    def type_of(property_id: str) -> str:
+        """Lazy load and read-only access to type of the property"""
+        if Wikidata.__types is None:
+            Wikidata.__types = Wikidata.query('SELECT ?prop ?type { ?prop wikibase:propertyType ?type }')
+            for prop in Wikidata.__types:
+                Wikidata.__types[prop] = Wikidata.__types[prop].replace('http://wikiba.se/ontology#', ''). \
+                    replace('WikibaseItem', 'wikibase-item').replace('ExternalId', 'external-id').lower()
+        return Wikidata.__types[property_id] if property_id in Wikidata.__types else None
 
+
+class Model:
     @classmethod
-    def get_all_items(cls, sparql: str, process=lambda row, result: (row[0], row[1])):
-        results = WikiData.query(sparql, process)
-        offset = None
-        while True:
-            chunk, offset = cls.get_next_chunk(offset)
-            if len(chunk) == 0:
-                break
-            for external_id in chunk:
-                if external_id not in results:
-                    results[external_id] = None
-        return results
+    def convert_to_qid(cls, text: str):
+        return text if re.search('Q\\d+$', text) else None
 
     @staticmethod
     def format_float(figure, digits: int = -1):
@@ -140,63 +135,9 @@ class WikiData(ABC):
     def fix_error(figure: str) -> str:
         if re.search('999+\\d$', figure):
             n = Decimal(999999999999999999999999)
-            return WikiData.format_float(n - Decimal(WikiData.fix_error(WikiData.format_float(n - Decimal(figure)))))
+            return Model.format_float(n - Decimal(Model.fix_error(Model.format_float(n - Decimal(figure)))))
         else:
-            return WikiData.format_float(re.sub('^000+\\d$', '', figure))
-
-    @staticmethod
-    def get_type(property_id: str) -> str:
-        """Lazy load and read-only access to type of the property"""
-        if WikiData.__types is None:
-            WikiData.__types = WikiData.query('SELECT ?prop ?type { ?prop wikibase:propertyType ?type }')
-            for prop in WikiData.__types:
-                WikiData.__types[prop] = WikiData.__types[prop].replace('http://wikiba.se/ontology#', ''). \
-                    replace('WikibaseItem', 'wikibase-item').replace('ExternalId', 'external-id').lower()
-        if property_id in WikiData.__types:
-            return WikiData.__types[property_id]
-
-    @classmethod
-    def create_snak(cls, property_id: str, value, lower: str = None, upper: str = None):
-        """Create snak based on provided id of the property and string value"""
-        if not WikiData.get_type(property_id) or value is None or value == '' or value == 'NaN':
-            return None
-
-        snak = {'datatype': WikiData.get_type(property_id), 'property': property_id, 'snaktype': 'value',
-                'datavalue': {'value': value, 'type': WikiData.get_type(property_id)}}
-        if snak['datatype'] == 'quantity':
-            try:
-                snak['datavalue']['value'] = {'amount': WikiData.format_float(value), 'unit': '1'}
-                if upper is not None and lower is not None:
-                    min_bound = Decimal(WikiData.fix_error(lower))
-                    if min_bound < 0:
-                        min_bound = -min_bound
-                    amount = Decimal(value)
-                    max_bound = Decimal(WikiData.fix_error(upper))
-
-                    if min_bound > 0 or max_bound > 0:  # +/- 0 can be skipped
-                        if max_bound != Decimal('Infinity'):
-                            snak['datavalue']['value']['lowerBound'] = WikiData.format_float(amount - min_bound)
-                            snak['datavalue']['value']['upperBound'] = WikiData.format_float(amount + max_bound)
-            except (ValueError, DecimalException, KeyError):
-                return None
-        elif snak['datatype'] == 'wikibase-item':
-            if not (text := cls.convert_to_qid(snak['datavalue']['value'])):
-                return
-            snak['datavalue'] = {'type': 'wikibase-entityid', 'value': {'entity-type': 'item', 'id': text}}
-        elif snak['datatype'] == 'time':
-            if not (value := WikiData.parse_date(snak['datavalue']['value'])):
-                return
-            snak['datavalue']['value'] = value
-        elif snak['datatype'] == 'external-id':
-            snak['datavalue']['type'] = 'string'
-        return snak
-
-    @classmethod
-    def convert_to_qid(cls, text: str):
-        if cls.config and 'translate' in cls.config and text in cls.config['translate']:
-            text = cls.config['translate'][text]
-        if re.search('Q\\d+$', text):
-            return text
+            return Model.format_float(re.sub('^000+\\d$', '', figure))
 
     @staticmethod
     def parse_date(i: str):
@@ -211,8 +152,75 @@ class WikiData(ABC):
                         'precision': 11 if int(g['d']) else 10 if int(g['m']) else 9, 'timezone': 0}
 
     @staticmethod
+    def serialize(value: dict, standard: dict = None):
+        if isinstance(value, str):
+            return value
+        elif 'id' in (standard := standard if standard else value):
+            return value['id']  # TODO: implement P279*
+        elif 'amount' in standard:
+            digits = -Decimal(standard['amount']).normalize().as_tuple().exponent
+            result = value['unit']
+            if 'lowerBound' in value and 'lowerBound' in standard:
+                if digits < (bound := -Decimal(standard['lowerBound']).normalize().as_tuple().exponent):
+                    digits = bound
+                if digits < (bound := -Decimal(standard['upperBound']).normalize().as_tuple().exponent):
+                    digits = bound
+                result += '|' + str(round(Decimal(value['amount']) - Decimal(value['lowerBound']), digits))
+                result += '|' + str(round(Decimal(value['upperBound']) - Decimal(value['amount']), digits))
+            return result + '|' + str(round(Decimal(value['amount']), digits))
+        elif 'precision' in standard and int(value['precision']) >= int(standard['precision']):
+            if standard['precision'] == 9:
+                return value['time'][:5] + '0000'
+            elif standard['precision'] == 10:
+                return value['time'][:5] + value['time'][6:8] + '00'
+            elif standard['precision'] == 11:
+                return value['time'][:5] + value['time'][6:8] + value['time'][9:11]
+        return float('nan')  # because NaN != NaN
+
+    @staticmethod
+    def skip_statement(s: dict) -> bool:
+        """ If someone explicitly states that this is a bad statement, do not touch it"""
+        return 'rank' in s and s['rank'] == 'deprecated' and 'qualifiers' in s and 'P2241' in s['qualifiers']
+
+    @classmethod
+    def create_snak(cls, property_id: str, value, lower: str = None, upper: str = None):
+        """Create snak based on provided id of the property and string value"""
+        if not Wikidata.type_of(property_id) or value is None or value == '' or value == 'NaN':
+            return None
+
+        snak = {'datatype': Wikidata.type_of(property_id), 'property': property_id, 'snaktype': 'value',
+                'datavalue': {'value': value, 'type': Wikidata.type_of(property_id)}}
+        if snak['datatype'] == 'quantity':
+            try:
+                snak['datavalue']['value'] = {'amount': Model.format_float(value), 'unit': '1'}
+                if upper is not None and lower is not None:
+                    min_bound = Decimal(Model.fix_error(lower))
+                    if min_bound < 0:
+                        min_bound = -min_bound
+                    amount = Decimal(value)
+                    max_bound = Decimal(Model.fix_error(upper))
+
+                    if min_bound > 0 or max_bound > 0:  # +/- 0 can be skipped
+                        if max_bound != Decimal('Infinity'):
+                            snak['datavalue']['value']['lowerBound'] = Model.format_float(amount - min_bound)
+                            snak['datavalue']['value']['upperBound'] = Model.format_float(amount + max_bound)
+            except (ValueError, DecimalException, KeyError):
+                return None
+        elif snak['datatype'] == 'wikibase-item':
+            if not (text := cls.convert_to_qid(snak['datavalue']['value'])):
+                return
+            snak['datavalue'] = {'type': 'wikibase-entityid', 'value': {'entity-type': 'item', 'id': text}}
+        elif snak['datatype'] == 'time':
+            if not (value := Model.parse_date(snak['datavalue']['value'])):
+                return
+            snak['datavalue']['value'] = value
+        elif snak['datatype'] == 'external-id':
+            snak['datavalue']['type'] = 'string'
+        return snak
+
+    @staticmethod
     def compare(claim: dict, value: dict) -> bool:
-        return 'datavalue' in claim and WikiData.serialize(claim['datavalue']['value']) == WikiData.serialize(value)
+        return 'datavalue' in claim and Model.serialize(claim['datavalue']['value']) == Model.serialize(value)
 
     @staticmethod
     def qualifier_filter(conditions: dict, claim: dict) -> bool:
@@ -221,7 +229,7 @@ class WikiData(ABC):
                 return False
             was_found = None
             for claim in claim['qualifiers'][property_id]:
-                if was_found := WikiData.compare(claim, {'id': conditions['qualifiers'][property_id]}):
+                if was_found := Model.compare(claim, {'id': conditions['qualifiers'][property_id]}):
                     break
             if not was_found:  # Above loop did not find anything
                 return False
@@ -230,16 +238,57 @@ class WikiData(ABC):
     @staticmethod
     def find_claim(snak: dict, claims: list):
         for c in claims:
-            if WikiData.qualifier_filter(snak, c) and WikiData.compare(c['mainsnak'], snak['datavalue']['value']):
+            if Model.qualifier_filter(snak, c) and Model.compare(c['mainsnak'], snak['datavalue']['value']):
                 return c
-        if len(claims) > 0 and WikiData.get_type(claims[0]['mainsnak']['property']) == 'external-id':
+        if len(claims) > 0 and Wikidata.type_of(claims[0]['mainsnak']['property']) == 'external-id':
             claims[0]['mainsnak']['datavalue']['value'] = snak['datavalue']['value']
             return claims[0]
+
+
+class Element(Model, ABC):
+    config, db_property, db_ref = {}, None, None
+
+    @classmethod
+    def load_config(cls, file_name: str):
+        try:
+            with open(os.path.splitext(file_name)[0] + '.json') as file:
+                return {**cls.config, **json.load(file)}
+        except OSError:
+            return
+
+    @classmethod
+    def convert_to_qid(cls, text: str):
+        if cls.config and 'translate' in cls.config and text in cls.config['translate']:
+            text = cls.config['translate'][text]
+        return super().convert_to_qid(text)
+
+    @staticmethod
+    def get_next_chunk(offset: any) -> Tuple[list[str], any]:
+        """Fetch array of external identifiers starting from specified offset"""
+        return [], None
+
+    @classmethod
+    def get_all_items(cls, sparql: str, process=lambda row, result: (row[0], row[1])):
+        results = Wikidata.query(sparql, process)
+        offset = None
+        while True:
+            chunk, offset = cls.get_next_chunk(offset)
+            if len(chunk) == 0:
+                break
+            for external_id in chunk:
+                if external_id not in results:
+                    results[external_id] = None
+        return results
 
     def __init__(self, external_id: str, qid: str = None):
         self.external_id = external_id
         self.qid = qid
         self.entity, self.input_snaks = None, None
+
+    def trace(self, message: str, level=20):
+        # CRITICAL: 50, ERROR: 40, WARNING: 30, INFO: 20, DEBUG: 10
+        LOG = 'https://www.wikidata.org/wiki/{}#{}\t{}'
+        logging.log(level, LOG.format(self.qid, self.db_property, message) if self.qid else message)
 
     @abstractmethod
     def prepare_data(self, source=None) -> None:
@@ -247,17 +296,12 @@ class WikiData(ABC):
         try:
             if not self.qid:  # Attempt to find corresponding element via direct query
                 self.qid = self.haswbstatement(self.external_id)
-            if self.qid and (result := WikiData.load_items([self.qid])):
+            if self.qid and (result := Wikidata.load([self.qid])):
                 self.entity = result[self.qid]
-            self.input_snaks = [WikiData.create_snak(self.db_property, self.external_id)]
+            self.input_snaks = [Element.create_snak(self.db_property, self.external_id)]
         except ValueError as e:
             self.trace('Found {} instances of {}="{}", skipping'.format(e.args[0], self.db_property,
                                                                         self.external_id), 30)
-
-    @staticmethod
-    def skip_statement(s: dict) -> bool:
-        """ If someone explicitly states that this is a bad statement, do not touch it"""
-        return 'rank' in s and s['rank'] == 'deprecated' and 'qualifiers' in s and 'P2241' in s['qualifiers']
 
     def obtain_claim(self, snak: dict):
         """Find or create claim, corresponding to the provided snak"""
@@ -272,8 +316,8 @@ class WikiData(ABC):
         if snak['property'] not in self.entity['claims']:
             self.entity['claims'][snak['property']] = []
 
-        if claim := WikiData.find_claim(snak, self.entity['claims'][snak['property']]):
-            if WikiData.skip_statement(claim):
+        if claim := Element.find_claim(snak, self.entity['claims'][snak['property']]):
+            if Element.skip_statement(claim):
                 return
         else:
             claim = {'type': 'statement', 'mainsnak': snak}
@@ -318,12 +362,12 @@ class WikiData(ABC):
         if not default_ref_exists:
             claim['references'].append(self.process_own_reference(only_default_sources))
         for ref in references:
-            claim['references'].append({'snaks': {'P248': [WikiData.create_snak('P248', ref)]}})
+            claim['references'].append({'snaks': {'P248': [Element.create_snak('P248', ref)]}})
 
     def filter_by_ref(self, unfiltered: list):
         filtered = []
         for statement in unfiltered:
-            if 'references' in statement and not WikiData.skip_statement(statement):
+            if 'references' in statement and not Element.skip_statement(statement):
                 for ref in statement['references']:
                     if 'P248' in ref['snaks'] and ref['snaks']['P248'][0]['datavalue']['value']['id'] == self.db_ref:
                         filtered.append(statement)
@@ -335,10 +379,6 @@ class WikiData(ABC):
         self.entity['labels'] = {} if 'labels' not in self.entity else self.entity['labels']
         if 'en' not in self.entity['labels']:
             self.entity['labels']['en'] = {'value': self.external_id, 'language': 'en'}
-
-    def trace(self, message: str, level=20):
-        # CRITICAL: 50, ERROR: 40, WARNING: 30, INFO: 20, DEBUG: 10
-        logging.log(level, WikiData.LOG.format(self.qid, self.db_property, message) if self.qid else message)
 
     def get_summary(self):
         return 'batch import from [[' + self.db_ref + ']] for object ' + self.external_id
@@ -356,24 +396,10 @@ class WikiData(ABC):
         else:
             data['new'] = 'item'
 
-        if (response := self.edit(data, 'wbeditentity')) and 'nochange' not in response['entity']:
+        if (response := Wikidata.edit(data, 'wbeditentity')) and 'nochange' not in response['entity']:
             self.entity, self.qid = response['entity'], response['entity']['id']
             self.trace('modified' if 'id' in data else 'created')
             return self.qid
-
-    def edit(self, data, method):
-        for retries in range(1, 3):
-            if response := WikiData.api_call(method, {**data, 'maxlag': '15', 'token': WikiData.token}):
-                if 'error' not in response:
-                    time.sleep(0.5)
-                    return response
-                if response['error']['code'] == 'badtoken':
-                    WikiData.token = WikiData.api_call('query', {'meta': 'tokens'})['query']['tokens']['csrftoken']
-                    continue
-                self.trace('{} response: {}'.format(method, response['error']['info']), 40)
-            time.sleep(10)
-            if response and (response['error']['code'] != 'maxlag'):
-                self.logon()  # just in case - re-authenticate
 
     def update(self):
         if self.input_snaks is None:
@@ -409,6 +435,11 @@ class WikiData(ABC):
             return self.save()
 
     @classmethod
+    def haswbstatement(cls, external_id, property_id=None):
+        if external_id and (property_id := property_id if property_id else cls.db_property):
+            return Wikidata.search('haswbstatement:"{}={}"'.format(property_id, external_id))
+
+    @classmethod
     def get_by_id(cls, external_id: str):
         """Attempt to find qid by external_id or create it"""
         try:
@@ -418,29 +449,3 @@ class WikiData(ABC):
             return instance.update()
         except ValueError as e:
             logging.warning('Found {} instances of {}="{}", skipping'.format(e.args[0], cls.db_property, external_id))
-
-    @staticmethod
-    def serialize(value: dict, standard: dict = None):
-        if isinstance(value, str):
-            return value
-        elif 'id' in (standard := standard if standard else value):
-            return value['id']  # TODO: implement P279*
-        elif 'amount' in standard:
-            digits = -Decimal(standard['amount']).normalize().as_tuple().exponent
-            result = value['unit']
-            if 'lowerBound' in value and 'lowerBound' in standard:
-                if digits < (bound := -Decimal(standard['lowerBound']).normalize().as_tuple().exponent):
-                    digits = bound
-                if digits < (bound := -Decimal(standard['upperBound']).normalize().as_tuple().exponent):
-                    digits = bound
-                result += '|' + str(round(Decimal(value['amount']) - Decimal(value['lowerBound']), digits))
-                result += '|' + str(round(Decimal(value['upperBound']) - Decimal(value['amount']), digits))
-            return result + '|' + str(round(Decimal(value['amount']), digits))
-        elif 'precision' in standard and int(value['precision']) >= int(standard['precision']):
-            if standard['precision'] == 9:
-                return value['time'][:5] + '0000'
-            elif standard['precision'] == 10:
-                return value['time'][:5] + value['time'][6:8] + '00'
-            elif standard['precision'] == 11:
-                return value['time'][:5] + value['time'][6:8] + value['time'][9:11]
-        return float('nan')  # because NaN != NaN

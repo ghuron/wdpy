@@ -23,7 +23,7 @@ class TestExoplanetEu(TestCase):
         claim = self.exo.obtain_claim(ExoplanetEu.create_snak('P4501', 0.5))
         self.assertEqual('Q2832068', claim['qualifiers']['P1013'][0]['datavalue']['value']['id'])  # Always geometric
 
-    @mock.patch('wikidata.WikiData.api_search', return_value='Q50668')
+    @mock.patch('wd.Wikidata.search', return_value='Q50668')
     def test_get_by_id(self, api_search):
         value = ExoplanetEu.get_by_id('55 Cnc e')
         self.assertEqual('Q50668', value)
@@ -63,7 +63,7 @@ class TestExoplanetEu(TestCase):
     def test_create_snak(self):
         self.assertEqual('aa:bb:cc', ExoplanetEu.create_snak('P213', 'aa:bb:cc')['datavalue']['value'])
 
-    @mock.patch('wikidata.WikiData.api_search', return_value=None)
+    @mock.patch('wd.Wikidata.search', return_value=None)
     def test_prepare_data(self, _):
         page = BeautifulSoup('''<div id="planet-detail-basic-info"><dd class="col-sm-8"> Kepler-338 d </dd>
             <div class="row d-flex justify-content-between "><span>2022</span></div>

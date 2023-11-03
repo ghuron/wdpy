@@ -10,11 +10,11 @@ from astropy import coordinates
 
 from ads import ADS
 from arxiv import ArXiv
-from wikidata import WikiData
+from wd import Wikidata, Element
 
 
-class ADQL(WikiData, ABC):
-    config = WikiData.load_config(__file__)
+class ADQL(Element, ABC):
+    config = Element.load_config(__file__)
 
     def obtain_claim(self, snak):
         if claim := super().obtain_claim(snak):
@@ -65,8 +65,9 @@ class ADQL(WikiData, ABC):
                     dec = self.entity['claims']['P6258'][0]['mainsnak']['datavalue']['value']['amount']
                     tla = coordinates.SkyCoord(ra, dec, frame='icrs', unit='deg').get_constellation(short_name=True)
                     if ADQL.__const is None:
-                        ADQL.__const = ADQL.query('SELECT DISTINCT ?n ?i {?i wdt:P31/wdt:P279* wd:Q8928; wdt:P1813 ?n}')
-                    self.obtain_claim(WikiData.create_snak('P59', ADQL.__const[tla]))
+                        ADQL.__const = Wikidata.query(
+                            'SELECT DISTINCT ?n ?i {?i wdt:P31/wdt:P279* wd:Q8928; wdt:P1813 ?n}')
+                    self.obtain_claim(Element.create_snak('P59', ADQL.__const[tla]))
 
     __pub_dates, __redirects = {'Q66617668': 19240101, 'Q4026990': 99999999}, {}
 
@@ -80,13 +81,13 @@ class ADQL(WikiData, ABC):
                         ref_id = ADQL.__redirects[ref_id]
                     if ref_id not in ADQL.__pub_dates:
                         p577 = None
-                        if (item := WikiData.load_items([ref_id])) and ref_id in item:
+                        if (item := Wikidata.load([ref_id])) and ref_id in item:
                             if 'redirects' in (entity := item[ref_id]):
                                 ADQL.__redirects[ref_id] = entity['redirects']['to']
                                 ref_id = entity['redirects']['to']
                             if 'claims' in entity and 'P577' in entity['claims']:
                                 p577 = entity['claims']['P577'][0]['mainsnak']['datavalue']['value']
-                        ADQL.__pub_dates[ref_id] = int(WikiData.serialize(p577)) if p577 else None
+                        ADQL.__pub_dates[ref_id] = int(Element.serialize(p577)) if p577 else None
                     if ref_id in p248:
                         claim['references'].remove(ref)  # remove duplicates
                     else:
@@ -166,8 +167,8 @@ class ADQL(WikiData, ABC):
 
     @staticmethod
     def tap_query(url, sql, result=None):
-        if response := ADQL.request(url + '/sync', data={'request': 'doQuery', 'lang': 'adql', 'format': 'csv',
-                                                         'maxrec': -1, 'query': sql}, stream=True):
+        if response := Wikidata.request(url + '/sync', data={'request': 'doQuery', 'lang': 'adql', 'format': 'csv',
+                                                             'maxrec': -1, 'query': sql}, stream=True):
             with closing(response) as r:
                 reader = csv.reader(r.iter_lines(decode_unicode='utf-8'), delimiter=',', quotechar='"')
                 header = next(reader)
@@ -186,13 +187,13 @@ class ADQL(WikiData, ABC):
 
     @staticmethod
     def format_figure(row, col):
-        return WikiData.format_float(row[col], int(row[col + 'p']) if col + 'p' in row and row[col + 'p'] != '' else -1)
+        return Element.format_float(row[col], int(row[col + 'p']) if col + 'p' in row and row[col + 'p'] != '' else -1)
 
     def construct_snak(self, row, col, new_col=None):
         from simbad_dap import SimbadDAP
 
         new_col = (new_col if new_col else col).upper()
-        if WikiData.get_type(new_col) != 'quantity':
+        if Wikidata.type_of(new_col) != 'quantity':
             if col == 'p397' and (qid := SimbadDAP.get_by_any_id(row[col])):
                 row[col] = qid
             result = self.create_snak(new_col, row[col])
@@ -238,6 +239,6 @@ class ADQL(WikiData, ABC):
                     if query.startswith('P819=') and (qid := ADS.get_by_id(query.replace('P819=', ''))):
                         return qid
                     try:  # fallback
-                        return WikiData.api_search('haswbstatement:' + query)
+                        return Wikidata.search('haswbstatement:' + query)
                     except ValueError as e:
                         logging.warning('Found {} instances of {}'.format(e.args[0], query))

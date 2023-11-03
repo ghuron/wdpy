@@ -4,7 +4,7 @@ from simbad_dap import SimbadDAP
 
 
 class TestSimbad(TestCase):
-    def setUp(cls):
+    def setUp(self):
         SimbadDAP.cache = {}
 
     def test_get_by_any_id_hit(self):
@@ -28,7 +28,7 @@ class TestSimbad(TestCase):
     def test_get_by_incorrect_id(self, _):
         self.assertIsNone(SimbadDAP.get_by_any_id('QQQ'))
 
-    @mock.patch('adql.ADQL.request', return_value=None)
+    @mock.patch('wd.Wikidata.request', return_value=None)
     def test_tap_query_exception(self, mock_post):
         self.assertIsNone(SimbadDAP.tap_query('https://simbad.u-strasbg.fr/simbad/sim-tap', 'select * from basic'))
         mock_post.assert_called_with('https://simbad.u-strasbg.fr/simbad/sim-tap/sync',
