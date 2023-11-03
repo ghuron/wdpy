@@ -1,10 +1,8 @@
 #!/usr/bin/python3
 import http.client
 import logging
-import os.path
 import random
 import socket
-import sys
 import time
 from urllib import request, error
 from xml.etree import ElementTree
@@ -121,8 +119,7 @@ class ArXiv(Element):
             self.obtain_claim(self.create_snak('P31', 'Q13442814'))
 
 
-if sys.argv[0].endswith(os.path.basename(__file__)):  # if not imported
-    Wikidata.logon(sys.argv[1], sys.argv[2])
+if ArXiv.initialize(__file__):  # if not imported
     wd_items = Wikidata.query('SELECT ?id (SAMPLE(?i) AS ?a) {?i wdt:P818 ?id} GROUP BY ?id')
     offset = None
     while True:

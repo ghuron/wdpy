@@ -249,12 +249,15 @@ class Element(Model, ABC):
     config, db_property, db_ref = {}, None, None
 
     @classmethod
-    def load_config(cls, file_name: str):
+    def initialize(cls, file_name: str) -> bool:
         try:
             with open(os.path.splitext(file_name)[0] + '.json') as file:
-                return {**cls.config, **json.load(file)}
+                cls.config = {**cls.config, **json.load(file)}
         except OSError:
-            return
+            pass
+        if executed := sys.argv[0].endswith(os.path.basename(file_name)):
+            Wikidata.logon(sys.argv[1], sys.argv[2])
+        return executed
 
     @classmethod
     def convert_to_qid(cls, text: str):

@@ -1,7 +1,5 @@
 #!/usr/bin/python3
 from decimal import Decimal, InvalidOperation
-from os.path import basename
-from sys import argv
 from time import sleep
 
 from adql import ADQL
@@ -10,7 +8,6 @@ from wd import Wikidata
 
 
 class ExoArchive(ADQL):
-    config = ADQL.load_config(__file__)
     db_property, db_ref = 'P5667', 'Q5420639'
     redirect = {}
 
@@ -70,12 +67,11 @@ class ExoArchive(ADQL):
         return super().obtain_claim(snak)
 
 
-if argv[0].endswith(basename(__file__)):  # if not imported
-    Wikidata.logon(argv[1], argv[2])
+if ExoArchive.initialize(__file__):  # if not imported
     ExoArchive.redirect = ExoArchive.tap_query(ExoArchive.config['endpoint'], ExoArchive.config['redirects'])
+    wd_items = ExoArchive.get_all_items('SELECT ?id ?item {?item p:P5667/ps:P5667 ?id}', ExoArchive.resolve_redirects)
     SimbadDAP.cache = Wikidata.query('SELECT DISTINCT ?c ?i { ?i ^ps:P397 []; wdt:P528 ?c }',
                                      lambda row, _: (row[0].lower(), row[1]))
-    wd_items = ExoArchive.get_all_items('SELECT ?id ?item {?item p:P5667/ps:P5667 ?id}', ExoArchive.resolve_redirects)
     for ex_id in wd_items:
         # ex_id = 'eps Tau b'
         item = ExoArchive(ex_id, wd_items[ex_id])

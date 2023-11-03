@@ -1,8 +1,6 @@
 #!/usr/bin/python3
 import json
 import logging
-import sys
-from os.path import basename
 
 import requests
 
@@ -10,7 +8,6 @@ from wd import Wikidata, Element
 
 
 class YadVashem(Element):
-    config = Element.load_config(__file__)
     db_property, db_ref = 'P1979', 'Q77598447'
     pending = []
 
@@ -129,8 +126,7 @@ class YadVashem(Element):
                 new_item.create()
 
 
-if sys.argv[0].endswith(basename(__file__)):  # if not imported
-    Wikidata.logon(sys.argv[1], sys.argv[2])
+if YadVashem.initialize(__file__):  # if not imported
     YadVashem.post('BuildQuery')
     wd_items = YadVashem.get_all_items(
         'SELECT ?r ?n ?i { ?i wdt:P31 wd:Q5; p:P1979 ?s . ?s ps:P1979 ?r OPTIONAL {?s pq:P1810 ?n}}',

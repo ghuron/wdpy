@@ -2,8 +2,6 @@
 import re
 from collections import OrderedDict
 from decimal import DecimalException
-from os.path import basename
-from sys import argv
 from time import sleep
 
 import requests
@@ -15,7 +13,6 @@ from wd import Wikidata
 
 
 class ExoplanetEu(ADQL):
-    config = ADQL.load_config(__file__)
     db_property, db_ref = 'P5653', 'Q1385430'
 
     def __init__(self, external_id, qid=None):
@@ -183,8 +180,7 @@ class ExoplanetEu(ADQL):
         super().add_refs(claim, references)
 
 
-if argv[0].endswith(basename(__file__)):  # if just imported - do nothing
-    Wikidata.logon(argv[1], argv[2])
+if ExoplanetEu.initialize(__file__):  # if just imported - do nothing
     updated_hosts = []
     wd_items = OrderedDict(sorted(ExoplanetEu.get_all_items('SELECT ?id ?item {?item p:P5653/ps:P5653 ?id}').items()))
     SimbadDAP.cache = Wikidata.query('SELECT DISTINCT ?c ?i { ?i ^ps:P397 []; wdt:P528 ?c }',

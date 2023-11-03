@@ -14,8 +14,6 @@ from wd import Wikidata, Element
 
 
 class ADQL(Element, ABC):
-    config = Element.load_config(__file__)
-
     def obtain_claim(self, snak):
         if claim := super().obtain_claim(snak):
             if 'mespos' in snak:
@@ -242,3 +240,6 @@ class ADQL(Element, ABC):
                         return Wikidata.search('haswbstatement:' + query)
                     except ValueError as e:
                         logging.warning('Found {} instances of {}'.format(e.args[0], query))
+
+
+ADQL.initialize(__file__)

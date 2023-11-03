@@ -1,14 +1,10 @@
 #!/usr/bin/python3
 import logging
-from os.path import basename
-from sys import argv
 
 from adql import ADQL
-from wd import Wikidata
 
 
 class SimbadDAP(ADQL):
-    config = ADQL.load_config(__file__)
     db_property, db_ref = 'P3083', 'Q654724'
 
     @staticmethod
@@ -50,8 +46,7 @@ class SimbadDAP(ADQL):
                     return SimbadDAP.cache[ident.lower()]
 
 
-if argv[0].endswith(basename(__file__)):  # if not imported
-    Wikidata.logon(argv[1], argv[2])
+if SimbadDAP.initialize(__file__):  # if not imported
     wd_items = SimbadDAP.get_all_items('SELECT DISTINCT ?id ?item {?item wdt:P3083 ?id; ^wdt:P397 []}')
     for simbad_id in wd_items:
         # simbad_id = '* 51 Eri b'
