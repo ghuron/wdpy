@@ -105,7 +105,7 @@ class ExoplanetEu(ADQL):
             self.entity['labels'] = {} if 'labels' not in self.entity else self.entity['labels']
             if 'en' not in self.entity['labels']:
                 self.entity['labels']['en'] = {'value': name, 'language': 'en'}
-        super().update()
+        return super().update()
 
     @staticmethod
     def parse_value(property_id: str, value: str):
@@ -200,7 +200,7 @@ if ExoplanetEu.initialize(__file__):  # if just imported - do nothing
                     host.properties = ExoplanetEu.config['star']
                     host.prepare_data(data)
                     if ExoplanetEu.db_property not in host.entity['claims'] and host.qid not in updated_hosts:
-                        host.update()
-                        updated_hosts.append(host.qid)
+                        if host.update():
+                            updated_hosts.append(host.qid)
             data.decompose()
         sleep(3)
