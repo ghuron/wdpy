@@ -21,7 +21,7 @@ class ADS(Element):
 
             query = 'SELECT bibcode, doi AS P356, "year" AS P577 FROM ref WHERE bibcode=\'{}\''.format(external_id)
             from adql import ADQL  # to avoid circular import
-            if len(result := ADQL.tap_query('https://simbad.u-strasbg.fr/simbad/sim-tap', query)) == 1:
+            if (result := ADQL.tap_query('https://simbad.u-strasbg.fr/simbad/sim-tap', query)) and len(result) == 1:
                 if qid := cls.haswbstatement(result[external_id][0]['p356'], 'P356'):
                     instance = ADS(external_id, qid)
                     instance.prepare_data(result[external_id][0])
