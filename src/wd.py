@@ -94,7 +94,7 @@ class Wikidata:
         result = None
         with requests.Session() as session:
             session.headers.update({'Accept': 'text/csv', 'User-Agent': Wikidata.USER_AGENT})
-            if request := Wikidata.request(ENDPOINT, session, params={'query': sparql}, stream=True):
+            if request := Wikidata.request(ENDPOINT, session, data={'query': sparql}, stream=True):
                 with closing(request) as r:
                     reader = csv.reader(r.iter_lines(decode_unicode='utf-8'), delimiter=',', quotechar='"')
                     next(reader)
