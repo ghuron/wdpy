@@ -163,7 +163,9 @@ class TestElement(TestCase):
         self.wd.trace('test')
         info.assert_called_with(20, 'test')
 
-    def test_obtain_claim_self_reference(self):
+    @mock.patch('wd.Wikidata.load', return_value=None)
+    @mock.patch('wd.Wikidata.type_of', return_value='wikibase-item')
+    def test_obtain_claim_self_reference(self, _, __):
         self.wd.qid = 'Q5'
         self.wd.obtain_claim({'datavalue': {'value': 'id'}, 'property': 'P213'})  # should not throw an exception
         self.assertIsNone(self.wd.obtain_claim(Model.create_snak('P397', 'Q5')))
