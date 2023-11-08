@@ -245,10 +245,10 @@ class Model:
             return claims[0]
 
     @staticmethod
-    def create_claim(snak: dict, id: str = None) -> dict:
+    def create_claim(snak: dict, qid: str = None) -> dict:
         claim = {'type': 'statement', 'mainsnak': snak}
-        if id:
-            claim['id'] = str(id) + '$' + str(uuid.uuid4())
+        if qid:
+            claim['id'] = str(qid) + '$' + str(uuid.uuid4())
         return claim
 
     @staticmethod
