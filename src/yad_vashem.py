@@ -9,10 +9,9 @@ from wd import Wikidata, Element
 
 class YadVashem(Element):
     db_property, db_ref = 'P1979', 'Q77598447'
-    pending = []
 
-    def __init__(self, group_id, named_as):
-        super().__init__(group_id)
+    def __init__(self, case_id, named_as, qid):
+        super().__init__(case_id, qid)
         self.named_as = named_as
         self.award_cleared_qualifiers = []
 
@@ -31,6 +30,57 @@ class YadVashem(Element):
                 return response.json()
         except json.decoder.JSONDecodeError:
             logging.error('Cannot decode {} response for {}'.format(method, num))
+
+    _entities = None
+    _rows = None
+
+    @staticmethod
+    def get_items(case_id, people: dict):
+        YadVashem._rows = {}
+        if case := YadVashem.post('GetPersonDetailsBySession', case_id):
+            result, remaining = {}, []
+            for row in case['d']['Individuals']:
+                if row['Title'] is not None:
+                    row['Title'] = ' '.join(row['Title'].split())  # Fix multiple spaces
+                    YadVashem._rows[row['Title']] = row['Details']  # Save for future parsing
+                    if row['Title'] in people:  # Find match is wikidata
+                        if isinstance(people[row['Title']], int):
+                            people[row['Title']] -= 1  # Counting how many are in Yad Vashem database
+                        else:
+                            result[row['Title']] = people[row['Title']]  # Will process as normal match
+                            del people[row['Title']]  # Remove from the source
+                    else:
+                        remaining.append(row['Title'])  # No match, save for future analysis
+
+            if len(people) == 0:  # Copy remaining names to be created
+                for named_as in remaining:
+                    result[named_as] = None
+            elif len(people) == 1 and len(remaining) == 1:  # only one record unmatched - assuming it is the same person
+                if isinstance(list(people.values())[0], str):
+                    YadVashem.info(case_id, list(people.keys())[0], ' probably changed to "{}"'.format(remaining[0]))
+                    result[remaining[0]] = list(people.values())[0]
+            else:  # Possibly complex case for manual processing, just log
+                for named_as in people:
+                    if isinstance(people[named_as], int):
+                        YadVashem.info(case_id, named_as, ' is ambiguous: ' + str(people[named_as]))
+                    else:
+                        YadVashem.info(case_id, named_as, 'https://wikidata.org/wiki/' + remaining[name] + ' missing')
+
+            if loaded := Wikidata.load(list(filter(lambda x: isinstance(x, str), result.values()))):
+                YadVashem._entities = loaded
+                return result
+            else:
+                YadVashem.info(case_id, '', 'could not load items, skipping')
+                return {}
+
+    @property
+    def entity(self) -> dict:
+        if not self._entity:
+            if self.qid and self.qid in YadVashem._entities:
+                self._entity = YadVashem._entities[item.qid]
+            else:
+                self._entity = {'label': {}, 'claims': {}}
+        return self._entity
 
     @staticmethod
     def get_next_chunk(offset):
@@ -83,14 +133,12 @@ class YadVashem(Element):
         self.input_snaks = [Element.create_snak(self.db_property, self.external_id)]
         self.input_snaks[0]['qualifiers'] = {'P1810': self.named_as}
         self.input_snaks.append(self.create_snak('P31', 'Q5'))
-        for element in source:
+        for element in YadVashem._rows[self.named_as]:
             if element['Title'] in YadVashem.config['properties']:
                 self.input_snaks.append(
                     self.create_snak(YadVashem.config['properties'][element['Title']], element['Value']))
 
     def post_process(self):
-        if 'labels' not in self.entity:
-            self.entity['labels'] = {}
         if 'en' not in self.entity['labels']:
             words = self.named_as.split('(')[0].split()
             if words[0].lower() in ['dalla', 'de', 'del', 'della', 'di', 'du', 'Im', 'le', 'te', 'van', 'von']:
@@ -99,59 +147,20 @@ class YadVashem(Element):
                 label = ' '.join([words[-1]] + words[1:-1] + [words[0]])  # Pol van de John -> John van de Pol
             self.entity['labels']['en'] = {'value': label, 'language': 'en'}
 
-    def save(self):
-        if 'id' in self.entity:
-            super().save()
-        else:
-            self.pending.append(self)
-
-    def create(self):
-        super().save()
-
-    @staticmethod
-    def create_pending(remaining):
-        items_absent_in_yv = False
-        if remaining is not None:
-            for name in list(remaining):
-                if isinstance(remaining[name], int):
-                    YadVashem.info(item_id, name, ' is ambiguous: ' + str(remaining[name]))
-                else:
-                    YadVashem.info(item_id, name, 'https://wikidata.org/wiki/' + remaining[name] + ' is missing')
-                    items_absent_in_yv = True
-
-        for new_item in YadVashem.pending:
-            if items_absent_in_yv:
-                new_item.trace('was not created (see above)')
-            else:
-                new_item.create()
-
 
 if YadVashem.initialize(__file__):  # if not imported
     YadVashem.post('BuildQuery')
-    wd_items = YadVashem.get_all_items(
+    groups = YadVashem.get_all_items(
         'SELECT ?r ?n ?i { ?i wdt:P31 wd:Q5; p:P1979 ?s . ?s ps:P1979 ?r OPTIONAL {?s pq:P1810 ?n}}',
         YadVashem.process_sparql_row)
 
-    for item_id in wd_items:
-        # item_id = '6658068'  # uncomment to debug specific group of people
-        qids = wd_items[item_id].values() if wd_items[item_id] is not None else []
-        if (group := Wikidata.load(list(filter(lambda x: isinstance(x, str), qids)))) is None:
-            continue
-        YadVashem.pending = []
-        case = YadVashem.post('GetPersonDetailsBySession', item_id)
-        for row in case['d']['Individuals']:
-            if row['Title'] is not None:
-                row['Title'] = ' '.join(row['Title'].split())
-                if row['Title'] in wd_items[item_id] and isinstance(wd_items[item_id][row['Title']], int):
-                    wd_items[item_id][row['Title']] -= 1
-                    continue  # multiple values for the same key - skipping updates
-
-                item = YadVashem(item_id, row['Title'])
-                if row['Title'] in wd_items[item_id] and wd_items[item_id][row['Title']] in group:
-                    item.entity = group[wd_items[item_id][row['Title']]]
-                    del wd_items[item_id][row['Title']]  # consider it processed
-
-                item.prepare_data(row['Details'])
-                item.update()
-
-        YadVashem.create_pending(wd_items[item_id])
+    for group_id in groups:
+        try:
+            # group_id = '4022505'  # uncomment to debug specific group of people
+            if wd_items := YadVashem.get_items(group_id, groups[group_id]):
+                for name in wd_items:
+                    item = YadVashem(group_id, name, wd_items[name] if wd_items[name] else [])
+                    item.prepare_data()
+                    item.update()
+        except Exception as e:
+            logging.critical(group_id + ' ' + e.__str__())

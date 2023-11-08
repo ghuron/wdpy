@@ -244,6 +244,19 @@ class Model:
             claims[0]['mainsnak']['datavalue']['value'] = snak['datavalue']['value']
             return claims[0]
 
+    @staticmethod
+    def create_claim(snak: dict, id: str = None) -> dict:
+        claim = {'type': 'statement', 'mainsnak': snak}
+        if id:
+            claim['id'] = str(id) + '$' + str(uuid.uuid4())
+        return claim
+
+    @staticmethod
+    def set_id(qid, property_id, value, summary):
+        claim = Model.create_claim(Model.create_snak(property_id, value), qid)
+        if response := Wikidata.edit(data={'summary': summary, 'claim': json.dumps(claim)}, method='wbsetclaim'):
+            logging.info('https://www.wikidata.org/wiki/{}#{} created'.format(qid, response['claim']['id']))
+
 
 class Element(Model, ABC):
     config, db_property, db_ref = {}, None, None
@@ -271,7 +284,7 @@ class Element(Model, ABC):
         return [], None
 
     @classmethod
-    def get_all_items(cls, sparql: str, process=lambda row, result: (row[0], row[1])):
+    def get_all_items(cls, sparql: str, process=lambda row, _: (row[0], row[1])):
         results = Wikidata.query(sparql, process)
         offset = None
         while True:
@@ -286,7 +299,20 @@ class Element(Model, ABC):
     def __init__(self, external_id: str, qid: str = None):
         self.external_id = external_id
         self.qid = qid
-        self.entity, self.input_snaks = None, None
+        self._entity = None
+        self.input_snaks = None
+
+    @property
+    def entity(self):
+        if not self._entity:
+            if not self.qid:  # Attempt to find corresponding element via direct query
+                self.qid = self.haswbstatement(self.external_id)
+            if self.qid and (result := Wikidata.load([self.qid])):
+                self._entity = result[self.qid]
+
+        if not self._entity:
+            self._entity = {'label': {}, 'claims': {}}
+        return self._entity
 
     def trace(self, message: str, level=20):
         # CRITICAL: 50, ERROR: 40, WARNING: 30, INFO: 20, DEBUG: 10
@@ -295,16 +321,7 @@ class Element(Model, ABC):
 
     @abstractmethod
     def prepare_data(self, source=None) -> None:
-        """Load self.entity using self.qid and prepare self.input_snaks by parsing source using self.external_id"""
-        try:
-            if not self.qid:  # Attempt to find corresponding element via direct query
-                self.qid = self.haswbstatement(self.external_id)
-            if self.qid and (result := Wikidata.load([self.qid])):
-                self.entity = result[self.qid]
-            self.input_snaks = [Element.create_snak(self.db_property, self.external_id)]
-        except ValueError as e:
-            self.trace('Found {} instances of {}="{}", skipping'.format(e.args[0], self.db_property,
-                                                                        self.external_id), 30)
+        self.input_snaks = [Element.create_snak(self.db_property, self.external_id)]
 
     def obtain_claim(self, snak: dict):
         """Find or create claim, corresponding to the provided snak"""
@@ -314,19 +331,14 @@ class Element(Model, ABC):
             if self.qid == snak['datavalue']['value']['id']:
                 return
 
-        self.entity = {} if self.entity is None else self.entity
-        self.entity['claims'] = {} if 'claims' not in self.entity else self.entity['claims']
         if snak['property'] not in self.entity['claims']:
             self.entity['claims'][snak['property']] = []
 
-        if claim := Element.find_claim(snak, self.entity['claims'][snak['property']]):
+        if claim := Model.find_claim(snak, self.entity['claims'][snak['property']]):
             if Element.skip_statement(claim):
                 return
         else:
-            claim = {'type': 'statement', 'mainsnak': snak}
-            if 'id' in self.entity:
-                claim['id'] = self.entity['id'] + '$' + str(uuid.uuid4())
-            self.entity['claims'][snak['property']].append(claim)
+            self.entity['claims'][snak['property']].append(claim := Model.create_claim(snak, self.qid))
 
         if 'qualifiers' in snak:
             claim['qualifiers'] = {} if 'qualifiers' not in claim else claim['qualifiers']
@@ -379,7 +391,6 @@ class Element(Model, ABC):
 
     def post_process(self):
         """Changes in self.entity that does not depend on specific input"""
-        self.entity['labels'] = {} if 'labels' not in self.entity else self.entity['labels']
         if 'en' not in self.entity['labels']:
             self.entity['labels']['en'] = {'value': self.external_id, 'language': 'en'}
 
@@ -400,7 +411,7 @@ class Element(Model, ABC):
             data['new'] = 'item'
 
         if (response := Wikidata.edit(data, 'wbeditentity')) and 'nochange' not in response['entity']:
-            self.entity, self.qid = response['entity'], response['entity']['id']
+            self._entity, self.qid = response['entity'], response['entity']['id']
             self.trace('modified' if 'id' in data else 'created')
             return self.qid
 
@@ -408,10 +419,7 @@ class Element(Model, ABC):
         if self.input_snaks is None:
             return
 
-        self.entity = {} if self.entity is None else self.entity
         original = json.dumps(self.entity)
-        self.entity['claims'] = {} if 'claims' not in self.entity else self.entity['claims']
-
         affected_statements = {}
         for snak in self.input_snaks:
             if claim := self.obtain_claim(snak):
@@ -434,7 +442,7 @@ class Element(Model, ABC):
                     claim['remove'] = 1
 
         self.post_process()
-        if json.dumps(self.entity) != original:
+        if not self.qid or json.dumps(self.entity) != original:
             return self.save()
 
     @classmethod

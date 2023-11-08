@@ -1,7 +1,6 @@
 #!/usr/bin/python3
 import http.client
 import logging
-import random
 import socket
 import time
 from urllib import request, error
@@ -11,74 +10,53 @@ from wd import Wikidata, Element
 
 
 class ArXiv(Element):
-    arxiv = {}
+    dataset = {}
     db_property, db_ref = 'P818', 'Q118398'
 
     @staticmethod
-    def get_xml(url):
-        for retries in range(1, 5):
+    def arxiv_xml(query):
+        retries = 0
+        while retries < 5:
             try:
-                with request.urlopen(url, timeout=100) as file:
+                with request.urlopen((url := 'https://export.arxiv.org/' + query), timeout=180) as file:
                     return ElementTree.fromstring(file.read())
-            except (error.HTTPError, http.client.IncompleteRead, ConnectionResetError, socket.timeout):
-                logging.error('Error while fetching ' + url)
-                time.sleep(1800)
+            except error.HTTPError as e:
+                if e.status == 503 and 'Retry-After' in e.headers:
+                    time.sleep(int(e.headers['Retry-After']))
+                    continue
+                logging.error('While fetching {} got error: {}'.format(url, e.__str__()))
+            except (http.client.IncompleteRead, ConnectionResetError, socket.timeout) as e:
+                logging.error('While fetching {} got error: {}'.format(url, e.__str__()))
+            retries += 1
+            time.sleep(1800)
         return None
 
     @staticmethod
     def get_next_chunk(suffix):
-        result = {}
-        suffix = '&metadataPrefix=arXiv' if suffix is None else suffix
-        if (tree := ArXiv.get_xml('http://export.arxiv.org/oai2?verb=ListRecords' + suffix)) is not None:
-            ns = {'oa': 'http://arxiv.org/OAI/arXiv/', 'oai': 'http://www.openarchives.org/OAI/2.0/'}
-            for preprint in tree.findall('.//oa:arXiv', ns):
-                if len(doi := preprint.findall('oa:doi', ns)) > 0:
-                    result[preprint.find('oa:id', ns).text] = doi[0].text.split()[0].replace('\\', '')
-                else:
-                    result[preprint.find('oa:id', ns).text] = None
-            ArXiv.arxiv = ArXiv.arxiv | result
-            if suffix.endswith('arXiv'):  # randomise the starting offset
-                random.seed()
-                suffix = '&resumptionToken=' + tree.find('.//oai:resumptionToken', ns).text.split('|')[0]
-                suffix = suffix + '|' + str(random.randint(0, 2000)) + '001'
-            elif tree.find('.//oai:resumptionToken', ns).text:
-                suffix = '&resumptionToken=' + tree.find('.//oai:resumptionToken', ns).text
-            else:
-                suffix = '&metadataPrefix=arXiv'
-        return result.keys(), suffix
-
-    def __init__(self, external_id, qid=None):
-        super().__init__(external_id, qid)
-        self.doi = None
+        NS = {'oa': 'http://arxiv.org/OAI/arXiv/', 'oai': 'http://www.openarchives.org/OAI/2.0/'}
+        ArXiv.dataset, token = {}, None
+        if tree := ArXiv.arxiv_xml('oai2?verb=ListRecords&' + (suffix if suffix else 'metadataPrefix=arXiv')):
+            for preprint in tree.findall('.//oa:arXiv', NS):
+                if len(doi := preprint.findall('oa:doi', NS)) > 0:
+                    ArXiv.dataset[preprint.find('oa:id', NS).text] = doi[0].text.split()[0].replace('\\', '')
+            if (attribute := tree.find('.//oai:resumptionToken', NS)) is not None:
+                token = 'resumptionToken=' + attribute.text
+        return ArXiv.dataset.keys(), token
 
     def prepare_data(self, source=None):
-        if self.external_id in self.arxiv:
-            super().prepare_data()
-            if self.arxiv[self.external_id] is not None:
-                self.doi = self.arxiv[self.external_id].upper()
-                self.input_snaks.append(self.create_snak('P356', self.doi))
-        elif tree := self.get_xml('https://export.arxiv.org/api/query?id_list=' + self.external_id):
+        if tree := ArXiv.arxiv_xml('api/query?id_list=' + self.external_id):
             super().prepare_data()
             ns = {'w3': 'http://www.w3.org/2005/Atom', 'arxiv': 'http://arxiv.org/schemas/atom'}
             title = ' '.join(tree.findall('*/w3:title', ns)[0].text.split())
-            self.input_snaks.append(self.create_snak('P1476', {'text': title, 'language': 'en'}))
+            self.input_snaks.append(ArXiv.create_snak('P1476', {'text': title, 'language': 'en'}))
             author_num = 0
             for author in tree.findall('*/*/w3:name', ns):
                 if len(author.text.strip()) > 3:
-                    snak = self.create_snak('P2093', author.text.strip())
+                    snak = ArXiv.create_snak('P2093', author.text.strip())
                     snak['qualifiers'] = {'P1545': str(author_num := author_num + 1)}
                     self.input_snaks.append(snak)
             if len(doi := tree.findall('*/arxiv:doi', ns)) == 1:
-                self.doi = doi[0].text.upper()
-                self.input_snaks.append(self.create_snak('P356', self.doi))
-
-        if self.doi and self.qid is None and self.entity is None:
-            try:
-                self.qid = ArXiv.haswbstatement(self.doi, 'P356')
-                if self.qid and (result := Wikidata.load([self.qid])):
-                    self.entity = result[self.qid]
-            except ValueError as e:
-                self.trace('Found {} instances with DOI "{}", skipping'.format(e.args[0], self.doi), 30)
+                self.input_snaks.append(self.create_snak('P356', doi[0].text.upper()))
 
     def obtain_claim(self, snak):
         if snak is not None:
@@ -91,26 +69,11 @@ class ArXiv(Element):
                             if 'qualifiers' in claim and 'P1545' in claim['qualifiers']:
                                 if claim['qualifiers']['P1545'][0]['datavalue']['value'] == snak['qualifiers']['P1545']:
                                     return
-            if snak['property'] == 'P356':
-                try:
-                    if 'P356' in self.entity['claims']:
-                        doi = self.entity['claims']['P356'][0]['mainsnak']['datavalue']['value']
-                        if snak['datavalue']['value'] != doi:
-                            self.trace('has DOI {}, but arxiv states {}, skipping'.format(doi, self.doi), 30)
-                            return
-                    elif qid := ArXiv.haswbstatement(self.doi, 'P356'):
-                        self.trace('DOI {} already assigned to {}, skipping'.format(self.doi, qid), 30)
-                        return
-                except ValueError as e:
-                    self.trace('Found {} instances with DOI "{}", skipping'.format(e.args[0], self.doi), 30)
-                    return
 
         claim = super().obtain_claim(snak)
         return claim
 
     def post_process(self):
-        if 'labels' not in self.entity:
-            self.entity['labels'] = {}
         if 'en' not in self.entity['labels'] and 'P1476' in self.entity['claims']:
             self.entity['labels']['en'] = {
                 'value': self.entity['claims']['P1476'][0]['mainsnak']['datavalue']['value']['text'],
@@ -120,15 +83,16 @@ class ArXiv(Element):
 
 
 if ArXiv.initialize(__file__):  # if not imported
-    wd_items = Wikidata.query('SELECT ?id (SAMPLE(?i) AS ?a) {?i wdt:P818 ?id} GROUP BY ?id')
-    offset = None
-    while True:
-        chunk, offset = ArXiv.get_next_chunk(offset)
-        if len(chunk) == 0:
-            break
-        for ex_id in chunk:
-            item = ArXiv(ex_id, wd_items[ex_id] if ex_id in wd_items else None)  # ToDo: find items with invalid arxiv
-            item.prepare_data()
-            if item.entity is not None:
-                if 'P818' not in item.entity['claims'] or item.doi is not None and 'P356' not in item.entity['claims']:
-                    item.update()
+    SUMMARY = 'extracted from [[Q118398]] based on [[Property:{}]]: {}'
+    QUERY = 'SELECT ?c ?i {{VALUES ?c {{\'{}\'}} ?i p:P356/ps:P356 ?c MINUS {{?i p:P818 []; p:P356 []}}}}'
+    no_doi_items = Wikidata.query('SELECT ?c ?i {?i p:P818/ps:P818 ?c MINUS {?i p:P818 []; p:P356 []}}')
+    offset = 'metadataPrefix=arXiv'
+    while offset is not None:
+        _, offset = ArXiv.get_next_chunk(offset)
+        no_arxiv_items = Wikidata.query(QUERY.format('\' \''.join(ArXiv.dataset.values())))
+        for arxiv_id in ArXiv.dataset:
+            if doi := ArXiv.dataset[arxiv_id]:
+                if no_doi_items and (arxiv_id in no_doi_items):  # DOI is absent
+                    ArXiv.set_id(no_doi_items.pop(arxiv_id), 'P356', doi.upper(), SUMMARY.format('P818', arxiv_id))
+                elif no_arxiv_items and (doi in no_arxiv_items):  # Arxiv is absent
+                    ArXiv.set_id(no_arxiv_items.pop(doi), 'P818', arxiv_id, SUMMARY.format('P356', doi))

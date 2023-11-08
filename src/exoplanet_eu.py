@@ -101,8 +101,6 @@ class ExoplanetEu(ADQL):
     def update(self):
         if self.input_snaks:
             name = self.input_snaks.pop(0)
-            self.entity = {} if self.entity is None else self.entity
-            self.entity['labels'] = {} if 'labels' not in self.entity else self.entity['labels']
             if 'en' not in self.entity['labels']:
                 self.entity['labels']['en'] = {'value': name, 'language': 'en'}
         return super().update()

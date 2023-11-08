@@ -8,7 +8,6 @@ class TestADQL(TestCase):
     @mock.patch.multiple(ADQL, __abstractmethods__=set())
     def setUp(cls):
         item = ADQL('')
-        item.entity = {}
         cls.adql = item
 
     @mock.patch('adql.ADQL.get_latest_publication_date', return_value=20241231)
