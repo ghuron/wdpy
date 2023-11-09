@@ -38,6 +38,6 @@ class TestSimbad(TestCase):
     def test_parse_input_use_parent(self):
         simbad = SimbadDAP('HD 1')
         simbad.dataset = {simbad.external_id: []}
-        simbad.prepare_data()
-        self.assertEqual(simbad.db_property, simbad.input_snaks[0]['property'])
-        self.assertEqual(simbad.external_id, simbad.input_snaks[0]['datavalue']['value'])
+        input_snaks = simbad.prepare_data()
+        self.assertEqual(simbad.db_property, input_snaks[0]['property'])
+        self.assertEqual(simbad.external_id, input_snaks[0]['datavalue']['value'])

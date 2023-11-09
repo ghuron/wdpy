@@ -130,13 +130,13 @@ class YadVashem(Element):
         logging.info('https://righteous.yadvashem.org/?itemId=' + book_id + '\t"' + named_as + '"\t' + message)
 
     def prepare_data(self, source=None):
-        self.input_snaks = [Element.create_snak(self.db_property, self.external_id)]
-        self.input_snaks[0]['qualifiers'] = {'P1810': self.named_as}
-        self.input_snaks.append(self.create_snak('P31', 'Q5'))
+        input_snaks = [Element.create_snak(self.db_property, self.external_id)]
+        input_snaks[0]['qualifiers'] = {'P1810': self.named_as}
+        input_snaks.append(self.create_snak('P31', 'Q5'))
         for element in YadVashem._rows[self.named_as]:
             if element['Title'] in YadVashem.config['properties']:
-                self.input_snaks.append(
-                    self.create_snak(YadVashem.config['properties'][element['Title']], element['Value']))
+                input_snaks.append(self.create_snak(YadVashem.config['properties'][element['Title']], element['Value']))
+        return input_snaks
 
     def post_process(self):
         if 'en' not in self.entity['labels']:
@@ -160,7 +160,6 @@ if YadVashem.initialize(__file__):  # if not imported
             if wd_items := YadVashem.get_items(group_id, groups[group_id]):
                 for name in wd_items:
                     item = YadVashem(group_id, name, wd_items[name] if wd_items[name] else [])
-                    item.prepare_data()
-                    item.update()
+                    item.update(item.prepare_data())
         except Exception as e:
             logging.critical(group_id + ' ' + e.__str__())

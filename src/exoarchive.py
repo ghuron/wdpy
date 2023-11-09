@@ -48,16 +48,16 @@ class ExoArchive(ADQL):
                 ExoArchive.missing = Wikidata.query(
                     'SELECT ?c ?i {?i wdt:P5653 ?c FILTER NOT EXISTS {?i wdt:P5667 []}}')
             self.qid = ExoArchive.missing[self.external_id] if self.external_id in ExoArchive.missing else self.qid
-        super().prepare_data()
-        if self.input_snaks:
+        if input_snaks := super().prepare_data():
             prefix = 'https://exoplanetarchive.ipac.caltech.edu/cgi-bin/Lookup/nph-aliaslookup.py?objname='
             if (response := Wikidata.request(prefix + self.external_id)) and 'system' in response.json():
                 if self.external_id in (data := response.json()['system']['objects']['planet_set']['planets']):
                     for code in data[self.external_id]['alias_set']['aliases']:
                         if snak := self.construct_snak({'p528': code.replace(' ', '')}, 'p528'):
-                            self.input_snaks.append(snak)
+                            input_snaks.append(snak)
                 else:
                     self.trace('{} appears to have redirect'.format(prefix + self.external_id))
+            return input_snaks
 
     def obtain_claim(self, snak):
         if snak and snak['property'] == 'P528':  # All catalogue codes for exoplanets should be aliases
@@ -75,6 +75,5 @@ if ExoArchive.initialize(__file__):  # if not imported
     for ex_id in wd_items:
         # ex_id = 'eps Tau b'
         item = ExoArchive(ex_id, wd_items[ex_id])
-        item.prepare_data()
-        item.update()
+        item.update(item.prepare_data())
         sleep(1)

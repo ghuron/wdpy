@@ -45,18 +45,19 @@ class ArXiv(Element):
 
     def prepare_data(self, source=None):
         if tree := ArXiv.arxiv_xml('api/query?id_list=' + self.external_id):
-            super().prepare_data()
+            input_snaks = super().prepare_data()
             ns = {'w3': 'http://www.w3.org/2005/Atom', 'arxiv': 'http://arxiv.org/schemas/atom'}
             title = ' '.join(tree.findall('*/w3:title', ns)[0].text.split())
-            self.input_snaks.append(ArXiv.create_snak('P1476', {'text': title, 'language': 'en'}))
+            input_snaks.append(ArXiv.create_snak('P1476', {'text': title, 'language': 'en'}))
             author_num = 0
             for author in tree.findall('*/*/w3:name', ns):
                 if len(author.text.strip()) > 3:
                     snak = ArXiv.create_snak('P2093', author.text.strip())
                     snak['qualifiers'] = {'P1545': str(author_num := author_num + 1)}
-                    self.input_snaks.append(snak)
+                    input_snaks.append(snak)
             if len(doi_list := tree.findall('*/arxiv:doi', ns)) == 1:
-                self.input_snaks.append(self.create_snak('P356', doi_list[0].text.upper()))
+                input_snaks.append(self.create_snak('P356', doi_list[0].text.upper()))
+            return input_snaks
 
     def obtain_claim(self, snak):
         if snak is not None:

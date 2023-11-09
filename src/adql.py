@@ -34,17 +34,18 @@ class ADQL(Element, ABC):
             ADQL.tap_query(cls.config['endpoint'], query, ADQL.dataset)
 
     def prepare_data(self, source=None):
-        super().prepare_data()
+        input_snaks = super().prepare_data()
         if self.external_id not in self.dataset and 'endpoint' in self.config:
             self.get_next_chunk(self.external_id)  # attempt to load this specific object
         if self.external_id in self.dataset:
             for row in self.dataset[self.external_id]:
                 for col in row:
                     if row[col] and re.search('\\d+$', col) and (snak := self.construct_snak(row, col)):
-                        self.input_snaks.append(snak)
+                        input_snaks.append(snak)
         elif not source:  # failed to load and no explicit source provided
             self.trace('"{}"\tcould not be loaded, skipping update'.format(self.external_id), 30)
-            self.input_snaks = None
+            input_snaks = None
+        return input_snaks
 
     __const = None
 

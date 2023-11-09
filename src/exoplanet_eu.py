@@ -65,27 +65,28 @@ class ExoplanetEu(ADQL):
 
     def prepare_data(self, source: BeautifulSoup = None):
         if source:
-            super().prepare_data(source)
+            input_snaks = super().prepare_data(source)
 
             if 'P215' in self.properties.values():  # parsing hosting star, not exoplanet
-                self.input_snaks = []
+                input_snaks = []
                 if s := source.select_one('[id^=star-detail] dd'):
-                    self.input_snaks.insert(0, s.text.strip())
+                    input_snaks.insert(0, s.text.strip())
             else:
-                self.input_snaks.insert(0, source.select_one('#planet-detail-basic-info dd').text.strip())
+                input_snaks.insert(0, source.select_one('#planet-detail-basic-info dd').text.strip())
                 if s := source.select_one('[id^=star-detail] dd'):
                     if snak := ExoplanetEu.parse_value('P397', s.text.strip()):
-                        self.input_snaks.append(snak)
+                        input_snaks.append(snak)
 
-            if self.input_snaks and (snak := ExoplanetEu.parse_value('P528', self.input_snaks[0])):
-                self.input_snaks.append(snak)
+            if input_snaks and (snak := ExoplanetEu.parse_value('P528', input_snaks[0])):
+                input_snaks.append(snak)
 
             for div_id in self.properties:
                 if (ref := source.find(id=div_id)) and (text := ref.parent.findChild('span').text):
                     if (property_id := self.properties[div_id]) in ['P397', 'P528']:
-                        self.input_snaks = self.input_snaks + ExoplanetEu.parse_snaks(property_id, text.split(','), ref)
+                        input_snaks = input_snaks + ExoplanetEu.parse_snaks(property_id, text.split(','), ref)
                     else:
-                        self.input_snaks = self.input_snaks + ExoplanetEu.parse_snaks(property_id, [text], ref)
+                        input_snaks = input_snaks + ExoplanetEu.parse_snaks(property_id, [text], ref)
+            return input_snaks
 
     @staticmethod
     def parse_snaks(property_id: str, values: [], ref_div: any) -> []:
@@ -98,12 +99,12 @@ class ExoplanetEu(ADQL):
                 result.append(snak)
         return result
 
-    def update(self):
-        if self.input_snaks:
-            name = self.input_snaks.pop(0)
+    def update(self, input_snaks):
+        if input_snaks:
+            name = input_snaks.pop(0)
             if 'en' not in self.entity['labels']:
                 self.entity['labels']['en'] = {'value': name, 'language': 'en'}
-        return super().update()
+        return super().update(input_snaks)
 
     @staticmethod
     def parse_value(property_id: str, value: str):
@@ -190,15 +191,13 @@ if ExoplanetEu.initialize(__file__):  # if just imported - do nothing
         # wd_items[ex_id] = p5667[ex_id] if ex_id in p5667 else None
         item = ExoplanetEu(ex_id, wd_items[ex_id])
         if data := item.retrieve():
-            item.prepare_data(data)
-            item.update()
+            item.update(item.prepare_data(data))
             if item.entity and 'P397' in item.entity['claims'] and len(item.entity['claims']['P397']) == 1:
                 if 'datavalue' in (parent := item.entity['claims']['P397'][0]['mainsnak']):  # parent != "novalue"
                     host = ExoplanetEu(ex_id, parent['datavalue']['value']['id'])
-                    host.properties = ExoplanetEu.config['star']
-                    host.prepare_data(data)
                     if ExoplanetEu.db_property not in host.entity['claims'] and host.qid not in updated_hosts:
-                        if host.update():
+                        host.properties = ExoplanetEu.config['star']
+                        if host.update(host.prepare_data(data)):
                             updated_hosts.append(host.qid)
             data.decompose()
         sleep(3)

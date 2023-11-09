@@ -300,7 +300,6 @@ class Element(Model, ABC):
         self.external_id = external_id
         self.qid = qid
         self._entity = None
-        self.input_snaks = None
 
     @property
     def entity(self):
@@ -320,8 +319,8 @@ class Element(Model, ABC):
         logging.log(level, LOG.format(self.qid, self.db_property, message) if self.qid else message)
 
     @abstractmethod
-    def prepare_data(self, source=None) -> None:
-        self.input_snaks = [Element.create_snak(self.db_property, self.external_id)]
+    def prepare_data(self, source=None) -> []:
+        return [Element.create_snak(self.db_property, self.external_id)]
 
     def obtain_claim(self, snak: dict):
         """Find or create claim, corresponding to the provided snak"""
@@ -415,13 +414,10 @@ class Element(Model, ABC):
             self.trace('modified' if 'id' in data else 'created')
             return self.qid
 
-    def update(self):
-        if self.input_snaks is None:
-            return
-
+    def update(self, input_snaks: []):
         original = json.dumps(self.entity)
         affected_statements = {}
-        for snak in self.input_snaks:
+        for snak in input_snaks:
             if claim := self.obtain_claim(snak):
                 if snak['property'] not in affected_statements and snak['property'] in self.entity['claims']:
                     affected_statements[snak['property']] = self.filter_by_ref(self.entity['claims'][snak['property']])
@@ -456,7 +452,7 @@ class Element(Model, ABC):
         try:
             if qid := cls.haswbstatement(external_id):
                 return qid
-            (instance := cls(external_id)).prepare_data()
-            return instance.update()
+            instance = cls(external_id)
+            return instance.update(instance.prepare_data())
         except ValueError as e:
             logging.warning('Found {} instances of {}="{}", skipping'.format(e.args[0], cls.db_property, external_id))

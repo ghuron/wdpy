@@ -51,5 +51,4 @@ if SimbadDAP.initialize(__file__):  # if not imported
     for simbad_id in wd_items:
         # simbad_id = '* 51 Eri b'
         item = SimbadDAP(simbad_id, wd_items[simbad_id])
-        item.prepare_data()
-        item.update()
+        item.update(item.prepare_data())

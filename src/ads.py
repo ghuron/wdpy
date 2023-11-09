@@ -9,9 +9,10 @@ class ADS(Element):
 
     def prepare_data(self, source=None) -> None:
         if self.qid:
-            super().prepare_data()
+            input_snaks = super().prepare_data()
             if source and source['p577'] and 'P577' not in self.entity['claims']:
-                self.input_snaks.append(ADS.create_snak('P577', source['p577']))
+                input_snaks.append(ADS.create_snak('P577', source['p577']))
+            return input_snaks
 
     @classmethod
     def get_by_id(cls, external_id: str, create=True):
@@ -24,8 +25,7 @@ class ADS(Element):
             if (result := ADQL.tap_query('https://simbad.u-strasbg.fr/simbad/sim-tap', query)) and len(result) == 1:
                 if qid := cls.haswbstatement(result[external_id][0]['p356'], 'P356'):
                     instance = ADS(external_id, qid)
-                    instance.prepare_data(result[external_id][0])
-                    return instance.update()
+                    return instance.update(instance.prepare_data(result[external_id][0]))
                 # ToDo: create a new source
         except ValueError as e:
             logging.warning('Found {} instances of {}="{}", skipping'.format(e.args[0], cls.db_property, external_id))
