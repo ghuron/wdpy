@@ -173,7 +173,7 @@ class TestElement(TestCase):
     @mock.patch('wd.Wikidata.load', return_value=None)
     def test_prepare_data_null_items(self, load_items):
         self.wd.qid = 'Q1'
-        self.assertDictEqual({'label': {}, 'claims': {}}, self.wd.entity)
+        self.assertDictEqual({'labels': {}, 'claims': {}}, self.wd.entity)
         load_items.assert_called_with(['Q1'])
 
     @mock.patch('wd.Wikidata.type_of', return_value='wikibase-item')

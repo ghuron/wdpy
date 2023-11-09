@@ -22,19 +22,19 @@ class ExoplanetEu(ADQL):
     def trace(self, message: str, level=20):
         super().trace('http://exoplanet.eu/catalog/{}\t{}'.format(self.external_id.replace(' ', '_'), message), level)
 
-    session = None
+    __session = None
 
     @staticmethod
     def get_next_chunk(offset: int) -> tuple[list[str], int]:
-        if not ExoplanetEu.session:
-            ExoplanetEu.session = requests.Session()
-            Wikidata.request('https://exoplanet.eu/catalog/', ExoplanetEu.session)  # obtain csrftoken cookie
-            ExoplanetEu.session.headers.update({'X-Csrftoken': ExoplanetEu.session.cookies.get('csrftoken'),
-                                                'Referer': 'https://exoplanet.eu/catalog/'})
+        if not ExoplanetEu.__session:
+            ExoplanetEu.__session = requests.Session()
+            Wikidata.request('https://exoplanet.eu/catalog/', ExoplanetEu.__session)  # obtain csrftoken cookie
+            ExoplanetEu.__session.headers.update({'X-Csrftoken': ExoplanetEu.__session.cookies.get('csrftoken'),
+                                                  'Referer': 'https://exoplanet.eu/catalog/'})
 
         identifiers, offset = [], 0 if offset is None else offset
         params = {**{'iDisplayStart': offset}, **ExoplanetEu.config['post']}
-        if result := Wikidata.request('https://exoplanet.eu/catalog/json/', ExoplanetEu.session, data=params):
+        if result := Wikidata.request('https://exoplanet.eu/catalog/json/', ExoplanetEu.__session, data=params):
             if (response := result.json()) and (offset < response['iTotalRecords']):
                 for record in response['aaData']:
                     identifiers.append(re.findall('catalog/([^/]+)', record[0])[0])
@@ -65,28 +65,28 @@ class ExoplanetEu(ADQL):
 
     def prepare_data(self, source: BeautifulSoup = None):
         if source:
-            input_snaks = super().prepare_data(source)
+            snaks, name = super().prepare_data(source), ''
 
             if 'P215' in self.properties.values():  # parsing hosting star, not exoplanet
-                input_snaks = []
-                if s := source.select_one('[id^=star-detail] dd'):
-                    input_snaks.insert(0, s.text.strip())
+                snaks = []
+                if star := source.select_one('[id^=star-detail] dd'):
+                    name = star.text.strip()
             else:
-                input_snaks.insert(0, source.select_one('#planet-detail-basic-info dd').text.strip())
-                if s := source.select_one('[id^=star-detail] dd'):
-                    if snak := ExoplanetEu.parse_value('P397', s.text.strip()):
-                        input_snaks.append(snak)
+                name = source.select_one('#planet-detail-basic-info dd').text.strip()
+                if star := source.select_one('[id^=star-detail] dd'):
+                    if snak := ExoplanetEu.parse_value('P397', star.text.strip()):
+                        snaks.append(snak)
 
-            if input_snaks and (snak := ExoplanetEu.parse_value('P528', input_snaks[0])):
-                input_snaks.append(snak)
+            if snak := ExoplanetEu.parse_value('P528', name):
+                snaks.append(snak)
 
             for div_id in self.properties:
                 if (ref := source.find(id=div_id)) and (text := ref.parent.findChild('span').text):
                     if (property_id := self.properties[div_id]) in ['P397', 'P528']:
-                        input_snaks = input_snaks + ExoplanetEu.parse_snaks(property_id, text.split(','), ref)
+                        snaks = snaks + ExoplanetEu.parse_snaks(property_id, text.split(','), ref)
                     else:
-                        input_snaks = input_snaks + ExoplanetEu.parse_snaks(property_id, [text], ref)
-            return input_snaks
+                        snaks = snaks + ExoplanetEu.parse_snaks(property_id, [text], ref)
+            return {'input': snaks, 'label': name}
 
     @staticmethod
     def parse_snaks(property_id: str, values: [], ref_div: any) -> []:
@@ -99,12 +99,19 @@ class ExoplanetEu(ADQL):
                 result.append(snak)
         return result
 
-    def update(self, input_snaks):
-        if input_snaks:
-            name = input_snaks.pop(0)
+    __p5667 = None
+
+    def update(self, parsed_data):
+        if parsed_data and 'label' in parsed_data:
+            if not self.qid:  # Try to reuse item from NASA Exoplanet Archive
+                if not ExoplanetEu.__p5667:
+                    ExoplanetEu.__p5667 = Wikidata.query('SELECT ?c ?i {?i wdt:P5667 ?c MINUS {?i wdt:P5653 []}}')
+                if parsed_data['label'] in ExoplanetEu.__p5667:
+                    self.qid = ExoplanetEu.__p5667[parsed_data['label']]
             if 'en' not in self.entity['labels']:
-                self.entity['labels']['en'] = {'value': name, 'language': 'en'}
-        return super().update(input_snaks)
+                self.entity['labels']['en'] = {'value': parsed_data['label'], 'language': 'en'}
+        if parsed_data and 'input' in parsed_data:
+            return super().update(parsed_data['input'])
 
     @staticmethod
     def parse_value(property_id: str, value: str):
@@ -186,9 +193,6 @@ if ExoplanetEu.initialize(__file__):  # if just imported - do nothing
                                      lambda row, _: (row[0].lower(), row[1]))
     for ex_id in wd_items:
         # ex_id = '2mass_j0249_0557_ab_c--6790'  # uncomment to debug specific item only
-        # if not wd_items[ex_id]:  # Try to reuse item from NASA Exoplanet Archive
-        # p5667 = p5667 if p5667 else ADQL.query('SELECT ?c ?i {?i wdt:P5667 ?c FILTER NOT EXISTS {?i wdt:P5653 []}}')
-        # wd_items[ex_id] = p5667[ex_id] if ex_id in p5667 else None
         item = ExoplanetEu(ex_id, wd_items[ex_id])
         if data := item.retrieve():
             item.update(item.prepare_data(data))

@@ -76,6 +76,6 @@ class TestExoplanetEu(TestCase):
                     TOI-969: a late-K dwarf with a hot mini-Neptune in the desert and an eccentric cold Jupiter
             </a></li></ul></div></div''', 'html.parser')
         self.exo.properties = {'planet_field_publications_discovered': 'P575'}
-        input_snaks = self.exo.prepare_data(page)
-        self.assertEqual('+2022-00-00T00:00:00Z', input_snaks[3]['datavalue']['value']['time'])
-        self.assertEqual(['Q54012702'], input_snaks[3]['source'])
+        input_snaks = self.exo.prepare_data(page)['input']
+        self.assertEqual('+2022-00-00T00:00:00Z', input_snaks[2]['datavalue']['value']['time'])
+        self.assertEqual(['Q54012702'], input_snaks[2]['source'])
