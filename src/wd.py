@@ -310,7 +310,7 @@ class Element(Model, ABC):
                 self._entity = result[self.qid]
 
         if not self._entity:
-            self._entity = {'label': {}, 'claims': {}}
+            self._entity = {'labels': {}, 'claims': {}}
         return self._entity
 
     def trace(self, message: str, level=20):
@@ -414,10 +414,13 @@ class Element(Model, ABC):
             self.trace('modified' if 'id' in data else 'created')
             return self.qid
 
-    def update(self, input_snaks: []):
+    def update(self, parsed_data):
+        if parsed_data is None:
+            return
+
         original = json.dumps(self.entity)
         affected_statements = {}
-        for snak in input_snaks:
+        for snak in parsed_data:
             if claim := self.obtain_claim(snak):
                 if snak['property'] not in affected_statements and snak['property'] in self.entity['claims']:
                     affected_statements[snak['property']] = self.filter_by_ref(self.entity['claims'][snak['property']])
