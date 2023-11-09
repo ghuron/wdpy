@@ -37,10 +37,10 @@ class ArXiv(Element):
         ArXiv.dataset, token = {}, None
         if tree := ArXiv.arxiv_xml('oai2?verb=ListRecords&' + (suffix if suffix else 'metadataPrefix=arXiv')):
             for preprint in tree.findall('.//oa:arXiv', NS):
-                if len(doi := preprint.findall('oa:doi', NS)) > 0:
-                    ArXiv.dataset[preprint.find('oa:id', NS).text] = doi[0].text.split()[0].replace('\\', '')
-            if (attribute := tree.find('.//oai:resumptionToken', NS)) is not None:
-                token = 'resumptionToken=' + attribute.text
+                if len(doi_list := preprint.findall('oa:doi', NS)) > 0:
+                    ArXiv.dataset[preprint.find('oa:id', NS).text] = doi_list[0].text.split()[0].replace('\\', '')
+            if (element := tree.find('.//oai:resumptionToken', NS)) and element.text:
+                token = 'resumptionToken=' + element.text
         return ArXiv.dataset.keys(), token
 
     def prepare_data(self, source=None):
@@ -55,8 +55,8 @@ class ArXiv(Element):
                     snak = ArXiv.create_snak('P2093', author.text.strip())
                     snak['qualifiers'] = {'P1545': str(author_num := author_num + 1)}
                     self.input_snaks.append(snak)
-            if len(doi := tree.findall('*/arxiv:doi', ns)) == 1:
-                self.input_snaks.append(self.create_snak('P356', doi[0].text.upper()))
+            if len(doi_list := tree.findall('*/arxiv:doi', ns)) == 1:
+                self.input_snaks.append(self.create_snak('P356', doi_list[0].text.upper()))
 
     def obtain_claim(self, snak):
         if snak is not None:
@@ -69,9 +69,7 @@ class ArXiv(Element):
                             if 'qualifiers' in claim and 'P1545' in claim['qualifiers']:
                                 if claim['qualifiers']['P1545'][0]['datavalue']['value'] == snak['qualifiers']['P1545']:
                                     return
-
-        claim = super().obtain_claim(snak)
-        return claim
+        return super().obtain_claim(snak)
 
     def post_process(self):
         if 'en' not in self.entity['labels'] and 'P1476' in self.entity['claims']:
