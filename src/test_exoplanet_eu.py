@@ -29,7 +29,8 @@ class TestExoplanetEu(TestCase):
         self.assertEqual('Q50668', value)
         api_search.assert_called_with('haswbstatement:"P5653=55 Cnc e"')
 
-    def test_parse_value(self):
+    @mock.patch('wd.Wikidata.type_of', return_value='quantity')
+    def test_parse_value(self, _):
         value = ExoplanetEu.parse_value('P1096', '0.98')['datavalue']['value']
         self.assertDictEqual({'unit': '1', 'amount': '0.98'}, value)
 
@@ -60,7 +61,8 @@ class TestExoplanetEu(TestCase):
 
         self.assertIsNone(ExoplanetEu.parse_value('P6257', 'aa:bb:cc'))
 
-    def test_create_snak(self):
+    @mock.patch('wd.Wikidata.type_of', return_value='external-id')
+    def test_create_snak(self, _):
         self.assertEqual('aa:bb:cc', ExoplanetEu.create_snak('P213', 'aa:bb:cc')['datavalue']['value'])
 
     @mock.patch('wd.Wikidata.search', return_value=None)
