@@ -316,7 +316,7 @@ class Element(Model, ABC):
         logging.log(level, LOG.format(self.qid, self.db_property, message) if self.qid else message)
 
     @abstractmethod
-    def prepare_data(self, source=None) -> []:
+    def prepare_data(self) -> []:
         return [Element.create_snak(self.db_property, self.external_id)]
 
     def obtain_claim(self, snak: dict):

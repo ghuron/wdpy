@@ -31,7 +31,7 @@ class ADQL(Element, ABC):
                 query = 'SELECT * FROM ({}) a WHERE {}'.format(query, condition)  # condition uses "final" column names
             ADQL.tap_query(cls.config['endpoint'], query, ADQL.dataset)
 
-    def prepare_data(self, source=None):
+    def prepare_data(self):
         input_snaks = super().prepare_data()
         if self.external_id not in self.dataset and 'endpoint' in self.config:
             self.get_next_chunk(self.external_id)  # attempt to load this specific object
@@ -40,7 +40,7 @@ class ADQL(Element, ABC):
                 for col in row:
                     if row[col] and re.search('\\d+$', col) and (snak := self.construct_snak(row, col)):
                         input_snaks.append(snak)
-        elif not source:  # failed to load and no explicit source provided
+        else:
             self.trace('"{}"\tcould not be loaded, skipping update'.format(self.external_id), 30)
             input_snaks = None
         return input_snaks

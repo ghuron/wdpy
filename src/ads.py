@@ -1,31 +1,32 @@
 #!/usr/bin/python3
-import logging
-
-from wd import Element
+from adql import ADQL
 
 
-class ADS(Element):
+class ADS(ADQL):
     db_property, db_ref = 'P819', 'Q654724'
 
-    def prepare_data(self, source=None) -> None:
-        if self.qid:
-            input_snaks = super().prepare_data()
-            if source and source['p577'] and 'P577' not in self.entity['claims']:
-                input_snaks.append(ADS.create_snak('P577', source['p577']))
-            return input_snaks
+    @staticmethod
+    def get_next_chunk(offset: any):
+        ADS.load('id = \'{}\''.format(offset))
+        return [], None
+
+    __doi = None
+
+    def prepare_data(self):
+        ADS.__doi = None
+        if (result := super().prepare_data()) and ADS.__doi:
+            return {'input': result, 'doi': ADS.__doi}  # {**result, 'doi': ADS.__doi}
 
     @classmethod
-    def get_by_id(cls, external_id: str, create=True):
-        try:
-            if qid := cls.haswbstatement(external_id):
-                return qid
+    def create_snak(cls, property_id: str, value, lower: str = None, upper: str = None):
+        ADS.__doi = value if (property_id == 'P356') and value else ADS.__doi
+        return ADQL.create_snak(property_id, value, lower, upper)
 
-            query = 'SELECT bibcode, doi AS P356, "year" AS P577 FROM ref WHERE bibcode=\'{}\''.format(external_id)
-            from adql import ADQL  # to avoid circular import
-            if (result := ADQL.tap_query('https://simbad.u-strasbg.fr/simbad/sim-tap', query)) and len(result) == 1:
-                if qid := cls.haswbstatement(result[external_id][0]['p356'], 'P356'):
-                    instance = ADS(external_id, qid)
-                    return instance.update(instance.prepare_data(result[external_id][0]))
-                # ToDo: create a new source
-        except ValueError as e:
-            logging.warning('Found {} instances of {}="{}", skipping'.format(e.args[0], cls.db_property, external_id))
+    def update(self, parsed_data):
+        if parsed_data:
+            if self.qid is None and parsed_data['doi']:
+                self.qid = ADS.haswbstatement(parsed_data['doi'], 'P356')
+            return super().update(parsed_data['input'])  # ToDo: create a new source
+
+
+ADS.initialize(__file__)

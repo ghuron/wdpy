@@ -42,7 +42,7 @@ class ExoArchive(ADQL):
 
     missing = None
 
-    def prepare_data(self, source=None):
+    def prepare_data(self):
         if not self.qid:  # Try to reuse item from exoplanet.eu
             if not ExoArchive.missing:  # Lazy load
                 ExoArchive.missing = Wikidata.query(

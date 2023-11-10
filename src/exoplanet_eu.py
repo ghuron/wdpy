@@ -1,4 +1,5 @@
 #!/usr/bin/python3
+import logging
 import re
 from collections import OrderedDict
 from decimal import DecimalException
@@ -42,17 +43,19 @@ class ExoplanetEu(ADQL):
 
     articles = {'publication_2540': 'Q54012702', 'publication_4966': 'Q66424531', 'publication_3182': 'Q56032677'}
 
-    def retrieve(self):
+    @staticmethod
+    def retrieve(exoplanet_id):
         """Load page corresponding to self.external_id and update Exoplanet.articles with parsed sources"""
-        if response := Wikidata.request("https://exoplanet.eu/catalog/" + self.external_id):
-            page = BeautifulSoup(response.content, 'html.parser')
-            for p in page.find_all('li', {'class': 'publication'}):
+        if response := Wikidata.request(url := "https://exoplanet.eu/catalog/" + exoplanet_id):
+            ExoplanetEu.page = BeautifulSoup(response.content, 'html.parser')
+            for p in ExoplanetEu.page.find_all('li', {'class': 'publication'}):
                 try:
                     if p.get('id') not in ExoplanetEu.articles and (ref_id := ExoplanetEu.parse_publication(p)):
                         ExoplanetEu.articles[p.get('id')] = ref_id
                 except ValueError as e:
-                    self.trace('Found {} results while looking for source {} by title'.format(e.args[0], p.get('id')))
-            return page
+                    logging.info('{}\tFound {} results while looking for source {} by title'.
+                                 format(url, e.args[0], p.get('id')))
+            return ExoplanetEu.page
 
     @staticmethod
     def parse_publication(publication: element.Tag):
@@ -63,30 +66,32 @@ class ExoplanetEu(ADQL):
             if len(title := ' '.join(raw.replace('\n', ' ').strip('.').split())) > 24:
                 return Wikidata.search('"{}" -haswbstatement:P31=Q1348305'.format(title))
 
-    def prepare_data(self, source: BeautifulSoup = None):
-        if source:
-            snaks, name = super().prepare_data(source), ''
+    page = None
 
+    def prepare_data(self):
+        ExoplanetEu.page = ExoplanetEu.page if ExoplanetEu.page else item.retrieve(self.external_id)
+        if ExoplanetEu.page:
+            result = {'input': []}
             if 'P215' in self.properties.values():  # parsing hosting star, not exoplanet
-                snaks = []
-                if star := source.select_one('[id^=star-detail] dd'):
-                    name = star.text.strip()
+                if star := ExoplanetEu.page.select_one('[id^=star-detail] dd'):
+                    result['label'] = star.text.strip()
             else:
-                name = source.select_one('#planet-detail-basic-info dd').text.strip()
-                if star := source.select_one('[id^=star-detail] dd'):
+                result['input'] = [ExoplanetEu.create_snak(ExoplanetEu.db_property, self.external_id)]
+                result['label'] = ExoplanetEu.page.select_one('#planet-detail-basic-info dd').text.strip()
+                if star := ExoplanetEu.page.select_one('[id^=star-detail] dd'):
                     if snak := ExoplanetEu.parse_value('P397', star.text.strip()):
-                        snaks.append(snak)
+                        result['input'].append(snak)
 
-            if snak := ExoplanetEu.parse_value('P528', name):
-                snaks.append(snak)
+            if snak := ExoplanetEu.parse_value('P528', result['label']):
+                result['input'].append(snak)
 
             for div_id in self.properties:
-                if (ref := source.find(id=div_id)) and (text := ref.parent.findChild('span').text):
+                if (ref := ExoplanetEu.page.find(id=div_id)) and (text := ref.parent.findChild('span').text):
                     if (property_id := self.properties[div_id]) in ['P397', 'P528']:
-                        snaks = snaks + ExoplanetEu.parse_snaks(property_id, text.split(','), ref)
+                        result['input'] = result['input'] + ExoplanetEu.parse_snaks(property_id, text.split(','), ref)
                     else:
-                        snaks = snaks + ExoplanetEu.parse_snaks(property_id, [text], ref)
-            return {'input': snaks, 'label': name}
+                        result['input'] = result['input'] + ExoplanetEu.parse_snaks(property_id, [text], ref)
+            return result
 
     @staticmethod
     def parse_snaks(property_id: str, values: [], ref_div: any) -> []:
@@ -194,14 +199,15 @@ if ExoplanetEu.initialize(__file__):  # if just imported - do nothing
     for ex_id in wd_items:
         # ex_id = '2mass_j0249_0557_ab_c--6790'  # uncomment to debug specific item only
         item = ExoplanetEu(ex_id, wd_items[ex_id])
-        if data := item.retrieve():
-            item.update(item.prepare_data(data))
-            if item.entity and 'P397' in item.entity['claims'] and len(item.entity['claims']['P397']) == 1:
-                if 'datavalue' in (parent := item.entity['claims']['P397'][0]['mainsnak']):  # parent != "novalue"
-                    host = ExoplanetEu(ex_id, parent['datavalue']['value']['id'])
-                    if ExoplanetEu.db_property not in host.entity['claims'] and host.qid not in updated_hosts:
+        item.update(item.prepare_data())
+        if item.entity and 'P397' in item.entity['claims'] and len(item.entity['claims']['P397']) == 1:
+            if 'datavalue' in (parent := item.entity['claims']['P397'][0]['mainsnak']):  # parent != "novalue"
+                if (host := ExoplanetEu(ex_id, parent['datavalue']['value']['id'])).qid not in updated_hosts:
+                    if ExoplanetEu.db_property not in host.entity['claims']:
                         host.properties = ExoplanetEu.config['star']
-                        if host.update(host.prepare_data(data)):
-                            updated_hosts.append(host.qid)
-            data.decompose()
+                        host.update(host.prepare_data())
+                        updated_hosts.append(host.qid)
+        if ExoplanetEu.page:
+            ExoplanetEu.page.decompose()
+            ExoplanetEu.page = None
         sleep(3)

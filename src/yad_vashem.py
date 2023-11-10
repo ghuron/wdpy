@@ -129,7 +129,7 @@ class YadVashem(Element):
     def info(book_id, named_as, message):
         logging.info('https://righteous.yadvashem.org/?itemId=' + book_id + '\t"' + named_as + '"\t' + message)
 
-    def prepare_data(self, source=None):
+    def prepare_data(self):
         input_snaks = [Element.create_snak(self.db_property, self.external_id)]
         input_snaks[0]['qualifiers'] = {'P1810': self.named_as}
         input_snaks.append(self.create_snak('P31', 'Q5'))

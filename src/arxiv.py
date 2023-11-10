@@ -43,7 +43,7 @@ class ArXiv(Element):
                 token = 'resumptionToken=' + element.text
         return ArXiv.dataset.keys(), token
 
-    def prepare_data(self, source=None):
+    def prepare_data(self):
         if tree := ArXiv.arxiv_xml('api/query?id_list=' + self.external_id):
             snaks = super().prepare_data() + [ArXiv.create_snak('P31', 'Q13442814')]
             ns = {'w3': 'http://www.w3.org/2005/Atom', 'arxiv': 'http://arxiv.org/schemas/atom'}
