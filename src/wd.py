@@ -304,13 +304,10 @@ class Element(Model, ABC):
     @property
     def entity(self):
         if not self._entity:
-            if not self.qid:  # Attempt to find corresponding element via direct query
-                self.qid = self.haswbstatement(self.external_id)
+            self.qid = self.qid if self.qid else self.haswbstatement(self.external_id)
+            self._entity = {'labels': {}, 'claims': {}}
             if self.qid and (result := Wikidata.load([self.qid])):
                 self._entity = result[self.qid]
-
-        if not self._entity:
-            self._entity = {'labels': {}, 'claims': {}}
         return self._entity
 
     def trace(self, message: str, level=20):
