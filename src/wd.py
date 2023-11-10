@@ -411,8 +411,8 @@ class Element(Model, ABC):
                 self._entity, self.qid = response['entity'], response['entity']['id']
                 self.trace('modified' if 'id' in data else 'created')
                 return self.qid
-            else:
-                self.trace('no change while saving {}'.format(data['data']))
+            # else:  # Too many
+            #     self.trace('no change while saving {}'.format(data['data']))
 
     def update(self, parsed_data):
         if parsed_data is None:
