@@ -8,8 +8,6 @@ from urllib.parse import unquote
 
 from astropy import coordinates
 
-from ads import ADS
-from arxiv import ArXiv
 from wd import Wikidata, Element
 
 
@@ -229,6 +227,9 @@ class ADQL(Element, ABC):
 
     @staticmethod
     def parse_url(url: str) -> str:
+        from ads import ADS
+        from arxiv import ArXiv
+
         """Try to find qid of the reference based on the url provided"""
         if url and url.strip() and (url := url.split()[0]):  # get text before first whitespace and strip
             for pattern, repl in ADQL.config['transform'].items():
