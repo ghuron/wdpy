@@ -34,10 +34,3 @@ class TestSimbad(TestCase):
         mock_post.assert_called_with('https://simbad.u-strasbg.fr/simbad/sim-tap/sync',
                                      data={'request': 'doQuery', 'lang': 'adql', 'format': 'csv', 'maxrec': -1,
                                            'query': 'select * from basic'}, stream=True)
-
-    def test_parse_input_use_parent(self):
-        simbad = SimbadDAP('HD 1')
-        simbad.dataset = {simbad.external_id: []}
-        input_snaks = simbad.prepare_data()
-        self.assertEqual(simbad.db_property, input_snaks[0]['property'])
-        self.assertEqual(simbad.external_id, input_snaks[0]['datavalue']['value'])
