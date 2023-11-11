@@ -59,6 +59,16 @@ class ExoArchive(ADQL):
                     self.trace('{} appears to have redirect'.format(prefix + self.external_id))
             return input_snaks
 
+    __p5653 = None
+
+    def update(self, parsed_data):
+        if not self.qid:  # Try to reuse item from Exoplanet.eu
+            if not ExoArchive.__p5653:
+                ExoArchive.__p5653 = Wikidata.query('SELECT ?c ?i {?i wdt:P5653 ?c MINUS {?i wdt:P5667 []}}')
+            if self.external_id in ExoArchive.__p5653:
+                self.qid = ExoArchive.__p5653[self.external_id]
+        return super().update(parsed_data)
+
     def obtain_claim(self, snak):
         if snak and snak['property'] == 'P528':  # All catalogue codes for exoplanets should be aliases
             self.entity['aliases'] = {} if 'aliases' not in self.entity else self.entity['aliases']
