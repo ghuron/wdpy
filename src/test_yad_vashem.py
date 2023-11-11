@@ -6,7 +6,7 @@ from yad_vashem import YadVashem
 class TestYadVashem(TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.yv = YadVashem('10061418', 'Succi Luigi (1882 - 1945 )', None)
+        cls.yv = YadVashem('Succi Luigi (1882 - 1945 )', None)
 
     def test_obtain_claim_no_qualifiers_for_award(self):
         self.yv.obtain_claim(self.yv.create_snak('P166', 'Q112197'))

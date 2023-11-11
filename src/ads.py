@@ -12,15 +12,16 @@ class ADS(ADQL):
 
     __doi = None
 
-    def prepare_data(self):
+    @classmethod
+    def prepare_data(cls, external_id) -> []:
         ADS.__doi = None
-        if (result := super().prepare_data()) and ADS.__doi:
+        if (result := super().prepare_data(external_id)) and ADS.__doi:
             return {'input': result, 'doi': ADS.__doi}  # {**result, 'doi': ADS.__doi}
 
     @classmethod
     def create_snak(cls, property_id: str, value, lower: str = None, upper: str = None):
         ADS.__doi = value if (property_id == 'P356') and value else ADS.__doi
-        return ADQL.create_snak(property_id, value, lower, upper)
+        return super().create_snak(property_id, value, lower, upper)
 
     def update(self, parsed_data):
         if parsed_data:
@@ -31,3 +32,4 @@ class ADS(ADQL):
 
 
 ADS.initialize(__file__)
+# ADS.get_by_id('2023ApJ...943...15W')

@@ -52,7 +52,6 @@ class TestWikiData(TestCase):
 
 class TestAddRefs(TestCase):
     @classmethod
-    @mock.patch.multiple(Element, __abstractmethods__=set())
     def setUp(cls):
         wd = Element('0000 0001 2197 5163')
         Element.db_property = 'P213'
@@ -151,7 +150,6 @@ class TestModel(TestCase):
 
 class TestElement(TestCase):
     @classmethod
-    @mock.patch.multiple(Element, __abstractmethods__=set())
     def setUp(cls):
         cls.wd = Element('0000 0001 2197 5163')
 

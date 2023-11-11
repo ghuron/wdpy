@@ -14,11 +14,7 @@ from wd import Wikidata
 
 
 class ExoplanetEu(ADQL):
-    db_property, db_ref = 'P5653', 'Q1385430'
-
-    def __init__(self, external_id, qid=None):
-        super().__init__(external_id, qid)
-        self.properties = ExoplanetEu.config['planet']
+    db_property, db_ref, properties = 'P5653', 'Q1385430', None
 
     def trace(self, message: str, level=20):
         super().trace('http://exoplanet.eu/catalog/{}\t{}'.format(self.external_id.replace(' ', '_'), message), level)
@@ -60,7 +56,7 @@ class ExoplanetEu(ADQL):
     @staticmethod
     def parse_publication(publication: element.Tag):
         for a in publication.find_all('a'):
-            if ref_id := ADQL.parse_url(a.get('href')):
+            if ref_id := ExoplanetEu.parse_url(a.get('href')):
                 return ref_id
         if (raw := publication.find('h5').text) and "Data Validation (DV) Report for Kepler" not in raw:
             if len(title := ' '.join(raw.replace('\n', ' ').strip('.').split())) > 24:
@@ -68,26 +64,27 @@ class ExoplanetEu(ADQL):
 
     page = None
 
-    def prepare_data(self):
-        ExoplanetEu.page = ExoplanetEu.page if ExoplanetEu.page else item.retrieve(self.external_id)
+    @classmethod
+    def prepare_data(cls, external_id) -> []:
+        ExoplanetEu.page = ExoplanetEu.page if ExoplanetEu.page else item.retrieve(external_id)
         if ExoplanetEu.page:
             result = {'input': []}
-            if 'P215' in self.properties.values():  # parsing hosting star, not exoplanet
+            if 'P215' in ExoplanetEu.properties.values():  # parsing hosting star, not exoplanet
                 if star := ExoplanetEu.page.select_one('[id^=star-detail] dd'):
                     result['label'] = star.text.strip()
             else:
-                result['input'] = [ExoplanetEu.create_snak(ExoplanetEu.db_property, self.external_id)]
+                result['input'] = [ExoplanetEu.create_snak(ExoplanetEu.db_property, external_id)]
                 result['label'] = ExoplanetEu.page.select_one('#planet-detail-basic-info dd').text.strip()
                 if star := ExoplanetEu.page.select_one('[id^=star-detail] dd'):
                     if snak := ExoplanetEu.parse_value('P397', star.text.strip()):
                         result['input'].append(snak)
 
-            if snak := ExoplanetEu.parse_value('P528', result['label']):
+            if 'label' in result and (snak := ExoplanetEu.parse_value('P528', result['label'])):
                 result['input'].append(snak)
 
-            for div_id in self.properties:
+            for div_id in ExoplanetEu.properties:
                 if (ref := ExoplanetEu.page.find(id=div_id)) and (text := ref.parent.findChild('span').text):
-                    if (property_id := self.properties[div_id]) in ['P397', 'P528']:
+                    if (property_id := ExoplanetEu.properties[div_id]) in ['P397', 'P528']:
                         result['input'] = result['input'] + ExoplanetEu.parse_snaks(property_id, text.split(','), ref)
                     else:
                         result['input'] = result['input'] + ExoplanetEu.parse_snaks(property_id, [text], ref)
@@ -142,7 +139,7 @@ class ExoplanetEu(ADQL):
                 deg[1], deg[2] = ('-' + deg[1], '-' + deg[2]) if deg[0].startswith('-') else (deg[1], deg[2])
                 angle = (float(deg[2]) / 60 + float(deg[1])) / 60 + float(deg[0])
                 digits = 3 + (len(value) - value.find('.') - 1 if value.find('.') > 0 else 0)
-                value = ADQL.format_float(15 * angle if property_id == 'P6257' else angle, digits)
+                value = ExoplanetEu.format_float(15 * angle if property_id == 'P6257' else angle, digits)
                 if result := ExoplanetEu.create_snak(property_id, value):
                     result['datavalue']['value']['unit'] = prefix + 'Q28390'
             except (ValueError, DecimalException):
@@ -198,14 +195,14 @@ if ExoplanetEu.initialize(__file__):  # if just imported - do nothing
                                      lambda row, _: (row[0].lower(), row[1]))
     for ex_id in wd_items:
         # ex_id = '2mass_j0249_0557_ab_c--6790'  # uncomment to debug specific item only
-        item = ExoplanetEu(ex_id, wd_items[ex_id])
-        item.update(item.prepare_data())
+        ExoplanetEu.properties = ExoplanetEu.config['planet']
+        (item := ExoplanetEu(ex_id, wd_items[ex_id])).update(ExoplanetEu.prepare_data(ex_id))
         if item.entity and 'P397' in item.entity['claims'] and len(item.entity['claims']['P397']) == 1:
             if 'datavalue' in (parent := item.entity['claims']['P397'][0]['mainsnak']):  # parent != "novalue"
                 if (host := ExoplanetEu(ex_id, parent['datavalue']['value']['id'])).qid not in updated_hosts:
-                    if ExoplanetEu.db_property not in host.entity['claims']:
-                        host.properties = ExoplanetEu.config['star']
-                        host.update(host.prepare_data())
+                    if ExoplanetEu.db_property not in host.entity['claims']:  # If initial item was not exo-moon
+                        ExoplanetEu.properties = ExoplanetEu.config['star']
+                        host.update(host.prepare_data(ex_id))
                         updated_hosts.append(host.qid)
         if ExoplanetEu.page:
             ExoplanetEu.page.decompose()

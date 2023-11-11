@@ -19,7 +19,8 @@ class SimbadDAP(ADQL):
         SimbadDAP.load('id BETWEEN {} AND {}'.format(0, 10000))
         return SimbadDAP.dataset.keys(), None
 
-    def construct_snak(self, row, col, new_col=None):
+    @classmethod
+    def construct_snak(cls, row, col, new_col=None):
         if (new_col := col) == 'p397':
             new_col = 'p361' if row['parent_type'] in SimbadDAP.config["groups"] else new_col
         elif col == 'p215':
@@ -50,5 +51,4 @@ if SimbadDAP.initialize(__file__):  # if not imported
     wd_items = SimbadDAP.get_all_items('SELECT DISTINCT ?id ?item {?item wdt:P3083 ?id; ^wdt:P397 []}')
     for simbad_id in wd_items:
         # simbad_id = '* 51 Eri b'
-        item = SimbadDAP(simbad_id, wd_items[simbad_id])
-        item.update(item.prepare_data())
+        SimbadDAP(simbad_id, wd_items[simbad_id]).update(SimbadDAP.prepare_data(simbad_id))

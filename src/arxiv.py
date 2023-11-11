@@ -43,21 +43,22 @@ class ArXiv(Element):
                 token = 'resumptionToken=' + element.text
         return ArXiv.dataset.keys(), token
 
-    def prepare_data(self):
-        if tree := ArXiv.arxiv_xml('api/query?id_list=' + self.external_id):
-            snaks = super().prepare_data() + [ArXiv.create_snak('P31', 'Q13442814')]
+    @classmethod
+    def prepare_data(cls, external_id) -> []:
+        if tree := ArXiv.arxiv_xml('api/query?id_list=' + external_id):
+            snaks = super().prepare_data(external_id) + [cls.create_snak('P31', 'Q13442814')]
             ns = {'w3': 'http://www.w3.org/2005/Atom', 'arxiv': 'http://arxiv.org/schemas/atom'}
             title = ' '.join(tree.findall('*/w3:title', ns)[0].text.split())
-            snaks.append(ArXiv.create_snak('P1476', {'text': title, 'language': 'en'}))
+            snaks.append(cls.create_snak('P1476', {'text': title, 'language': 'en'}))
             author_num = 0
             for author in tree.findall('*/*/w3:name', ns):
                 if len(author.text.strip()) > 3:
-                    snak = ArXiv.create_snak('P2093', author.text.strip())
+                    snak = cls.create_snak('P2093', author.text.strip())
                     snak['qualifiers'] = {'P1545': str(author_num := author_num + 1)}
                     snaks.append(snak)
             doi = ''
             if len(doi_list := tree.findall('*/arxiv:doi', ns)) == 1:
-                snaks.append(self.create_snak('P356', doi := doi_list[0].text.upper()))
+                snaks.append(cls.create_snak('P356', doi := doi_list[0].text.upper()))
             return {'input': snaks, 'label': title, 'doi': doi}
 
     def update(self, parsed_data):
@@ -83,6 +84,7 @@ class ArXiv(Element):
 
 
 if ArXiv.initialize(__file__):  # if not imported
+    # ArXiv.get_by_id('2311.05349')
     SUMMARY = 'extracted from [[Q118398]] based on [[Property:{}]]: {}'
     QUERY = 'SELECT ?c ?i {{VALUES ?c {{\'{}\'}} ?i p:P356/ps:P356 ?c MINUS {{?i p:P818 []; p:P356 []}}}}'
     no_doi_items = Wikidata.query('SELECT ?c ?i {?i p:P818/ps:P818 ?c MINUS {?i p:P818 []; p:P356 []}}')

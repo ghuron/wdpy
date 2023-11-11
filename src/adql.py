@@ -30,17 +30,18 @@ class ADQL(Element):
                 query = 'SELECT * FROM ({}) a WHERE {}'.format(query, condition)  # condition uses "final" column names
             ADQL.tap_query(cls.config['endpoint'], query, ADQL.dataset)
 
-    def prepare_data(self):
-        input_snaks = super().prepare_data()
-        if self.external_id not in self.dataset and 'endpoint' in self.config:
-            self.get_next_chunk(self.external_id)  # attempt to load this specific object
-        if self.external_id in self.dataset:
-            for row in self.dataset[self.external_id]:
+    @classmethod
+    def prepare_data(cls, external_id) -> []:
+        input_snaks = super().prepare_data(external_id)
+        if external_id not in cls.dataset and 'endpoint' in cls.config:
+            cls.get_next_chunk(external_id)  # attempt to load this specific object
+        if external_id in cls.dataset:
+            for row in cls.dataset[external_id]:
                 for col in row:
-                    if row[col] and re.search('\\d+$', col) and (snak := self.construct_snak(row, col)):
+                    if row[col] and re.search('\\d+$', col) and (snak := cls.construct_snak(row, col)):
                         input_snaks.append(snak)
         else:
-            self.trace('"{}"\tcould not be loaded, skipping update'.format(self.external_id), 30)
+            logging.warning('"{}"\tcould not be loaded, skipping update'.format(external_id))
             input_snaks = None
         return input_snaks
 
@@ -49,10 +50,10 @@ class ADQL(Element):
     def post_process(self):
         super().post_process()
         for property_id in self.entity['claims']:
-            if property_id in ADQL.config['normalize']:
-                ADQL.normalize(self.entity['claims'][property_id])
+            if property_id in self.config['normalize']:
+                self.normalize(self.entity['claims'][property_id])
             elif property_id in ['P6257', 'P6258']:
-                self.entity['claims'][property_id] = ADQL.get_best_value(self.entity['claims'][property_id])
+                self.entity['claims'][property_id] = self.get_best_value(self.entity['claims'][property_id])
         if 'P6257' in self.entity['claims'] and 'datavalue' in self.entity['claims']['P6257'][0]['mainsnak']:
             if 'P6258' in self.entity['claims'] and 'datavalue' in self.entity['claims']['P6258'][0]['mainsnak']:
                 self.obtain_claim(self.create_snak('P6259', 'Q1264450'))  # J2000
@@ -63,7 +64,7 @@ class ADQL(Element):
                     if ADQL.__const is None:
                         ADQL.__const = Wikidata.query(
                             'SELECT DISTINCT ?n ?i {?i wdt:P31/wdt:P279* wd:Q8928; wdt:P1813 ?n}')
-                    self.obtain_claim(Element.create_snak('P59', ADQL.__const[tla]))
+                    self.obtain_claim(self.create_snak('P59', ADQL.__const[tla]))
 
     __pub_dates, __redirects = {'Q66617668': 19240101, 'Q4026990': 99999999}, {}
 
@@ -83,7 +84,7 @@ class ADQL(Element):
                                 ref_id = entity['redirects']['to']
                             if 'claims' in entity and 'P577' in entity['claims']:
                                 p577 = entity['claims']['P577'][0]['mainsnak']['datavalue']['value']
-                        ADQL.__pub_dates[ref_id] = int(Element.serialize(p577)) if p577 else None
+                        ADQL.__pub_dates[ref_id] = int(ADQL.serialize(p577)) if p577 else None
                     if ref_id in p248:
                         claim['references'].remove(ref)  # remove duplicates
                     else:
@@ -183,37 +184,38 @@ class ADQL(Element):
 
     @staticmethod
     def format_figure(row, col):
-        return Element.format_float(row[col], int(row[col + 'p']) if col + 'p' in row and row[col + 'p'] != '' else -1)
+        return ADQL.format_float(row[col], int(row[col + 'p']) if col + 'p' in row and row[col + 'p'] != '' else -1)
 
-    def construct_snak(self, row, col, new_col=None):
+    @classmethod
+    def construct_snak(cls, row, col, new_col=None):
         from simbad_dap import SimbadDAP
 
         new_col = (new_col if new_col else col).upper()
         if Wikidata.type_of(new_col) != 'quantity':
             if col == 'p397' and (qid := SimbadDAP.get_by_any_id(row[col])):
                 row[col] = qid
-            result = self.create_snak(new_col, row[col])
+            result = cls.create_snak(new_col, row[col])
         elif col + 'h' not in row or row[col + 'h'] == '':
-            result = self.create_snak(new_col, ADQL.format_figure(row, col))
+            result = cls.create_snak(new_col, cls.format_figure(row, col))
         else:
             try:
-                high = ADQL.format_figure(row, col + 'h')
-                low = ADQL.format_figure(row, col + 'l')
-                figure = ADQL.format_figure(row, col)
-                result = self.create_snak(new_col, figure, low, high)
+                high = cls.format_figure(row, col + 'h')
+                low = cls.format_figure(row, col + 'l')
+                figure = cls.format_figure(row, col)
+                result = cls.create_snak(new_col, figure, low, high)
             except InvalidOperation:
                 return
 
         if result is not None:
             if 'mespos' in row:
                 result['mespos'] = row['mespos']
-            if col + 'u' in row and (unit := self.convert_to_qid(row[col + 'u'])):
+            if col + 'u' in row and (unit := cls.convert_to_qid(row[col + 'u'])):
                 result['datavalue']['value']['unit'] = 'http://www.wikidata.org/entity/' + unit
             reference = row[col + 'r'] if col + 'r' in row and row[col + 'r'] else None
             reference = row['reference'] if 'reference' in row and row['reference'] else reference
             if reference and (ref_id := ADQL.parse_url(re.sub('.*(http\\S+).*', '\\g<1>', reference))):
                 result['source'] = [ref_id] if 'source' not in result else result['source'] + [ref_id]
-        return self.enrich_qualifier(result, row['qualifier'] if 'qualifier' in row else row[col])
+        return cls.enrich_qualifier(result, row['qualifier'] if 'qualifier' in row else row[col])
 
     @classmethod
     def enrich_qualifier(cls, snak, value):

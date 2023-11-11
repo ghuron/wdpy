@@ -1,6 +1,7 @@
 #!/usr/bin/python3
 import json
 import logging
+import traceback
 
 import requests
 
@@ -10,13 +11,16 @@ from wd import Wikidata, Element
 class YadVashem(Element):
     db_property, db_ref = 'P1979', 'Q77598447'
 
-    def __init__(self, case_id, named_as, qid):
-        super().__init__(case_id, qid)
-        self.named_as = named_as
-        self.award_cleared_qualifiers = []
-
-    def get_summary(self):
-        return 'basic facts about: ' + self.named_as + ' from Yad Vashem database entry ' + self.external_id
+    @staticmethod
+    def process_sparql_row(new, result):
+        if new[0] not in result:
+            return new[0], {new[1]: new[2]}  # create a new case
+        elif new[1] not in result[new[0]]:
+            return new[0], {**result[new[0]], new[1]: new[2]}  # add person to existing case
+        elif isinstance(result[new[0]][new[1]], int):
+            return new[0], {**result[new[0]], new[1]: 1 + result[new[0]][new[1]]}  # increment duplication count
+        else:
+            return new[0], {**result[new[0]], new[1]: 2}  # convert to duplication count
 
     __endpoint = requests.Session()
     __endpoint.verify = False
@@ -31,12 +35,18 @@ class YadVashem(Element):
         except json.decoder.JSONDecodeError:
             logging.error('Cannot decode {} response for {}'.format(method, num))
 
-    _entities = None
-    _rows = None
+    @staticmethod
+    def get_next_chunk(offset):
+        page, result = YadVashem.post('GetRighteousList', (offset := 0 if offset is None else offset)), []
+        for case_item in page['d']:
+            result.append(str(case_item['BookId']))
+        return result, offset + len(result)
+
+    _rows, _items, _group_id = {}, {}, None
 
     @staticmethod
-    def get_items(case_id, people: dict):
-        YadVashem._rows = {}
+    def extract(case_id, people: dict):
+        YadVashem._rows, YadVashem._items, YadVashem._group_id = {}, {}, case_id
         if case := YadVashem.post('GetPersonDetailsBySession', case_id):
             result, remaining = {}, []
             for row in case['d']['Individuals']:
@@ -67,40 +77,31 @@ class YadVashem(Element):
                         YadVashem.info(case_id, named_as, 'https://wikidata.org/wiki/' + remaining[name] + ' missing')
 
             if loaded := Wikidata.load(list(filter(lambda x: isinstance(x, str), result.values()))):
-                YadVashem._entities = loaded
+                YadVashem._items = loaded
                 return result
-            else:
-                YadVashem.info(case_id, '', 'could not load items, skipping')
-                return {}
+
+        YadVashem.info(case_id, '', 'could not load items, skipping')
+        return {}
+
+    @classmethod
+    def prepare_data(cls, external_id: str) -> []:
+        input_snaks = [YadVashem.create_snak(cls.db_property, YadVashem._group_id)]
+        input_snaks[0]['qualifiers'] = {'P1810': external_id}
+        input_snaks.append(cls.create_snak('P31', 'Q5'))
+        for element in YadVashem._rows[external_id]:
+            if element['Title'] in YadVashem.config['properties']:
+                input_snaks.append(cls.create_snak(cls.config['properties'][element['Title']], element['Value']))
+        return input_snaks
+
+    def __init__(self, named_as, qid):
+        super().__init__(named_as, qid)
+        self.award_cleared_qualifiers = []
 
     @property
     def entity(self) -> dict:
         if not self._entity:
-            if self.qid and self.qid in YadVashem._entities:
-                self._entity = YadVashem._entities[item.qid]
-            else:
-                self._entity = {'label': {}, 'claims': {}}
+            self._entity = YadVashem._items[self.qid] if self.qid in YadVashem._items else {'labels': {}, 'claims': {}}
         return self._entity
-
-    @staticmethod
-    def get_next_chunk(offset):
-        offset = 0 if offset is None else offset
-        page = YadVashem.post('GetRighteousList', offset)
-        result = []
-        for case_item in page['d']:
-            result.append(str(case_item['BookId']))
-        return result, offset + len(result)
-
-    @staticmethod
-    def process_sparql_row(new, result):
-        if new[0] not in result:
-            return new[0], {new[1]: new[2]}  # create a new case
-        elif new[1] not in result[new[0]]:
-            return new[0], {**result[new[0]], new[1]: new[2]}  # add person to existing case
-        elif isinstance(result[new[0]][new[1]], int):
-            return new[0], {**result[new[0]], new[1]: 1 + result[new[0]][new[1]]}  # increment duplication count
-        else:
-            return new[0], {**result[new[0]], new[1]: 2}  # convert to duplication count
 
     def obtain_claim(self, snak):
         if snak is not None:
@@ -120,46 +121,38 @@ class YadVashem(Element):
                                 claim['qualifiers'] = {'P2241': [self.create_snak('P2241', 'Q41755623')]}
                 return claim
 
-    def trace(self, message: str, level=20):
-        if self.entity is not None and 'id' in self.entity:
-            message = 'https://www.wikidata.org/wiki/' + self.entity['id'] + '\t' + message
-        YadVashem.info(self.external_id, self.named_as, message)
-
-    @staticmethod
-    def info(book_id, named_as, message):
-        logging.info('https://righteous.yadvashem.org/?itemId=' + book_id + '\t"' + named_as + '"\t' + message)
-
-    def prepare_data(self):
-        input_snaks = [Element.create_snak(self.db_property, self.external_id)]
-        input_snaks[0]['qualifiers'] = {'P1810': self.named_as}
-        input_snaks.append(self.create_snak('P31', 'Q5'))
-        for element in YadVashem._rows[self.named_as]:
-            if element['Title'] in YadVashem.config['properties']:
-                input_snaks.append(self.create_snak(YadVashem.config['properties'][element['Title']], element['Value']))
-        return input_snaks
-
     def post_process(self):
         if 'en' not in self.entity['labels']:
-            words = self.named_as.split('(')[0].split()
+            words = self.external_id.split('(')[0].split()
             if words[0].lower() in ['dalla', 'de', 'del', 'della', 'di', 'du', 'Im', 'le', 'te', 'van', 'von']:
                 label = ' '.join([words[-1]] + words[:-1])  # van Allen John -> John van Allen
             else:
                 label = ' '.join([words[-1]] + words[1:-1] + [words[0]])  # Pol van de John -> John van de Pol
             self.entity['labels']['en'] = {'value': label, 'language': 'en'}
 
+    def get_summary(self):
+        return 'basic facts about: ' + self.external_id + ' from Yad Vashem database entry ' + YadVashem._group_id
+
+    def trace(self, message: str, level=20):
+        if self.entity is not None and 'id' in self.entity:
+            message = 'https://www.wikidata.org/wiki/' + self.entity['id'] + '\t' + message
+        YadVashem.info(YadVashem._group_id, self.external_id, message)
+
+    @staticmethod
+    def info(book_id, named_as, message):
+        logging.info('https://righteous.yadvashem.org/?itemId=' + book_id + '\t"' + named_as + '"\t' + message)
+
 
 if YadVashem.initialize(__file__):  # if not imported
     YadVashem.post('BuildQuery')
-    groups = YadVashem.get_all_items(
-        'SELECT ?r ?n ?i { ?i wdt:P31 wd:Q5; p:P1979 ?s . ?s ps:P1979 ?r OPTIONAL {?s pq:P1810 ?n}}',
-        YadVashem.process_sparql_row)
+    QUERY = 'SELECT ?r ?n ?i { ?i wdt:P31 wd:Q5; p:P1979 ?s . ?s ps:P1979 ?r OPTIONAL {?s pq:P1810 ?n}}'
+    groups = YadVashem.get_all_items(QUERY, YadVashem.process_sparql_row)
 
-    for group_id in groups:
+    for _id in groups:
         try:
-            # group_id = '4022505'  # uncomment to debug specific group of people
-            if wd_items := YadVashem.get_items(group_id, groups[group_id]):
+            # _id = '4022505'  # uncomment to debug specific group of people
+            if wd_items := YadVashem.extract(_id, groups[_id]):
                 for name in wd_items:
-                    item = YadVashem(group_id, name, wd_items[name] if wd_items[name] else [])
-                    item.update(item.prepare_data())
+                    YadVashem(name, wd_items[name]).update(YadVashem.prepare_data(name))
         except Exception as e:
-            logging.critical(group_id + ' ' + e.__str__())
+            logging.critical('while processing {}. {}'.format(_id, traceback.format_exc()))

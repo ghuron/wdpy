@@ -7,7 +7,6 @@ import re
 import sys
 import time
 import uuid
-from abc import ABC, abstractmethod
 from contextlib import closing
 from datetime import datetime
 from decimal import Decimal, DecimalException
@@ -258,7 +257,7 @@ class Model:
             logging.info('https://www.wikidata.org/wiki/{}#{} created'.format(qid, response['claim']['id']))
 
 
-class Element(Model, ABC):
+class Element(Model):
     config, db_property, db_ref = {}, None, None
 
     @classmethod
@@ -297,9 +296,7 @@ class Element(Model, ABC):
         return results
 
     def __init__(self, external_id: str, qid: str = None):
-        self.external_id = external_id
-        self.qid = qid
-        self._entity = None
+        self.external_id, self.qid, self._entity = external_id, qid, None
 
     @property
     def entity(self):
@@ -315,9 +312,9 @@ class Element(Model, ABC):
         LOG = 'https://www.wikidata.org/wiki/{}#{}\t{}'
         logging.log(level, LOG.format(self.qid, self.db_property, message) if self.qid else message)
 
-    @abstractmethod
-    def prepare_data(self) -> []:
-        return [Element.create_snak(self.db_property, self.external_id)]
+    @classmethod
+    def prepare_data(cls, external_id: str) -> []:
+        return [cls.create_snak(cls.db_property, external_id)]
 
     def obtain_claim(self, snak: dict):
         """Find or create claim, corresponding to the provided snak"""
@@ -331,7 +328,7 @@ class Element(Model, ABC):
             self.entity['claims'][snak['property']] = []
 
         if claim := Model.find_claim(snak, self.entity['claims'][snak['property']]):
-            if Element.skip_statement(claim):
+            if self.skip_statement(claim):
                 return
         else:
             self.entity['claims'][snak['property']].append(claim := Model.create_claim(snak, self.qid))
@@ -373,12 +370,12 @@ class Element(Model, ABC):
         if not default_ref_exists:
             claim['references'].append(self.process_own_reference(only_default_sources))
         for ref in references:
-            claim['references'].append({'snaks': {'P248': [Element.create_snak('P248', ref)]}})
+            claim['references'].append({'snaks': {'P248': [self.create_snak('P248', ref)]}})
 
     def filter_by_ref(self, unfiltered: list):
         filtered = []
         for statement in unfiltered:
-            if 'references' in statement and not Element.skip_statement(statement):
+            if 'references' in statement and not self.skip_statement(statement):
                 for ref in statement['references']:
                     if 'P248' in ref['snaks'] and ref['snaks']['P248'][0]['datavalue']['value']['id'] == self.db_ref:
                         filtered.append(statement)
@@ -455,7 +452,6 @@ class Element(Model, ABC):
         try:
             if qid := cls.haswbstatement(external_id):
                 return qid
-            instance = cls(external_id)
-            return instance.update(instance.prepare_data())
+            return cls(external_id).update(cls.prepare_data(external_id))
         except ValueError as e:
             logging.warning('Found {} instances of {}="{}", skipping'.format(e.args[0], cls.db_property, external_id))

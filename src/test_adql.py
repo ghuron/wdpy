@@ -5,7 +5,6 @@ from adql import ADQL
 
 class TestADQL(TestCase):
     @classmethod
-    @mock.patch.multiple(ADQL, __abstractmethods__=set())
     def setUp(cls):
         item = ADQL('')
         cls.adql = item
@@ -26,7 +25,6 @@ class TestADQL(TestCase):
 
 class TestDeprecateLessPreciseValues(TestCase):
     @classmethod
-    @mock.patch.multiple(ADQL, __abstractmethods__=set())
     def setUp(cls):
         cls.adql = ADQL('')
 
