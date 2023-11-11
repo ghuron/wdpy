@@ -116,10 +116,6 @@ class Wikidata:
 
 
 class Model:
-    @classmethod
-    def convert_to_qid(cls, text: str):
-        return text if re.search('Q\\d+$', text) else None
-
     @staticmethod
     def format_float(figure, digits: int = -1):
         """Raises: DecimalException"""
@@ -181,8 +177,8 @@ class Model:
         """ If someone explicitly states that this is a bad statement, do not touch it"""
         return 'rank' in s and s['rank'] == 'deprecated' and 'qualifiers' in s and 'P2241' in s['qualifiers']
 
-    @classmethod
-    def create_snak(cls, property_id: str, value, lower: str = None, upper: str = None):
+    @staticmethod
+    def create_snak(property_id: str, value, lower: str = None, upper: str = None):
         """Create snak based on provided id of the property and string value"""
         if not Wikidata.type_of(property_id) or value is None or value == '' or value == 'NaN':
             return None
@@ -206,9 +202,9 @@ class Model:
             except (ValueError, DecimalException, KeyError):
                 return None
         elif snak['datatype'] == 'wikibase-item':
-            if not (text := cls.convert_to_qid(snak['datavalue']['value'])):
-                return
-            snak['datavalue'] = {'type': 'wikibase-entityid', 'value': {'entity-type': 'item', 'id': text}}
+            if not re.search('Q\\d+$', value):
+                return None
+            snak['datavalue'] = {'type': 'wikibase-entityid', 'value': {'entity-type': 'item', 'id': value}}
         elif snak['datatype'] == 'time':
             if not (value := Model.parse_date(snak['datavalue']['value'])):
                 return
@@ -257,7 +253,7 @@ class Model:
             logging.info('https://www.wikidata.org/wiki/{}#{} created'.format(qid, response['claim']['id']))
 
 
-class Element(Model):
+class Element:
     config, db_property, db_ref = {}, None, None
 
     @classmethod
@@ -272,10 +268,13 @@ class Element(Model):
         return executed
 
     @classmethod
-    def convert_to_qid(cls, text: str):
-        if cls.config and 'translate' in cls.config and text in cls.config['translate']:
-            text = cls.config['translate'][text]
-        return super().convert_to_qid(text)
+    def create_snak(cls, property_id: str, value, lower: str = None, upper: str = None):
+        return Model.create_snak(property_id, cls.lut(value) if property_id == 'wikibase-item' else value, lower, upper)
+
+    @classmethod
+    def lut(cls, text: str):
+        conversion = cls.config and 'translate' in cls.config and text in cls.config['translate']
+        return cls.config['translate'][text] if conversion else text
 
     @staticmethod
     def get_next_chunk(offset: any) -> Tuple[list[str], any]:
@@ -328,7 +327,7 @@ class Element(Model):
             self.entity['claims'][snak['property']] = []
 
         if claim := Model.find_claim(snak, self.entity['claims'][snak['property']]):
-            if self.skip_statement(claim):
+            if Model.skip_statement(claim):
                 return
         else:
             self.entity['claims'][snak['property']].append(claim := Model.create_claim(snak, self.qid))
@@ -375,7 +374,7 @@ class Element(Model):
     def filter_by_ref(self, unfiltered: list):
         filtered = []
         for statement in unfiltered:
-            if 'references' in statement and not self.skip_statement(statement):
+            if 'references' in statement and not Model.skip_statement(statement):
                 for ref in statement['references']:
                     if 'P248' in ref['snaks'] and ref['snaks']['P248'][0]['datavalue']['value']['id'] == self.db_ref:
                         filtered.append(statement)

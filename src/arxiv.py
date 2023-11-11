@@ -6,7 +6,7 @@ import time
 from urllib import request, error
 from xml.etree import ElementTree
 
-from wd import Wikidata, Element
+from wd import Wikidata, Model, Element
 
 
 class ArXiv(Element):
@@ -95,6 +95,6 @@ if ArXiv.initialize(__file__):  # if not imported
         for p818 in ArXiv.dataset:
             if p356 := ArXiv.dataset[p818]:
                 if no_doi_items and (p818 in no_doi_items):  # DOI is absent
-                    ArXiv.set_id(no_doi_items.pop(p818), 'P356', p356.upper(), SUMMARY.format('P818', p818))
+                    Model.set_id(no_doi_items.pop(p818), 'P356', p356.upper(), SUMMARY.format('P818', p818))
                 elif no_arxiv_items and (p356 in no_arxiv_items):  # Arxiv is absent
-                    ArXiv.set_id(no_arxiv_items.pop(p356), 'P818', p818, SUMMARY.format('P356', p356))
+                    Model.set_id(no_arxiv_items.pop(p356), 'P818', p818, SUMMARY.format('P356', p356))

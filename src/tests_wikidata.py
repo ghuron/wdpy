@@ -118,11 +118,11 @@ class TestModel(TestCase):
                              [Model.create_claim(Model.create_snak('P575', '1999'))]))
 
     def test_format_float(self):
-        self.assertEqual('0.12345679', Element.format_float('0.123456789', 8))
-        self.assertEqual(0, Decimal(Element.format_float('+0E-7', 8)))
+        self.assertEqual('0.12345679', Model.format_float('0.123456789', 8))
+        self.assertEqual(0, Decimal(Model.format_float('+0E-7', 8)))
 
     def test_date_parser(self):
-        self.assertIsNone(Element.parse_date(''))
+        self.assertIsNone(Model.parse_date(''))
         self.assertEqual('+1987-00-00T00:00:00Z', Model.parse_date('1987')['time'])
         self.assertEqual(9, Model.parse_date('1987')['precision'])
         self.assertEqual(0, Model.parse_date('1987')['timezone'])

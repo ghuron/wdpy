@@ -10,7 +10,7 @@ from bs4 import BeautifulSoup, element
 
 from adql import ADQL
 from simbad_dap import SimbadDAP
-from wd import Wikidata
+from wd import Wikidata, Model
 
 
 class ExoplanetEu(ADQL):
@@ -139,7 +139,7 @@ class ExoplanetEu(ADQL):
                 deg[1], deg[2] = ('-' + deg[1], '-' + deg[2]) if deg[0].startswith('-') else (deg[1], deg[2])
                 angle = (float(deg[2]) / 60 + float(deg[1])) / 60 + float(deg[0])
                 digits = 3 + (len(value) - value.find('.') - 1 if value.find('.') > 0 else 0)
-                value = ExoplanetEu.format_float(15 * angle if property_id == 'P6257' else angle, digits)
+                value = Model.format_float(15 * angle if property_id == 'P6257' else angle, digits)
                 if result := ExoplanetEu.create_snak(property_id, value):
                     result['datavalue']['value']['unit'] = prefix + 'Q28390'
             except (ValueError, DecimalException):

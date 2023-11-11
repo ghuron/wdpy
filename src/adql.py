@@ -7,7 +7,7 @@ from urllib.parse import unquote
 
 from astropy import coordinates
 
-from wd import Wikidata, Element
+from wd import Wikidata, Model, Element
 
 
 class ADQL(Element):
@@ -84,7 +84,7 @@ class ADQL(Element):
                                 ref_id = entity['redirects']['to']
                             if 'claims' in entity and 'P577' in entity['claims']:
                                 p577 = entity['claims']['P577'][0]['mainsnak']['datavalue']['value']
-                        ADQL.__pub_dates[ref_id] = int(ADQL.serialize(p577)) if p577 else None
+                        ADQL.__pub_dates[ref_id] = int(Model.serialize(p577)) if p577 else None
                     if ref_id in p248:
                         claim['references'].remove(ref)  # remove duplicates
                     else:
@@ -124,7 +124,7 @@ class ADQL(Element):
                         if 'datavalue' in claim1['mainsnak'] and 'datavalue' in claim2['mainsnak']:  # novalue
                             val1 = claim1['mainsnak']['datavalue']['value']
                             val2 = claim2['mainsnak']['datavalue']['value']
-                            if ADQL.serialize(val2, val1) == ADQL.serialize(val1):
+                            if Model.serialize(val2, val1) == Model.serialize(val1):
                                 claim1['rank'] = 'deprecated'
                                 claim1['qualifiers'] = {} if 'qualifiers' not in claim1 else claim1['qualifiers']
                                 claim1['qualifiers']['P2241'] = [ADQL.create_snak('P2241', 'Q42727519')]
@@ -184,7 +184,7 @@ class ADQL(Element):
 
     @staticmethod
     def format_figure(row, col):
-        return ADQL.format_float(row[col], int(row[col + 'p']) if col + 'p' in row and row[col + 'p'] != '' else -1)
+        return Model.format_float(row[col], int(row[col + 'p']) if col + 'p' in row and row[col + 'p'] != '' else -1)
 
     @classmethod
     def construct_snak(cls, row, col, new_col=None):
@@ -209,7 +209,7 @@ class ADQL(Element):
         if result is not None:
             if 'mespos' in row:
                 result['mespos'] = row['mespos']
-            if col + 'u' in row and (unit := cls.convert_to_qid(row[col + 'u'])):
+            if col + 'u' in row and (unit := cls.lut(row[col + 'u'])):
                 result['datavalue']['value']['unit'] = 'http://www.wikidata.org/entity/' + unit
             reference = row[col + 'r'] if col + 'r' in row and row[col + 'r'] else None
             reference = row['reference'] if 'reference' in row and row['reference'] else reference
