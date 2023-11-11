@@ -1,7 +1,6 @@
 import csv
 import logging
 import re
-from abc import ABC
 from contextlib import closing
 from decimal import InvalidOperation
 from urllib.parse import unquote
@@ -11,7 +10,7 @@ from astropy import coordinates
 from wd import Wikidata, Element
 
 
-class ADQL(Element, ABC):
+class ADQL(Element):
     def obtain_claim(self, snak):
         if claim := super().obtain_claim(snak):
             if 'mespos' in snak:
