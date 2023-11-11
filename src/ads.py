@@ -26,7 +26,8 @@ class ADS(ADQL):
         if parsed_data:
             if self.qid is None and parsed_data['doi']:
                 self.qid = ADS.haswbstatement(parsed_data['doi'], 'P356')
-            return super().update(parsed_data['input'])  # ToDo: create a new source
+            if self.qid:  # ToDo: create a new source if necessary
+                return super().update(parsed_data['input'])
 
 
 ADS.initialize(__file__)
