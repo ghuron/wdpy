@@ -82,7 +82,7 @@ class Wikidata:
                 if response['error']['code'] == 'badtoken':
                     Wikidata.__token = Wikidata.call('query', {'meta': 'tokens'})['query']['tokens']['csrftoken']
                     continue
-                logging.error('{} response: {}'.format(method, response['error']['info']), 40)
+                logging.error('{} response: {}'.format(method, response['error']['info']))
             time.sleep(10)
             if response and (response['error']['code'] != 'maxlag'):
                 Wikidata.logon()  # just in case - re-authenticate

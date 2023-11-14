@@ -20,7 +20,8 @@ class ADS(ADQL):
 
     @classmethod
     def create_snak(cls, property_id: str, value, lower: str = None, upper: str = None):
-        ADS.__doi = value if (property_id == 'P356') and value else ADS.__doi
+        if (property_id == 'P356') and value:
+            ADS.__doi = (value := value.upper())
         return super().create_snak(property_id, value, lower, upper)
 
     def update(self, parsed_data):
