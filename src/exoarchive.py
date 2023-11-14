@@ -4,7 +4,6 @@ from decimal import Decimal, InvalidOperation
 from time import sleep
 
 from adql import ADQL
-from simbad_dap import SimbadDAP
 from wd import Wikidata
 
 
@@ -78,8 +77,6 @@ class ExoArchive(ADQL):
 if ExoArchive.initialize(__file__):  # if not imported
     ExoArchive.redirect = ExoArchive.tap_query(ExoArchive.config['endpoint'], ExoArchive.config['redirects'])
     wd_items = ExoArchive.get_all_items('SELECT ?id ?item {?item p:P5667/ps:P5667 ?id}', ExoArchive.resolve_redirects)
-    SimbadDAP.cache = Wikidata.query('SELECT DISTINCT ?c ?i { ?i ^ps:P397 []; wdt:P528 ?c }',
-                                     lambda row, _: (row[0].lower(), row[1]))
     for ex_id in wd_items:
         # ex_id = 'eps Tau b'
         ExoArchive(ex_id, wd_items[ex_id]).update(ExoArchive.prepare_data(ex_id))

@@ -123,7 +123,7 @@ class ExoplanetEu(ADQL):
         if not value or (value := value.strip()) == '—':
             return
         elif property_id == 'P397':
-            return ExoplanetEu.create_snak(property_id, SimbadDAP.get_by_any_id(value))
+            return ExoplanetEu.create_snak(property_id, SimbadDAP.get_parent_object(value))
         elif reg := re.search(
                 '(?P<value>' + num + ')\\s*\\(\\s*-+(?P<min>' + num + ')\\s+(?P<max>\\+' + num + ')\\s*\\)' + unit,
                 value):
@@ -191,8 +191,6 @@ class ExoplanetEu(ADQL):
 if ExoplanetEu.initialize(__file__):  # if just imported - do nothing
     updated_hosts = []
     wd_items = OrderedDict(sorted(ExoplanetEu.get_all_items('SELECT ?id ?item {?item p:P5653/ps:P5653 ?id}').items()))
-    SimbadDAP.cache = Wikidata.query('SELECT DISTINCT ?c ?i { ?i ^ps:P397 []; wdt:P528 ?c }',
-                                     lambda row, _: (row[0].lower(), row[1]))
     for ex_id in wd_items:
         # ex_id = '2mass_j0249_0557_ab_c--6790'  # uncomment to debug specific item only
         ExoplanetEu.properties = ExoplanetEu.config['planet']

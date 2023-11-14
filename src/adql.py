@@ -192,7 +192,7 @@ class ADQL(Element):
 
         new_col = (new_col if new_col else col).upper()
         if Wikidata.type_of(new_col) != 'quantity':
-            if col == 'p397' and (qid := SimbadDAP.get_by_any_id(row[col])):
+            if col == 'p397' and (qid := SimbadDAP.get_parent_object(row[col])):
                 row[col] = qid
             result = cls.create_snak(new_col, row[col])
         elif col + 'h' not in row or row[col + 'h'] == '':

@@ -2,6 +2,7 @@
 import logging
 
 from adql import ADQL
+from wd import Wikidata
 
 
 class SimbadDAP(ADQL):
@@ -29,22 +30,25 @@ class SimbadDAP(ADQL):
             return
         return super().construct_snak(row, col, new_col)
 
-    cache = {}
+    _cache = None
 
     @staticmethod
-    def get_by_any_id(ident: str) -> str:
-        if ident.lower() in SimbadDAP.cache:
-            return SimbadDAP.cache[ident.lower()]
-        logging.info('Host star cache miss: ' + ident)
+    def get_parent_object(ident: str):
+        if SimbadDAP._cache is None:
+            SimbadDAP._cache = Wikidata.query('SELECT DISTINCT ?c ?i { ?i ^ps:P397 []; wdt:P528 ?c }',
+                                              lambda row, _: (row[0].lower(), row[1]))
+        if ident.lower() in SimbadDAP._cache:
+            return SimbadDAP._cache[ident.lower()]
         q = 'SELECT main_id FROM ident JOIN basic ON oid = oidref WHERE id=\'{}\''.format(ident.replace('\'', '\'\''))
         if ident and (row := SimbadDAP.tap_query(SimbadDAP.config['endpoint'], q)):
             if len(row) == 1:
-                if (main_id := list(row.keys())[0]).lower() in SimbadDAP.cache:
-                    SimbadDAP.cache[ident.lower()] = SimbadDAP.cache[main_id.lower()]
-                    return SimbadDAP.cache[ident.lower()]
-                if qid := SimbadDAP.get_by_id(main_id):
-                    SimbadDAP.cache[ident.lower()], SimbadDAP.cache[main_id.lower()] = qid, qid
-                    return SimbadDAP.cache[ident.lower()]
+                if (main_id := list(row.keys())[0]).lower() not in SimbadDAP._cache:
+                    if (qid := SimbadDAP.get_by_id(main_id)) is None:
+                        return
+                    SimbadDAP._cache[main_id.lower()] = qid
+                SimbadDAP._cache[ident.lower()] = SimbadDAP._cache[main_id.lower()]
+                logging.info('Cache miss: "{}" for {}'.format(ident, SimbadDAP._cache[ident.lower()]))
+                return SimbadDAP._cache[ident.lower()]
 
 
 if SimbadDAP.initialize(__file__):  # if not imported
