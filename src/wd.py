@@ -40,8 +40,8 @@ class Wikidata:
     @staticmethod
     def call(action: str, params: dict[str, str]) -> dict:
         """Wikidata API call with JSON format, see https://wikidata.org/w/api.php"""
-        ENDPOINT = 'https://www.wikidata.org/w/api.php'
-        if result := Wikidata.request(ENDPOINT, Wikidata.__api, data={**params, 'format': 'json', 'action': action}):
+        if result := Wikidata.request('https://www.wikidata.org/w/api.php', Wikidata.__api,
+                                      data={**params, 'format': 'json', 'action': action}):
             try:
                 return result.json()
             except json.decoder.JSONDecodeError:
@@ -89,11 +89,11 @@ class Wikidata:
 
     @staticmethod
     def query(sparql: str, process=lambda row, result: (row[0], row[1])):
-        ENDPOINT = 'https://query.wikidata.org/sparql'
         result = None
         with requests.Session() as session:
             session.headers.update({'Accept': 'text/csv', 'User-Agent': Wikidata.USER_AGENT})
-            if request := Wikidata.request(ENDPOINT, session, data={'query': sparql}, stream=True):
+            if request := Wikidata.request('https://query.wikidata.org/sparql',
+                                           session, data={'query': sparql}, stream=True):
                 with closing(request) as r:
                     reader = csv.reader(r.iter_lines(decode_unicode='utf-8'), delimiter=',', quotechar='"')
                     next(reader)
