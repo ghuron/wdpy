@@ -190,8 +190,8 @@ class ExoplanetEu(ADQL):
 
 if ExoplanetEu.initialize(__file__):  # if just imported - do nothing
     updated_hosts = []
-    wd_items = OrderedDict(sorted(ExoplanetEu.get_all_items('SELECT ?id ?item {?item p:P5653/ps:P5653 ?id}').items()))
-    for ex_id in wd_items:
+    wd_items = ExoplanetEu.get_all_items('SELECT ?id ?item {?item p:P5653/ps:P5653 ?id}')
+    for ex_id in OrderedDict(sorted(wd_items.items())):
         # ex_id = '2mass_j0249_0557_ab_c--6790'  # uncomment to debug specific item only
         ExoplanetEu.properties = ExoplanetEu.config['planet']
         (item := ExoplanetEu(ex_id, wd_items[ex_id])).update(ExoplanetEu.prepare_data(ex_id))
@@ -205,4 +205,4 @@ if ExoplanetEu.initialize(__file__):  # if just imported - do nothing
         if ExoplanetEu.page:
             ExoplanetEu.page.decompose()
             ExoplanetEu.page = None
-        sleep(3)
+        sleep(2)

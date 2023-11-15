@@ -1,5 +1,6 @@
 #!/usr/bin/python3
 import logging
+from collections import OrderedDict
 from decimal import Decimal, InvalidOperation
 from time import sleep
 
@@ -77,7 +78,7 @@ class ExoArchive(ADQL):
 if ExoArchive.initialize(__file__):  # if not imported
     ExoArchive.redirect = ExoArchive.tap_query(ExoArchive.config['endpoint'], ExoArchive.config['redirects'])
     wd_items = ExoArchive.get_all_items('SELECT ?id ?item {?item p:P5667/ps:P5667 ?id}', ExoArchive.resolve_redirects)
-    for ex_id in wd_items:
+    for ex_id in OrderedDict(sorted(wd_items.items())):
         # ex_id = 'eps Tau b'
         ExoArchive(ex_id, wd_items[ex_id]).update(ExoArchive.prepare_data(ex_id))
         sleep(1)
