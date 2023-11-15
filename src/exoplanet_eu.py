@@ -165,27 +165,11 @@ class ExoplanetEu(ADQL):
                                 return  # if found - skip provided snak
         return super().obtain_claim(snak)
 
-    @staticmethod
-    def compare_refs(claim: dict, references: set):
-        target = references.copy().union({ExoplanetEu.db_ref})
-        try:
-            for ref in claim['references']:
-                target.remove(ref['snaks']['P248'][0]['datavalue']['value']['id'])
-        except KeyError:
-            return False
-        return len(target) == 0
-
-    def add_refs(self, claim: dict, references: set):
-        if references:
-            try:
-                for candidate in self.entity['claims'][claim['mainsnak']['property']]:
-                    if candidate['id'] != claim['id'] and ExoplanetEu.compare_refs(candidate, references):
-                        self.trace('{} replace statement'.format(claim['mainsnak']['property']), 30)
-                        candidate[
-                            'remove'] = 1  # A different claim had exactly the same set of references -> replace it
-            except KeyError:
-                self.trace('No id')  # ToDo how does this happens?
-        super().add_refs(claim, references)
+    def confirm(self, reference):
+        reference = super().confirm(reference)
+        if 'P215' in ExoplanetEu.properties.values():
+            reference['snaks'][self.db_property] = [self.create_snak(self.db_property, self.external_id)]
+        return reference
 
 
 if ExoplanetEu.initialize(__file__):  # if just imported - do nothing

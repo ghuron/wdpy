@@ -338,48 +338,52 @@ class Element:
                 claim['qualifiers'][property_id] = [self.create_snak(property_id, snak['qualifiers'][property_id])]
         return claim
 
-    def process_own_reference(self, only_default_sources: bool, ref: dict = None) -> dict:
-        if ref is None:
-            ref = {'snaks': {'P248': [self.create_snak('P248', self.db_ref)]}}
-        if self.db_property in ref['snaks']:
-            if self.db_property in self.entity['claims'] or not only_default_sources:
-                ref['snaks'].pop(self.db_property, 0)
-        elif self.db_property not in self.entity['claims'] and only_default_sources:
-            ref['snaks'][self.db_property] = [self.create_snak(self.db_property, self.external_id)]
-        # if 'P813' in ref['snaks']:  # update "retrieved" timestamp if one already exists
-        #     ref['snaks']['P813'] = [self.create_snak('P813', datetime.now().strftime('%d/%m/%Y'))]
-        return ref
+    @staticmethod
+    def get_snaks(reference: {}, property_id: str) -> []:
+        result = []
+        for ref in reference['snaks'][property_id] if property_id in reference['snaks'] else []:
+            result.append(ref['datavalue']['value']['id'])
+        return result
 
-    def add_refs(self, claim: dict, references: set):
-        default_ref_exists = False
-        only_default_sources = (len(references) == 0)
-        claim['references'] = [] if 'references' not in claim else claim['references']
-        for exiting_ref in list(claim['references']):
-            if 'P248' in exiting_ref['snaks']:
-                if (ref_id := exiting_ref['snaks']['P248'][0]['datavalue']['value']['id']) == self.db_ref:
-                    default_ref_exists = True
-                    self.process_own_reference(only_default_sources, exiting_ref)
-                elif ref_id in references:
-                    references.remove(ref_id)
-            exiting_ref['snaks'].pop('P143', 0)  # Doesn't make sense to keep "imported from" if real source exists
-            exiting_ref['snaks'].pop('P4656', 0)
-            if len(exiting_ref['snaks']) == 0:
-                claim['references'].remove(exiting_ref)
+    def confirm(self, reference):
+        if self.db_ref not in self.get_snaks(reference, 'P248') + self.get_snaks(reference, 'P12132'):
+            reference['snaks']['P12132'] = reference['snaks']['P12132'] if 'P12132' in reference['snaks'] else []
+            reference['snaks']['P12132'] += [self.create_snak('P12132', self.db_ref)]
+        for property_id in ['P143', 'P4656', self.db_property]:
+            reference['snaks'].pop(property_id, 0)
+        reference['wdpy'] = 1
+        return reference
 
-        if not default_ref_exists:
-            claim['references'].append(self.process_own_reference(only_default_sources))
-        for ref in references:
-            claim['references'].append({'snaks': {'P248': [self.create_snak('P248', ref)]}})
+    def remove_unconfirmed(self, properties):
+        for property_id in properties:
+            for claim in self.entity['claims'][property_id]:
+                was_removed = False
+                for ref in list(claim['references']) if 'references' in claim else []:
+                    if not ref.pop('wdpy', 0):
+                        if self.db_ref in self.get_snaks(ref, 'P248') + self.get_snaks(ref, 'P12132'):
+                            claim['references'].remove(ref)
+                            was_removed = True
+                if was_removed and (len(claim['references']) == 0):
+                    claim['remove'] = 1
 
-    def filter_by_ref(self, unfiltered: list):
-        filtered = []
-        for statement in unfiltered:
-            if 'references' in statement and not Model.skip_statement(statement):
-                for ref in statement['references']:
-                    if 'P248' in ref['snaks'] and ref['snaks']['P248'][0]['datavalue']['value']['id'] == self.db_ref:
-                        filtered.append(statement)
-                        break
-        return filtered
+    def add_refs(self, claim, sources: set = None):
+        sources = sources if sources else set()
+        aggregator, has_confirmed_references = None, len(sources) > 0
+        claim['references'] = claim['references'] if 'references' in claim else []
+        for ref in claim['references']:
+            if ref['snaks']['P248'][0]['datavalue']['value']['id'] in sources:  # One of the sources
+                sources.remove(ref['snaks']['P248'][0]['datavalue']['value']['id'])
+                self.confirm(ref)
+            elif ref['snaks']['P248'][0]['datavalue']['value']['id'] == self.db_ref:
+                aggregator = ref
+            has_confirmed_references = True if 'wdpy' in ref else has_confirmed_references
+        for src_id in sources:
+            claim['references'].append(self.confirm({'snaks': {'P248': [Model.create_snak('P248', src_id)]}}))
+        if not has_confirmed_references:
+            if aggregator:
+                self.confirm(aggregator)
+            else:
+                claim['references'].append(self.confirm({'snaks': {'P248': [Model.create_snak('P248', self.db_ref)]}}))
 
     def post_process(self):
         """Changes in self.entity that does not depend on specific input"""
@@ -411,34 +415,19 @@ class Element:
             #     self.trace('no change while saving {}'.format(data['data']))
 
     def update(self, parsed_data):
-        if parsed_data is None:
-            return
+        if parsed_data:
+            original = json.dumps(self.entity)
 
-        original = json.dumps(self.entity)
-        affected_statements = {}
-        for snak in parsed_data:
-            if claim := self.obtain_claim(snak):
-                if snak['property'] not in affected_statements and snak['property'] in self.entity['claims']:
-                    affected_statements[snak['property']] = self.filter_by_ref(self.entity['claims'][snak['property']])
-                if claim in affected_statements[snak['property']]:
-                    affected_statements[snak['property']].remove(claim)
-                if claim['mainsnak']['datatype'] != 'external-id':
+            affected_properties = set()
+            for snak in parsed_data:
+                if (claim := self.obtain_claim(snak)) and claim['mainsnak']['datatype'] != 'external-id':
+                    affected_properties.add(snak['property'])
                     self.add_refs(claim, set(snak['source']) if 'source' in snak else set())
+            self.remove_unconfirmed(affected_properties)
 
-        for property_id in affected_statements:
-            for claim in affected_statements[property_id]:
-                if len(claim['references']) > 1:
-                    for ref in claim['references']:
-                        if 'P248' in ref['snaks']:
-                            if ref['snaks']['P248'][0]['datavalue']['value']['id'] == self.db_ref:
-                                claim['references'].remove(ref)
-                                continue
-                else:  # there is always P248:db_ref, so if there are no other references -> delete statement
-                    claim['remove'] = 1
-
-        self.post_process()
-        if not self.qid or json.dumps(self.entity) != original:
-            return self.save()
+            self.post_process()
+            if not self.qid or json.dumps(self.entity) != original:
+                return self.save()
 
     @classmethod
     def haswbstatement(cls, external_id, property_id=None):
