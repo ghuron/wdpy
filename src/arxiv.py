@@ -39,7 +39,7 @@ class ArXiv(Element):
             for preprint in tree.findall('.//oa:arXiv', NS):
                 if len(doi_list := preprint.findall('oa:doi', NS)) > 0:
                     ArXiv.dataset[preprint.find('oa:id', NS).text] = doi_list[0].text.split()[0].replace('\\', '')
-            if (element := tree.find('.//oai:resumptionToken', NS)) and element.text:
+            if (element := tree.find('.//oai:resumptionToken', NS)) is not None and element.text:
                 token = 'resumptionToken=' + element.text
         return ArXiv.dataset.keys(), token
 
