@@ -371,12 +371,13 @@ class Element:
         aggregator, has_confirmed_references = None, len(sources) > 0
         claim['references'] = claim['references'] if 'references' in claim else []
         for ref in claim['references']:
-            if ref['snaks']['P248'][0]['datavalue']['value']['id'] in sources:  # One of the sources
-                sources.remove(ref['snaks']['P248'][0]['datavalue']['value']['id'])
-                self.confirm(ref)
-            elif ref['snaks']['P248'][0]['datavalue']['value']['id'] == self.db_ref:
-                aggregator = ref
-            has_confirmed_references = True if 'wdpy' in ref else has_confirmed_references
+            if 'P248' in ref['snaks']:
+                if ref['snaks']['P248'][0]['datavalue']['value']['id'] in sources:  # One of the sources
+                    sources.remove(ref['snaks']['P248'][0]['datavalue']['value']['id'])
+                    self.confirm(ref)
+                elif ref['snaks']['P248'][0]['datavalue']['value']['id'] == self.db_ref:
+                    aggregator = ref
+                has_confirmed_references = True if 'wdpy' in ref else has_confirmed_references
         for src_id in sources:
             claim['references'].append(self.confirm({'snaks': {'P248': [Model.create_snak('P248', src_id)]}}))
         if not has_confirmed_references:
