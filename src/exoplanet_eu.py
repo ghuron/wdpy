@@ -98,6 +98,7 @@ class ExoplanetEu(ADQL):
                 for a in ref_div.find_all('a'):
                     if (anchor := a.get('href').strip('#')) in ExoplanetEu.articles:
                         snak['source'] = (snak['source'] if 'source' in snak else []) + [ExoplanetEu.articles[anchor]]
+                    break  # 2nd and subsequent sources are usually specified incorrectly
                 result.append(snak)
         return result
 
@@ -123,6 +124,7 @@ class ExoplanetEu(ADQL):
         if not value or (value := value.strip()) == '—':
             return
         elif property_id == 'P397':
+            # ToDo: add P5997 qualifier to source
             return ExoplanetEu.create_snak(property_id, SimbadDAP.get_parent_object(value))
         elif reg := re.search(
                 '(?P<value>' + num + ')\\s*\\(\\s*-+(?P<min>' + num + ')\\s+(?P<max>\\+' + num + ')\\s*\\)' + unit,
