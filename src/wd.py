@@ -269,7 +269,8 @@ class Element:
 
     @classmethod
     def create_snak(cls, property_id: str, value, lower: str = None, upper: str = None):
-        return Model.create_snak(property_id, cls.lut(value) if property_id == 'wikibase-item' else value, lower, upper)
+        value = cls.lut(value) if Wikidata.type_of(property_id) == 'wikibase-item' else value
+        return Model.create_snak(property_id, value, lower, upper)
 
     @classmethod
     def lut(cls, text: str):
