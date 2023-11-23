@@ -15,7 +15,10 @@
     "planet_field_publications_albedo": "P4501",
     "planet_field_publications_alternate_names": "P528",
     "star_field_publications_stars__ra": "P6257",
+    "system_field_publications_stars__ra": "P6257",
     "star_field_publications_stars__dec": "P6258",
+    "system_field_publications_stars__dec": "P6258",
+    "system_field_publications_stars__distance": "P2583",
     "star_field_publications_stars__alternate_names": "P397"
   },
   "star": {
