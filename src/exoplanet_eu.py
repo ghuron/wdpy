@@ -127,11 +127,11 @@ class ExoplanetEu(ADQL):
             # ToDo: add P5997 qualifier to source
             return ExoplanetEu.create_snak(property_id, SimbadDAP.get_parent_object(value))
         elif reg := re.search(
-                '(?P<value>' + num + ')\\s*\\(\\s*-+(?P<min>' + num + ')\\s+(?P<max>\\+' + num + ')\\s*\\)' + unit,
+                '(?P<value>{})\\s*\\(\\s*-+(?P<min>{})\\s+(?P<max>\\+{})\\s*\\){}'.format(num, num, num, unit),
                 value):
             result = ExoplanetEu.create_snak(property_id, reg.group('value'), reg.group('min'), reg.group('max'))
-        elif reg := re.search(
-                '^(?P<value>' + num + ')\\s*(\\(\\s*±\\s*(?P<bound>' + num + ')\\s*\\))?' + unit + '$', value):
+        elif reg := re.search(  # ToDo: Add source circumstance qualifier if > or < found
+                '^[<>]?\\s*(?P<value>' + num + ')\\s*(\\(\\s*±\\s*(?P<bound>' + num + ')\\s*\\))?' + unit + '$', value):
             if bound := reg.group('bound'):
                 result = ExoplanetEu.create_snak(property_id, reg.group('value'), bound, bound)
             else:
