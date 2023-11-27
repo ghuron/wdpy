@@ -29,7 +29,8 @@
     "star_field_publications_stars__age": "P7584",
     "star_field_publications_stars__teff": "P6879",
     "star_field_publications_stars__radius": "P2120",
-    "star_field_publications_stars__metallicity": "P2227"
+    "star_field_publications_stars__metallicity": "P2227",
+    "star_field_publications_stars__alternate_names": "P528"
   },
   "translate": {
     "Confirmed": "Q44559",
