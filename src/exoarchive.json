@@ -18,7 +18,9 @@
     "id": "P972",
     "translate": {
       "Kepler-": "Q122841443",
-      "KOI-": "Q6393205"
+      "KOI-": "Q6393205",
+      "TIC ": "Q81305744",
+      "TOI-": "Q123557842"
     }
   },
   "endpoint": "https://exoplanetarchive.ipac.caltech.edu/TAP",
