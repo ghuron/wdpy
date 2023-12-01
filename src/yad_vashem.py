@@ -74,7 +74,7 @@ class YadVashem(Element):
                     if isinstance(people[named_as], int):
                         YadVashem.info(case_id, named_as, ' is ambiguous: ' + str(people[named_as]))
                     else:
-                        YadVashem.info(case_id, named_as, 'https://wikidata.org/wiki/' + remaining[name] + ' missing')
+                        YadVashem.info(case_id, named_as, 'https://wikidata.org/wiki/' + people[named_as] + ' missing')
 
             if loaded := Wikidata.load(list(filter(lambda x: isinstance(x, str), result.values()))):
                 YadVashem._items = loaded
