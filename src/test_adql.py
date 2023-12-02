@@ -9,12 +9,6 @@ class TestADQL(TestCase):
         item = ADQL('')
         cls.adql = item
 
-    @mock.patch('adql.ADQL.get_latest_publication_date', return_value=20241231)
-    def test_no_value(self, _):
-        self.adql.obtain_claim(ADQL.create_snak('P6257', 0))
-        self.adql.entity['claims']['P6257'].append({'mainsnak': {}})
-        self.assertNotIn('datavalue', ADQL.get_best_value(self.adql.entity['claims']['P6257'])[0]['mainsnak'])
-
     @mock.patch('wd.Wikidata.request', return_value=None)
     def test_tap_query(self, _):
         self.assertIsNone(ADQL.tap_query('https://simbad.u-strasbg.fr/simbad/sim-tap',

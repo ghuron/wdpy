@@ -176,7 +176,7 @@ class Model:
     @staticmethod
     def skip_statement(s: dict) -> bool:
         """ If someone explicitly states that this is a bad statement, do not touch it"""
-        return 'rank' in s and s['rank'] == 'deprecated' and 'qualifiers' in s and 'P2241' in s['qualifiers']
+        return False  # 'rank' in s and s['rank'] == 'deprecated' and 'qualifiers' in s and 'P2241' in s['qualifiers']
 
     @staticmethod
     def create_snak(property_id: str, value, lower: str = None, upper: str = None):
@@ -356,40 +356,180 @@ class Element:
         reference['wdpy'] = 1
         return reference
 
-    def remove_unconfirmed(self, properties):
+    def process_affected_properties(self, properties):
         for property_id in properties:
-            for claim in self.entity['claims'][property_id]:
-                was_removed = False
-                for ref in list(claim['references']) if 'references' in claim else []:
-                    if not ref.pop('wdpy', 0):
-                        if self.db_ref in self.get_snaks(ref, 'P248') + self.get_snaks(ref, 'P12132'):
-                            claim['references'].remove(ref)
-                            was_removed = True
-                if was_removed and (len(claim['references']) == 0):
-                    claim['remove'] = 1
+            self.compact_refs(property_id)
+            if property_id in ['P6257', 'P6258']:
+                self.keep_only_best_value(property_id)
+            elif property_id.upper() in self.config:
+                self.keep_only_best_value(property_id, self.config[property_id.upper()]['id'])
+            elif property_id not in ['P31']:
+                self.normalize(self.entity['claims'][property_id])
+
+    @staticmethod
+    def deprecate_less_precise_values(statements):
+        for claim1 in statements:
+            if 'rank' not in claim1 or claim1['rank'] == 'normal':
+                for claim2 in statements:
+                    if claim1 != claim2 and ('rank' not in claim2 or claim2['rank'] == 'normal'):
+                        if 'datavalue' in claim1['mainsnak'] and 'datavalue' in claim2['mainsnak']:  # novalue
+                            val1 = claim1['mainsnak']['datavalue']['value']
+                            val2 = claim2['mainsnak']['datavalue']['value']
+                            if Model.serialize(val2, val1) == Model.serialize(val1):
+                                claim1['rank'] = 'deprecated'
+                                claim1['qualifiers'] = {} if 'qualifiers' not in claim1 else claim1['qualifiers']
+                                claim1['qualifiers']['P2241'] = [Model.create_snak('P2241', 'Q42727519')]
+
+    @staticmethod
+    def normalize(statements):
+        minimal = 999999
+        for statement in statements:
+            if 'rank' in statement and statement['rank'] == 'preferred':
+                return  # do not change any ranks
+
+            if 'mespos' in statement and minimal > int(statement['mespos']):
+                minimal = int(statement['mespos'])
+
+        for statement in statements:
+            if 'mespos' in statement:  # normal for statements with minimal mespos, deprecated for the rest
+                if int(statement['mespos']) == minimal:
+                    statement['rank'] = 'normal'
+                elif 'hash' not in statement['mainsnak'] and 'rank' not in statement:
+                    statement['rank'] = 'deprecated'
+
+        Element.deprecate_less_precise_values(statements)
+
+        latest = 0
+        for statement in statements:
+            if 'rank' not in statement or statement['rank'] == 'normal':
+                if (current := Element.get_latest_publication_date(statement)) > latest:
+                    latest = current
+
+        remaining_normal = 1  # only one statement supported by latest sources should remain normal
+        for statement in statements:
+            if 'rank' not in statement or statement['rank'] == 'normal':
+                if remaining_normal == 0 or latest > Element.get_latest_publication_date(statement):
+                    statement['rank'] = 'deprecated'
+                else:
+                    remaining_normal -= 1
+
+    _pub_dates, _redirects = {'Q66617668': 19240101, 'Q4026990': 99999999, 'Q654724': 19240101}, {}
+
+    @classmethod
+    def preload(cls, references) -> None:
+        qid = set()
+        for ref in references:
+            for p248 in ref['snaks']['P248'] if 'P248' in ref['snaks'] else []:
+                if p248['datavalue']['value']['id'] not in cls._pub_dates:
+                    if p248['datavalue']['value']['id'] not in cls._redirects:
+                        qid.add(p248['datavalue']['value']['id'])
+        if qid and (result := Wikidata.load(qid)):
+            for ref_id, item in result.items():
+                p577 = None
+                if 'redirects' in item:
+                    cls._redirects[ref_id] = item['redirects']['to']
+                    ref_id = item['redirects']['to']
+                if 'claims' in item and 'P577' in item['claims']:
+                    p577 = item['claims']['P577'][0]['mainsnak']['datavalue']['value']
+                cls._pub_dates[ref_id] = int(Model.serialize(p577)) if p577 else None
+
+    def remove_duplicates(self, references: []) -> []:
+        result, prior = [], {}
+        for ref in references:
+            if 'P248' in ref['snaks']:
+                if (_id := ref['snaks']['P248'][0]['datavalue']['value']['id']) in self._redirects:
+                    ref['snaks']['P248'][0]['datavalue']['value']['id'] = (_id := self._redirects[_id])
+                if _id in prior:
+                    for p12132 in (ref['snaks']['P12132'] if 'P12132' in ref['snaks'] else []):
+                        if p12132['datavalue']['value']['id'] not in Element.get_snaks(prior[_id], 'P12132'):
+                            if 'P12132' not in prior[_id]['snaks']:
+                                prior[_id]['snaks']['P12132'] = []
+                            prior[_id]['snaks']['P12132'].append(p12132)
+                    if 'wdpy' in ref:
+                        self.confirm(prior[_id])
+                    continue
+                prior[_id] = ref
+            result.append(ref)
+        return result
+
+    @classmethod
+    def remove_nonconfirmed(cls, references) -> []:
+        result, aggregator, aggregator_needed = [], None, True
+        for ref in references:
+            if ref.pop('wdpy', 0):
+                if cls.db_ref in cls.get_snaks(ref, 'P248'):
+                    aggregator = ref
+                else:
+                    aggregator_needed = False
+                    result.append(ref)
+            elif cls.db_ref not in cls.get_snaks(ref, 'P248') + cls.get_snaks(ref, 'P12132'):
+                result.append(ref)
+        if aggregator and aggregator_needed:
+            result.append(aggregator)
+        return result
+
+    def delete_claim(self, claim):
+        if 'hash' in claim['mainsnak']:  # Already saved
+            claim['remove'] = 1  # For already saved claims we have to request server to remove them
+        else:
+            self.entity['claims'][claim['mainsnak']['property']].remove(claim)  # Non-saved claim can be simply removed
+
+    def compact_refs(self, property_id: str):
+        for claim in list(self.entity['claims'][property_id]):
+            if ('remove' not in claim) and ('references' in claim) and (len(claim['references']) > 0):
+                self.preload(claim['references'])
+                if len(result := self.remove_nonconfirmed(self.remove_duplicates(claim['references']))) == 0:
+                    self.delete_claim(claim)
+                claim['references'] = result
 
     def add_refs(self, claim, sources: set = None):
-        sources = sources if sources else set()
-        aggregator, has_confirmed_references = None, len(sources) > 0
         claim['references'] = claim['references'] if 'references' in claim else []
-        for ref in claim['references']:
-            if 'P248' in ref['snaks']:
-                if ref['snaks']['P248'][0]['datavalue']['value']['id'] in sources:  # One of the sources
-                    sources.remove(ref['snaks']['P248'][0]['datavalue']['value']['id'])
-                    self.confirm(ref)
-                elif ref['snaks']['P248'][0]['datavalue']['value']['id'] == self.db_ref:
-                    aggregator = ref
-                has_confirmed_references = True if 'wdpy' in ref else has_confirmed_references
-        for src_id in sources:
+        for src_id in (sources if sources else set()) | {self.db_ref}:
             claim['references'].append(self.confirm({'snaks': {'P248': [Model.create_snak('P248', src_id)]}}))
-        if not has_confirmed_references:
-            if aggregator:
-                self.confirm(aggregator)
-            else:
-                claim['references'].append(self.confirm({'snaks': {'P248': [Model.create_snak('P248', self.db_ref)]}}))
+
+    @staticmethod
+    def get_latest_publication_date(claim: dict):
+        latest, p248 = 0, []
+        if 'references' in claim:
+            Element.preload(claim['references'])
+            for ref in list(claim['references']):
+                if 'P248' in ref['snaks']:
+                    ref_id = ref['snaks']['P248'][0]['datavalue']['value']['id']
+                    if Element._pub_dates[ref_id] and Element._pub_dates[ref_id] > latest:
+                        latest = Element._pub_dates[ref_id]
+        return latest
+
+    def keep_only_best_value(self, property_id, group_by=None):
+        latest = {}  # None if leave as is otherwise latest publication date for all claims
+        for claim in list(self.entity['claims'][property_id]):
+            if 'remove' not in claim:
+                group = None
+                if group_by:
+                    if 'qualifiers' not in claim or group_by not in claim['qualifiers']:
+                        self.delete_claim(claim)
+                        continue
+                    group = Model.serialize(claim['qualifiers'][group_by][0]['datavalue']['value'])
+
+                if 'datavalue' not in claim['mainsnak']:
+                    latest[group] = None
+                elif group not in latest:
+                    latest[group] = 0
+
+                if (latest[group] is not None) and (current := self.get_latest_publication_date(claim)):
+                    if current > latest[group]:
+                        latest[group] = current
+
+        for claim in list(self.entity['claims'][property_id]):
+            if 'remove' not in claim:
+                group = Model.serialize(claim['qualifiers'][group_by][0]['datavalue']['value']) if group_by else None
+                if latest[group]:
+                    if (current := self.get_latest_publication_date(claim)) and (current == latest[group]):
+                        latest[group] = 99999999  # keep this claim only
+                    else:
+                        self.delete_claim(claim)
 
     def post_process(self):
-        """Changes in self.entity that does not depend on specific input"""
+        """Changes in wd element in a way, that does not depend on the input"""
         if 'en' not in self.entity['labels']:
             self.entity['labels']['en'] = {'value': self.external_id, 'language': 'en'}
 
@@ -423,10 +563,10 @@ class Element:
 
             affected_properties = set()
             for snak in parsed_data:
-                if (claim := self.obtain_claim(snak)) and claim['mainsnak']['datatype'] != 'external-id':
+                if (claim := self.obtain_claim(snak)) and (claim['mainsnak']['datatype'] != 'external-id'):
                     affected_properties.add(snak['property'])
                     self.add_refs(claim, set(snak['source']) if 'source' in snak else set())
-            self.remove_unconfirmed(affected_properties)
+            self.process_affected_properties(affected_properties)
 
             self.post_process()
             if not self.qid or json.dumps(self.entity) != original:

@@ -61,56 +61,6 @@ class TestReferences(TestCase):
         self.assertEqual(1, len(claim['references']))
         self.assertCountEqual(['Q654724'], Element.get_snaks(claim['references'][0], 'P248'))
 
-    def test_existing_external_id(self, _):
-        self.wd.add_refs(claim := ({'references': [{'snaks': {'P248': [Model.create_snak('P248', 'Q654724')]}}]}))
-        self.assertEqual(1, len(claim['references']))
-        self.assertCountEqual(['Q654724'], Element.get_snaks(claim['references'][0], 'P248'))
-
-    def test_set_according_to(self, _):
-        self.wd.add_refs(claim := ({'references': [{'snaks': {'P248': [Model.create_snak('P248', 'Q66061041')],
-                                                              'P143': [Model.create_snak('P143', 'Q328')]
-                                                              }}]}), {'Q66061041'})
-        self.assertEqual(1, len(claim['references']))
-        self.assertEqual(['Q66061041'], Element.get_snaks(claim['references'][0], 'P248'))
-        self.assertEqual([], Element.get_snaks(claim['references'][0], 'P143'))
-        self.assertCountEqual(['Q654724'], Element.get_snaks(claim['references'][0], 'P12132'))
-
-    def test_add_accoridng_to(self, _):
-        self.wd.add_refs(claim := {'references': [{'snaks': {'P248': [Model.create_snak('P248', 'Q66061041')],
-                                                             'P12132': [Model.create_snak('P12132', 'Q1385430')],
-                                                             }}]}, {'Q66061041'})
-        self.assertEqual(1, len(claim['references']))
-        self.assertEqual(['Q66061041'], Element.get_snaks(claim['references'][0], 'P248'))
-        self.assertCountEqual(['Q654724', 'Q1385430'], Element.get_snaks(claim['references'][0], 'P12132'))
-
-    def test_add_source(self, _):
-        self.wd.add_refs(claim := {'references': [{'snaks': {'P248': [Model.create_snak('P248', 'Q66061041')]}}]},
-                         {'Q222662'})
-        self.assertEqual(2, len(claim['references']))
-        self.assertCountEqual(['Q66061041'], Element.get_snaks(claim['references'][0], 'P248'))
-        self.assertCountEqual([], Element.get_snaks(claim['references'][0], 'P12132'))
-        self.assertCountEqual(['Q222662'], Element.get_snaks(claim['references'][1], 'P248'))
-        self.assertCountEqual(['Q654724'], Element.get_snaks(claim['references'][1], 'P12132'))
-
-    def test_explicit_aggregator_id(self, _):
-        Element.db_property = 'P31'
-        self.wd.add_refs(claim := {'references': [{'snaks': {'P248': [Model.create_snak('P248', 'Q654724')],
-                                                             'P31': [Model.create_snak(Element.db_property, 'Q5')]}}]})
-        self.assertEqual(1, len(claim['references']))
-        self.assertCountEqual([], Element.get_snaks(claim['references'][0], Element.db_property))
-
-    def test_remove_unconfirmed(self, _):
-        self.wd.entity['claims'] = {'P31': [
-            {'references': [{'snaks': {'P12132': [Model.create_snak('P12132', 'Q654724')]}}]},
-            {'references': [{'snaks': {'P248': [Model.create_snak('P248', 'Q222662')]}}]},
-            {'references': [{'snaks': {'P248': [Model.create_snak('P248', 'Q654724')]}, 'wdpy': 1},
-                            {'snaks': {'P248': [Model.create_snak('P248', 'Q654724')]}}]},
-        ]}
-        self.wd.remove_unconfirmed({'P31'})
-        self.assertIn('remove', self.wd.entity['claims']['P31'][0])
-        self.assertNotIn('remove', self.wd.entity['claims']['P31'][1])
-        self.assertNotIn('remove', self.wd.entity['claims']['P31'][2])
-
 
 class TestModel(TestCase):
     @mock.patch('wd.Wikidata.type_of', return_value='time')
@@ -181,3 +131,82 @@ class TestElement(TestCase):
         claim = self.wd.obtain_claim(Element.create_snak('P31', 'Q5'))
         self.assertEqual('P31', claim['mainsnak']['property'])
         self.assertEqual('Q5', claim['mainsnak']['datavalue']['value']['id'])
+
+    @mock.patch('wd.Wikidata.load')
+    @mock.patch('wd.Wikidata.type_of', return_value='wikibase-item')
+    def test_preload(self, mock_typeof, mock_load):
+        mock_typeof.return_value = 'time'
+        (fake_redirect := Element('')).entity['redirects'] = {'to': 'Q2222'}
+        fake_redirect.obtain_claim(Element.create_snak('P577', '2022-02-02'))
+        mock_load.return_value = {'Q1111': fake_redirect.entity, 'Q3333': Element('').entity}
+        Element._redirects['Q4444'] = 'Q2222'
+
+        mock_typeof.return_value = 'wikibase-item'
+        Element.preload([{'snaks': {'P248': [Model.create_snak('P248', 'Q1111')]}},
+                         {'snaks': {'P248': [Model.create_snak('P248', 'Q3333')]}},
+                         {'snaks': {'P248': [Model.create_snak('P248', 'Q4444')]}},
+                         {'snaks': {'P248': [Model.create_snak('P248', 'Q654724')]}}])
+        mock_load.assert_called_once_with({'Q1111', 'Q3333'})
+        self.assertEqual('Q2222', Element._redirects['Q1111'])
+        self.assertNotIn('Q1111', Element._pub_dates)
+        self.assertEqual(20220202, Element._pub_dates['Q2222'])
+        self.assertIsNone(Element._pub_dates['Q3333'])
+
+    @mock.patch('wd.Wikidata.type_of', return_value='wikibase-item')
+    def test_remove_duplicates(self, _):
+        references = [{'snaks': {'P248': [Model.create_snak('P248', 'Q1111')],
+                                 'P12132': [Model.create_snak('P12132', 'Q5555')]}},
+                      {'snaks': {'P248': [Model.create_snak('P248', 'Q2222')]}},
+                      {'snaks': {'P248': [Model.create_snak('P248', 'Q3333')],
+                                 'P12132': [Model.create_snak('P12132', 'Q4444')]}, 'wdpy': 1},
+                      {'snaks': {'P248': [Model.create_snak('P248', 'Q1111')],
+                                 'P12132': [Model.create_snak('P12132', 'Q5555'),
+                                            Model.create_snak('P12132', 'Q6666')]}}]
+        self.wd._redirects = {'Q3333': 'Q2222'}
+        Element.db_ref = 'Q4444'
+        self.assertEqual(2, len(result := self.wd.remove_duplicates(references)))
+        self.assertCountEqual(['Q1111'], Element.get_snaks(result[0], 'P248'))
+        self.assertCountEqual(['Q5555', 'Q6666'], Element.get_snaks(result[0], 'P12132'))
+        self.assertCountEqual(['Q2222'], Element.get_snaks(result[1], 'P248'))
+        self.assertCountEqual(['Q4444'], Element.get_snaks(result[1], 'P12132'))
+        self.assertEqual(1, result[1]['wdpy'])
+
+
+@mock.patch('wd.Wikidata.type_of', return_value='wikibase-item')
+class TestKeepOnlyBestValue(TestCase):
+    @classmethod
+    def setUp(cls):
+        cls.wd = Element('0000 0001 2197 5163')
+
+    def test_remove_if_no_qualifier(self, _):
+        self.wd.obtain_claim(Model.create_snak('P31', 'Q5'))
+        self.wd.keep_only_best_value('P31', 'P2241')
+        self.assertCountEqual([], self.wd.entity['claims']['P31'])
+
+    @mock.patch('wd.Element.get_latest_publication_date', return_value=20241231)
+    def test_remove_second_claim_with_latest_publication_date(self, _, __):
+        claim = self.wd.obtain_claim(Model.create_snak('P31', 'Q523'))
+        self.wd.obtain_claim(Model.create_snak('P31', 'Q524'))
+        self.wd.keep_only_best_value('P31')
+        self.assertCountEqual([claim], self.wd.entity['claims']['P31'])
+
+    @mock.patch('wd.Element.get_latest_publication_date', return_value=20241231)
+    def test_no_modification_if_no_value_encountered(self, _, __):
+        claim1 = self.wd.obtain_claim(Model.create_snak('P31', 'Q523'))
+        claim1['mainsnak'] = {}
+        claim2 = self.wd.obtain_claim(Model.create_snak('P31', 'Q524'))
+        claim3 = self.wd.obtain_claim(Model.create_snak('P31', 'Q523'))
+        self.wd.keep_only_best_value('P31')
+        self.assertNotIn('remove', claim1)
+        self.assertNotIn('remove', claim2)
+        self.assertNotIn('remove', claim3)
+
+    @mock.patch('wd.Element.get_latest_publication_date', return_value=20241231)
+    def test_process_groups_separately(self, _, __):
+        claim1 = self.wd.obtain_claim(Model.create_snak('P31', 'Q523'))
+        claim1['qualifiers'] = {'P2241': [Model.create_snak('P2241', 'Q111')]}
+        claim2 = self.wd.obtain_claim(Model.create_snak('P31', 'Q524'))
+        claim2['qualifiers'] = {'P2241': [Model.create_snak('P2241', 'Q222')]}
+        self.wd.keep_only_best_value('P31', 'P2241')
+        self.assertNotIn('remove', claim1)
+        self.assertNotIn('remove', claim2)
