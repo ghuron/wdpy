@@ -98,7 +98,7 @@ class ExoplanetEu(ADQL):
                 for a in ref_div.find_all('a'):
                     if (anchor := a.get('href').strip('#')) in ExoplanetEu.articles:
                         snak['source'] = (snak['source'] if 'source' in snak else []) + [ExoplanetEu.articles[anchor]]
-                    break  # 2nd and subsequent sources are usually specified incorrectly
+                        break  # 2nd and subsequent sources are usually specified incorrectly
                 result.append(snak)
         return result
 
