@@ -31,12 +31,12 @@ class TestWikiData(TestCase):
 
     @mock.patch('wd.Wikidata.call', return_value=None)
     def test_load_items_none(self, api_call):
-        self.assertIsNone(Wikidata.load(['Q1', 'Q2']))
+        self.assertIsNone(Wikidata.load({'Q2', 'Q1'}))
         api_call.assert_called_with('wbgetentities', {'props': 'claims|info|labels|aliases', 'ids': 'Q1|Q2'})
 
     @mock.patch('wd.Wikidata.call', return_value=None)
     def test_load_items_single(self, api_call):
-        self.assertIsNone(Wikidata.load(['Q3']))
+        self.assertIsNone(Wikidata.load({'Q3'}))
         api_call.assert_called_with('wbgetentities', {'props': 'claims|info|labels|aliases', 'ids': 'Q3'})
 
     @mock.patch('wd.Wikidata.request', return_value=None)
@@ -174,7 +174,7 @@ class TestElement(TestCase):
     def test_prepare_data_null_items(self, load_items):
         self.wd.qid = 'Q1'
         self.assertDictEqual({'labels': {}, 'claims': {}}, self.wd.entity)
-        load_items.assert_called_with(['Q1'])
+        load_items.assert_called_with({'Q1'})
 
     @mock.patch('wd.Wikidata.type_of', return_value='wikibase-item')
     def test_obtain_claims_empty_entity(self, _):

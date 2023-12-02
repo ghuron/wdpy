@@ -76,7 +76,7 @@ class YadVashem(Element):
                     else:
                         YadVashem.info(case_id, named_as, 'https://wikidata.org/wiki/' + people[named_as] + ' missing')
 
-            if loaded := Wikidata.load(list(filter(lambda x: isinstance(x, str), result.values()))):
+            if loaded := Wikidata.load(set(filter(lambda x: isinstance(x, str), result.values()))):
                 YadVashem._items = loaded
                 return result
 

@@ -58,10 +58,11 @@ class Wikidata:
         Wikidata.call('login', {'lgtoken': token, 'lgname': Wikidata.__login, 'lgpassword': Wikidata.__password})
 
     @staticmethod
-    def load(items: list[str]):
+    def load(items: set[str]):
         """Load up to 50 wikidata entities, returns None in case of error"""
         if len(items) > 0:
-            result = Wikidata.call('wbgetentities', {'props': 'claims|info|labels|aliases', 'ids': '|'.join(items)})
+            result = Wikidata.call('wbgetentities',
+                                   {'props': 'claims|info|labels|aliases', 'ids': '|'.join(sorted(items))})
             return result['entities'] if (result is not None) and ('entities' in result) else None
 
     @staticmethod
@@ -303,7 +304,7 @@ class Element:
         if not self._entity:
             self.qid = self.qid if self.qid else self.haswbstatement(self.external_id)
             self._entity = {'labels': {}, 'claims': {}}
-            if self.qid and (result := Wikidata.load([self.qid])):
+            if self.qid and (result := Wikidata.load({self.qid})):
                 self._entity = result[self.qid]
         return self._entity
 
