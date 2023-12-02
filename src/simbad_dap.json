@@ -1463,6 +1463,15 @@
       "  JOIN basic ON oidref = oid"
     ],
     [
+      "SELECT main_id, oidref AS id, mespos, bibcode AS reference,",
+      "       pmde AS P10751, pmde_prec AS P10751p, pmde_err AS P10751h, pmde_err_prec AS P10751hp,",
+      "       pmde_err AS P10751l, pmde_err_prec AS P10751lp, 'Q22137107' AS P10751u,",
+      "       m.pmra AS P10752, m.pmra_prec AS P10752p, pmra_err AS P10752h, pmra_err_prec AS P10752hp,",
+      "       pmra_err AS P10752l, pmra_err_prec AS P10752lp, 'Q22137107' AS P10752u",
+      "  FROM mesPM m",
+      "  JOIN basic ON oidref = oid"
+    ],
+    [
       "SELECT main_id, oidref AS id, id AS P528, id AS qualifier",
       "  FROM ident",
       "  JOIN basic ON oidref = oid"
