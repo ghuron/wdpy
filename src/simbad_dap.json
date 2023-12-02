@@ -1475,6 +1475,20 @@
       "SELECT main_id, oidref AS id, id AS P528, id AS qualifier",
       "  FROM ident",
       "  JOIN basic ON oidref = oid"
+    ],
+    [
+      "SELECT main_id, oidref AS id, bibcode AS P2386r, 'Q828224' AS P2386u, diameter AS P2386, mespos,",
+      "        diameter_prec AS P2386p, error AS P2386h, error_prec AS P2386hp, error AS P2386l, error_prec AS P2386lp",
+      "  FROM mesDiameter",
+      "  JOIN basic ON oidref = oid",
+      " WHERE unit = 'km'"
+    ],
+    [
+      "SELECT main_id, oidref AS id, bibcode AS P5348r, 'Q21500224' AS P5348u, diameter AS P5348, mespos,",
+      "       diameter_prec AS P5348p, error AS P5348h, error_prec AS P5348hp, error AS P5348l, error_prec AS P5348lp",
+      "  FROM mesDiameter",
+      "  JOIN basic ON oidref = oid",
+      " WHERE unit = 'mas'"
     ]
   ]
 }
