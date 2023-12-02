@@ -13,7 +13,7 @@ from wd import Wikidata, Model, Element
 class ADQL(Element):
     def obtain_claim(self, snak):
         if claim := super().obtain_claim(snak):
-            if 'mespos' in snak:
+            if 'mespos' in snak and ('mespos' not in claim or int(claim['mespos']) > int(snak['mespos'])):
                 claim['mespos'] = snak['mespos']
             if snak['property'] == 'P1215':
                 if 'qualifiers' in snak and 'P1227' in snak['qualifiers'] and snak['qualifiers']['P1227'] == 'Q4892529':
