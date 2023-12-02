@@ -236,7 +236,7 @@ class Model:
         for c in claims:
             if Model.qualifier_filter(snak, c) and Model.compare(c['mainsnak'], snak['datavalue']['value']):
                 return c
-        if len(claims) > 0 and Wikidata.type_of(claims[0]['mainsnak']['property']) == 'external-id':
+        if len(claims) > 0 and Wikidata.type_of(snak['property']) == 'external-id':
             claims[0]['mainsnak']['datavalue']['value'] = snak['datavalue']['value']
             return claims[0]
 
