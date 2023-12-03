@@ -30,6 +30,12 @@ class SimbadDAP(ADQL):
             return
         return super().construct_snak(row, col, new_col)
 
+    @classmethod
+    def enrich_qualifier(cls, snak, value):
+        if (snak := super().enrich_qualifier(snak, value)) and (snak['property'].upper() == 'P528'):
+            snak['datavalue']['value'] = value[3:] if value.startswith('V* ') else value
+        return snak
+
     _cache = None
 
     @staticmethod
