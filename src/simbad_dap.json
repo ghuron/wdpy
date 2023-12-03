@@ -1490,6 +1490,12 @@
       "  FROM mesDiameter",
       "  JOIN basic ON oidref = oid",
       " WHERE unit = 'mas'"
+    ],
+    [
+      "SELECT main_id, oidref AS id, bibcode AS reference, mespos, teff AS P6879, 'Q11579' AS P6879u, fe_h AS P2227,",
+      "       fe_h_prec AS P2227p",
+      "  FROM mesFe_H",
+      "  JOIN basic ON oidref = oid"
     ]
   ]
 }
