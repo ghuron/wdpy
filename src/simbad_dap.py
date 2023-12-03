@@ -1,8 +1,5 @@
 #!/usr/bin/python3
-import logging
-
 from adql import ADQL
-from wd import Wikidata
 
 
 class SimbadDAP(ADQL):
@@ -36,25 +33,11 @@ class SimbadDAP(ADQL):
             snak['datavalue']['value'] = value[3:] if value.startswith('V* ') else value
         return snak
 
-    _cache = None
-
     @staticmethod
-    def get_parent_object(ident: str):
-        if SimbadDAP._cache is None:
-            SimbadDAP._cache = Wikidata.query('SELECT DISTINCT ?c ?i { ?i ^ps:P397 []; wdt:P528 ?c }',
-                                              lambda row, _: (row[0].lower(), row[1]))
-        if ident.lower() in SimbadDAP._cache:
-            return SimbadDAP._cache[ident.lower()]
-        q = 'SELECT main_id FROM ident JOIN basic ON oid = oidref WHERE id=\'{}\''.format(ident.replace('\'', '\'\''))
-        if ident and (row := SimbadDAP.tap_query(SimbadDAP.config['endpoint'], q)):
-            if len(row) == 1:
-                if (main_id := list(row.keys())[0]).lower() not in SimbadDAP._cache:
-                    if (qid := SimbadDAP.get_by_id(main_id)) is None:
-                        return
-                    SimbadDAP._cache[main_id.lower()] = qid
-                SimbadDAP._cache[ident.lower()] = SimbadDAP._cache[main_id.lower()]
-                logging.info('Cache miss: "{}" for {}'.format(ident, SimbadDAP._cache[ident.lower()]))
-                return SimbadDAP._cache[ident.lower()]
+    def get_id_by_name(name: str):
+        q = 'SELECT main_id FROM ident JOIN basic ON oid = oidref WHERE id=\'{}\''.format(name.replace('\'', '\'\''))
+        if (row := ADQL.tap_query(SimbadDAP.config['endpoint'], q)) and (len(row) == 1):
+            return list(row.keys())[0]
 
 
 if SimbadDAP.initialize(__file__):  # if not imported

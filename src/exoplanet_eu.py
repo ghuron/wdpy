@@ -9,7 +9,6 @@ import requests
 from bs4 import BeautifulSoup, element
 
 from adql import ADQL
-from simbad_dap import SimbadDAP
 from wd import Wikidata, Model
 
 
@@ -125,7 +124,7 @@ class ExoplanetEu(ADQL):
             return
         elif property_id == 'P397':
             # ToDo: add P5997 qualifier to source
-            return ExoplanetEu.create_snak(property_id, SimbadDAP.get_parent_object(value))
+            return ExoplanetEu.create_snak(property_id, ADQL.get_parent_object(value))
         elif reg := re.search(
                 '(?P<value>{})\\s*\\(\\s*-+(?P<min>{})\\s+(?P<max>\\+{})\\s*\\){}'.format(num, num, num, unit),
                 value):

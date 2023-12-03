@@ -85,13 +85,31 @@ class ADQL(Element):
     def format_figure(row, col):
         return Model.format_float(row[col], int(row[col + 'p']) if col + 'p' in row and row[col + 'p'] != '' else -1)
 
+    _parents = None
+
+    @staticmethod
+    def get_parent_object(name: str):
+        if ADQL._parents is None:
+            ADQL._parents = Wikidata.query('SELECT DISTINCT ?c ?i { ?i ^ps:P397 []; wdt:P528 ?c }',
+                                           lambda row, _: (row[0].lower(), row[1]))
+        if name.lower() in ADQL._parents:
+            return ADQL._parents[name.lower()]
+
+        from simbad_dap import SimbadDAP
+        if simbad_id := SimbadDAP.get_id_by_name(name):
+            if simbad_id.lower() not in ADQL._parents:
+                if (qid := SimbadDAP.get_by_id(simbad_id)) is None:
+                    return
+                ADQL._parents[simbad_id.lower()] = qid
+            ADQL._parents[name.lower()] = ADQL._parents[simbad_id.lower()]
+            logging.info('Cache miss: "{}" for {}'.format(name, ADQL._parents[name.lower()]))
+            return ADQL._parents[name.lower()]
+
     @classmethod
     def construct_snak(cls, row, col, new_col=None):
-        from simbad_dap import SimbadDAP
-
         new_col = (new_col if new_col else col).upper()
         if Wikidata.type_of(new_col) != 'quantity':
-            if col == 'p397' and (qid := SimbadDAP.get_parent_object(row[col])):
+            if col == 'p397' and (qid := ADQL.get_parent_object(row[col])):
                 row[col] = qid
             result = cls.create_snak(new_col, row[col])
         elif col + 'h' not in row or row[col + 'h'] == '':
