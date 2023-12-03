@@ -18,7 +18,7 @@ import requests
 class Wikidata:
     USER_AGENT = 'automated import by https://www.wikidata.org/wiki/User:Ghuron'
     (__api := requests.Session()).headers.update({'User-Agent': USER_AGENT})
-    __login, __password, __token = '', '', 'bad'
+    login, __password, __token = '', '', 'bad'
     __types: dict[str, str] = None
     logging.basicConfig(format="%(asctime)s: %(levelname)s - %(message)s", stream=sys.stdout,
                         level=os.environ.get('LOGLEVEL', 'INFO').upper())
@@ -52,10 +52,10 @@ class Wikidata:
         """Wikidata logon, see https://wikidata.org/w/api.php?action=help&modules=login
         and store credentials for future use. Performs wikidata re-logon if called subsequently without parameters.
         All further API calls will be performed on behalf on logged user"""
-        Wikidata.__login = login if login else Wikidata.__login
+        Wikidata.login = login if login else Wikidata.login
         Wikidata.__password = password if password else Wikidata.__password
         token = Wikidata.call('query', {'meta': 'tokens', 'type': 'login'})['query']['tokens']['logintoken']
-        Wikidata.call('login', {'lgtoken': token, 'lgname': Wikidata.__login, 'lgpassword': Wikidata.__password})
+        Wikidata.call('login', {'lgtoken': token, 'lgname': Wikidata.login, 'lgpassword': Wikidata.__password})
 
     @staticmethod
     def load(items: set[str]):
@@ -264,9 +264,9 @@ class Element:
                 cls.config = {**cls.config, **json.load(file)}
         except OSError:
             pass
-        if executed := sys.argv[0].endswith(os.path.basename(file_name)):
+        if need_init := (sys.argv[0].endswith(os.path.basename(file_name)) and not Wikidata.login):
             Wikidata.logon(sys.argv[1], sys.argv[2])
-        return executed
+        return need_init
 
     @classmethod
     def create_snak(cls, property_id: str, value, lower: str = None, upper: str = None):
