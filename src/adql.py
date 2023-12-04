@@ -41,7 +41,7 @@ class ADQL(Element):
                     if row[col] and re.search('\\d+$', col) and (snak := cls.construct_snak(row, col)):
                         input_snaks.append(snak)
         else:
-            logging.warning('"{}"\tcould not be loaded, skipping update'.format(external_id))
+            logging.warning('{}:"{}"\tcould not be extracted'.format(cls.db_property, external_id))
             input_snaks = None
         return input_snaks
 
