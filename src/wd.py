@@ -402,13 +402,13 @@ class Element:
         latest = 0
         for statement in statements:
             if 'rank' not in statement or statement['rank'] == 'normal':
-                if (current := Element.get_latest_publication_date(statement)) > latest:
+                if (current := Element.get_latest_ref_date(statement)) > latest:
                     latest = current
 
         remaining_normal = 1  # only one statement supported by latest sources should remain normal
         for statement in statements:
             if 'rank' not in statement or statement['rank'] == 'normal':
-                if remaining_normal == 0 or latest > Element.get_latest_publication_date(statement):
+                if remaining_normal == 0 or latest > Element.get_latest_ref_date(statement):
                     statement['rank'] = 'deprecated'
                 else:
                     remaining_normal -= 1
@@ -488,7 +488,7 @@ class Element:
             claim['references'].append(self.confirm({'snaks': {'P248': [Model.create_snak('P248', src_id)]}}))
 
     @staticmethod
-    def get_latest_publication_date(claim: dict):
+    def get_latest_ref_date(claim: dict):
         latest, p248 = 0, []
         if 'references' in claim:
             Element.preload(claim['references'])
@@ -510,23 +510,22 @@ class Element:
                         continue
                     group = Model.serialize(claim['qualifiers'][group_by][0]['datavalue']['value'])
 
+                latest[group] = 0 if group not in latest else latest[group]
                 if 'datavalue' not in claim['mainsnak']:
                     latest[group] = None
-                elif group not in latest:
-                    latest[group] = 0
-
-                if (latest[group] is not None) and (current := self.get_latest_publication_date(claim)):
-                    if current > latest[group]:
-                        latest[group] = current
+                elif latest[group] is not None:
+                    latest[group] = cur if (cur := self.get_latest_ref_date(claim)) > latest[group] else latest[group]
 
         for claim in list(self.entity['claims'][property_id]):
             if 'remove' not in claim:
                 group = Model.serialize(claim['qualifiers'][group_by][0]['datavalue']['value']) if group_by else None
-                if latest[group]:
-                    if (current := self.get_latest_publication_date(claim)) and (current == latest[group]):
-                        latest[group] = 99999999  # keep this claim only
-                    else:
-                        self.delete_claim(claim)
+                if (latest[group] is None) and ('datavalue' in claim['mainsnak']):
+                    self.delete_claim(claim)
+                    continue
+                elif (latest[group] is not None) and (self.get_latest_ref_date(claim) != latest[group]):
+                    self.delete_claim(claim)
+                    continue
+                latest[group] = 99999999  # keep this claim and remove all others
 
     def post_process(self):
         """Changes in wd element in a way, that does not depend on the input"""

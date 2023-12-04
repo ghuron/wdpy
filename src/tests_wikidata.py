@@ -183,25 +183,23 @@ class TestKeepOnlyBestValue(TestCase):
         self.wd.keep_only_best_value('P31', 'P2241')
         self.assertCountEqual([], self.wd.entity['claims']['P31'])
 
-    @mock.patch('wd.Element.get_latest_publication_date', return_value=20241231)
+    @mock.patch('wd.Element.get_latest_ref_date', return_value=20241231)
     def test_remove_second_claim_with_latest_publication_date(self, _, __):
         claim = self.wd.obtain_claim(Model.create_snak('P31', 'Q523'))
         self.wd.obtain_claim(Model.create_snak('P31', 'Q524'))
         self.wd.keep_only_best_value('P31')
         self.assertCountEqual([claim], self.wd.entity['claims']['P31'])
 
-    @mock.patch('wd.Element.get_latest_publication_date', return_value=20241231)
+    @mock.patch('wd.Element.get_latest_ref_date', return_value=20241231)
     def test_no_modification_if_no_value_encountered(self, _, __):
         claim1 = self.wd.obtain_claim(Model.create_snak('P31', 'Q523'))
-        claim1['mainsnak'] = {}
-        claim2 = self.wd.obtain_claim(Model.create_snak('P31', 'Q524'))
-        claim3 = self.wd.obtain_claim(Model.create_snak('P31', 'Q523'))
+        claim1['mainsnak'].pop('datavalue')
+        self.wd.obtain_claim(Model.create_snak('P31', 'Q524'))
+        self.wd.obtain_claim(Model.create_snak('P31', 'Q523'))
         self.wd.keep_only_best_value('P31')
-        self.assertNotIn('remove', claim1)
-        self.assertNotIn('remove', claim2)
-        self.assertNotIn('remove', claim3)
+        self.assertCountEqual([claim1], self.wd.entity['claims']['P31'])
 
-    @mock.patch('wd.Element.get_latest_publication_date', return_value=20241231)
+    @mock.patch('wd.Element.get_latest_ref_date', return_value=20241231)
     def test_process_groups_separately(self, _, __):
         claim1 = self.wd.obtain_claim(Model.create_snak('P31', 'Q523'))
         claim1['qualifiers'] = {'P2241': [Model.create_snak('P2241', 'Q111')]}
