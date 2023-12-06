@@ -29,7 +29,7 @@ class ExoplanetEu(ADQL):
                                                   'Referer': 'https://exoplanet.eu/catalog/'})
 
         identifiers, offset = [], 0 if offset is None else offset
-        params = {**{'iDisplayStart': offset}, **ExoplanetEu.config['post']}
+        params = {**{'iDisplayStart': offset}, **ExoplanetEu.config('post')}
         if result := Wikidata.request('https://exoplanet.eu/catalog/json/', ExoplanetEu.__session, data=params):
             if (response := result.json()) and (offset < response['iTotalRecords']):
                 for record in response['aaData']:
@@ -181,13 +181,13 @@ if ExoplanetEu.initialize(__file__):  # if just imported - do nothing
     wd_items = ExoplanetEu.get_all_items('SELECT ?id ?item {?item p:P5653/ps:P5653 ?id}')
     for ex_id in OrderedDict(sorted(wd_items.items())):
         # ex_id = '2mass_j0249_0557_ab_c--6790'  # uncomment to debug specific item only
-        ExoplanetEu.properties = ExoplanetEu.config['planet']
+        ExoplanetEu.properties = ExoplanetEu.config('planet')
         (item := ExoplanetEu(ex_id, wd_items[ex_id])).update(ExoplanetEu.prepare_data(ex_id))
         if item.entity and 'P397' in item.entity['claims'] and len(item.entity['claims']['P397']) == 1:
             if 'datavalue' in (parent := item.entity['claims']['P397'][0]['mainsnak']):  # parent != "novalue"
                 if (host := ExoplanetEu(ex_id, parent['datavalue']['value']['id'])).qid not in updated_hosts:
                     if ExoplanetEu.db_property not in host.entity['claims']:  # If initial item was not exo-moon
-                        ExoplanetEu.properties = ExoplanetEu.config['star']
+                        ExoplanetEu.properties = ExoplanetEu.config('star')
                         host.update(host.prepare_data(ex_id))
                         updated_hosts.append(host.qid)
         if ExoplanetEu.page:

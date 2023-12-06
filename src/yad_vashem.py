@@ -30,7 +30,7 @@ class YadVashem(Element):
     def post(method: str, num=0):
         try:
             if response := Wikidata.request('https://righteous.yadvashem.org/RighteousWS.asmx/' + method,
-                                            YadVashem.__endpoint, data=YadVashem.config['api'][method].format(num)):
+                                            YadVashem.__endpoint, data=YadVashem.config('api', method).format(num)):
                 return response.json()
         except json.decoder.JSONDecodeError:
             logging.error('Cannot decode {} response for {}'.format(method, num))
@@ -89,8 +89,8 @@ class YadVashem(Element):
         input_snaks[0]['qualifiers'] = {'P1810': external_id}
         input_snaks.append(cls.create_snak('P31', 'Q5'))
         for element in YadVashem._rows[external_id]:
-            if element['Title'] in YadVashem.config['properties']:
-                input_snaks.append(cls.create_snak(cls.config['properties'][element['Title']], element['Value']))
+            if property_id := YadVashem.config('properties', element['Title']):
+                input_snaks.append(cls.create_snak(property_id, element['Value']))
         return input_snaks
 
     def __init__(self, named_as, qid):

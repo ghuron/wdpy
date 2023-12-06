@@ -24,16 +24,16 @@ class ADQL(Element):
 
     @classmethod
     def load(cls, condition=None):
-        for lines in cls.config['queries']:
+        for lines in cls.config('queries'):
             query = ''.join(lines)
             if condition:
                 query = 'SELECT * FROM ({}) a WHERE {}'.format(query, condition)  # condition uses "final" column names
-            ADQL.tap_query(cls.config['endpoint'], query, ADQL.dataset)
+            ADQL.tap_query(cls.config('endpoint'), query, ADQL.dataset)
 
     @classmethod
     def prepare_data(cls, external_id) -> []:
         input_snaks = super().prepare_data(external_id)
-        if external_id not in cls.dataset and 'endpoint' in cls.config:
+        if (external_id not in cls.dataset) and cls.config('endpoint'):
             cls.get_next_chunk(external_id)  # attempt to load this specific object
         if external_id in cls.dataset:
             for row in cls.dataset[external_id]:
@@ -44,6 +44,14 @@ class ADQL(Element):
             logging.warning('{}:"{}"\tcould not be extracted'.format(cls.db_property, external_id))
             input_snaks = None
         return input_snaks
+
+    def remove_all_but_one(self, property_id):
+        if property_id not in ['P528']:
+            super().remove_all_but_one(property_id)
+
+    def deprecate_all_but_one(self, property_id: str):
+        if property_id not in ['P31']:
+            super().deprecate_all_but_one(property_id)
 
     __const = None
 
@@ -136,12 +144,11 @@ class ADQL(Element):
 
     @classmethod
     def enrich_qualifier(cls, snak, value):
-        if not snak or snak['property'].upper() not in cls.config:
+        if (not snak) or (not cls.config(snak['property'].upper(), 'id')):
             return snak
-        for pattern in (config := cls.config[snak['property'].upper()])['translate']:
+        for pattern in (config := cls.config(snak['property'].upper()))['translate']:
             if value.startswith(pattern):
-                snak['qualifiers'] = {config['id']: config['translate'][pattern]}
-                return snak
+                return {**snak, 'qualifiers': {config['id']: config['translate'][pattern]}}
 
     @staticmethod
     def parse_url(url: str) -> str:
@@ -150,7 +157,7 @@ class ADQL(Element):
 
         """Try to find qid of the reference based on the url provided"""
         if url and url.strip() and (url := url.split()[0]):  # get text before first whitespace and strip
-            for pattern, repl in ADQL.config['transform'].items():
+            for pattern, repl in ADQL.config('transform').items():
                 if (query := unquote(re.sub(pattern, repl, url, flags=re.S))).startswith('P'):
                     if query.startswith('P818=') and (qid := ArXiv.get_by_id(query.replace('P818=', ''))):
                         return qid

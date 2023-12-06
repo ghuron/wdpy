@@ -9,7 +9,7 @@ class SimbadDAP(ADQL):
     def get_next_chunk(offset):
         if isinstance(offset, str):
             query = 'SELECT oidref FROM ident WHERE id=\'{}\''.format(offset)
-            if len(ident := SimbadDAP.tap_query(SimbadDAP.config['endpoint'], query)) == 1:
+            if len(ident := SimbadDAP.tap_query(SimbadDAP.config('endpoint'), query)) == 1:
                 SimbadDAP.load('id = \'{}\''.format(list(ident.keys())[0]))
             return [], None
         elif len(ADQL.dataset) > 0:  # TODO: sliding window
@@ -20,7 +20,7 @@ class SimbadDAP(ADQL):
     @classmethod
     def construct_snak(cls, row, col, new_col=None):
         if (new_col := col) == 'p397':
-            new_col = 'p361' if row['parent_type'] in SimbadDAP.config["groups"] else new_col
+            new_col = 'p361' if row['parent_type'] in SimbadDAP.config("groups") else new_col
         elif col == 'p215':
             row[col] = row[col].replace(' ', '')
         elif col == 'p2216' and row['p2216t'] != 'v':
@@ -36,7 +36,7 @@ class SimbadDAP(ADQL):
     @staticmethod
     def get_id_by_name(name: str):
         q = 'SELECT main_id FROM ident JOIN basic ON oid = oidref WHERE id=\'{}\''.format(name.replace('\'', '\'\''))
-        if (row := ADQL.tap_query(SimbadDAP.config['endpoint'], q)) and (len(row) == 1):
+        if (row := ADQL.tap_query(SimbadDAP.config('endpoint'), q)) and (len(row) == 1):
             return list(row.keys())[0]
 
 

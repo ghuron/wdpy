@@ -176,18 +176,20 @@ class TestElement(TestCase):
 class TestKeepOnlyBestValue(TestCase):
     @classmethod
     def setUp(cls):
+        Element._config = {}
         cls.wd = Element('0000 0001 2197 5163')
 
     def test_remove_if_no_qualifier(self, _):
+        Element._config = {'P31': {'id': 'P2241'}}
         self.wd.obtain_claim(Model.create_snak('P31', 'Q5'))
-        self.wd.keep_only_best_value('P31', 'P2241')
+        self.wd.remove_all_but_one('P31')
         self.assertCountEqual([], self.wd.entity['claims']['P31'])
 
     @mock.patch('wd.Element.get_latest_ref_date', return_value=20241231)
     def test_remove_second_claim_with_latest_publication_date(self, _, __):
         claim = self.wd.obtain_claim(Model.create_snak('P31', 'Q523'))
         self.wd.obtain_claim(Model.create_snak('P31', 'Q524'))
-        self.wd.keep_only_best_value('P31')
+        self.wd.remove_all_but_one('P31')
         self.assertCountEqual([claim], self.wd.entity['claims']['P31'])
 
     @mock.patch('wd.Element.get_latest_ref_date', return_value=20241231)
@@ -196,15 +198,16 @@ class TestKeepOnlyBestValue(TestCase):
         claim1['mainsnak'].pop('datavalue')
         self.wd.obtain_claim(Model.create_snak('P31', 'Q524'))
         self.wd.obtain_claim(Model.create_snak('P31', 'Q523'))
-        self.wd.keep_only_best_value('P31')
+        self.wd.remove_all_but_one('P31')
         self.assertCountEqual([claim1], self.wd.entity['claims']['P31'])
 
     @mock.patch('wd.Element.get_latest_ref_date', return_value=20241231)
     def test_process_groups_separately(self, _, __):
+        Element._config = {'P31': {'id': 'P2241'}}
         claim1 = self.wd.obtain_claim(Model.create_snak('P31', 'Q523'))
         claim1['qualifiers'] = {'P2241': [Model.create_snak('P2241', 'Q111')]}
         claim2 = self.wd.obtain_claim(Model.create_snak('P31', 'Q524'))
         claim2['qualifiers'] = {'P2241': [Model.create_snak('P2241', 'Q222')]}
-        self.wd.keep_only_best_value('P31', 'P2241')
+        self.wd.remove_all_but_one('P31')
         self.assertNotIn('remove', claim1)
         self.assertNotIn('remove', claim2)

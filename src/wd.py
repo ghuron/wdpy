@@ -255,18 +255,29 @@ class Model:
 
 
 class Element:
-    config, db_property, db_ref = {}, None, None
+    _config, db_property, db_ref = {}, None, None
 
     @classmethod
     def initialize(cls, file_name: str) -> bool:
         try:
             with open(os.path.splitext(file_name)[0] + '.json') as file:
-                cls.config = {**cls.config, **json.load(file)}
+                cls._config = {**cls._config, **json.load(file)}
         except OSError:
             pass
         if need_init := (sys.argv[0].endswith(os.path.basename(file_name)) and not Wikidata.login):
             Wikidata.logon(sys.argv[1], sys.argv[2])
         return need_init
+
+    @classmethod
+    def config(cls, *kwargs):
+        # returns requested setting or None
+        result = cls._config
+        for _id in kwargs:
+            if _id in result:
+                result = result[_id]
+            else:
+                return None
+        return result
 
     @classmethod
     def create_snak(cls, property_id: str, value, lower: str = None, upper: str = None):
@@ -275,8 +286,7 @@ class Element:
 
     @classmethod
     def lut(cls, text: str):
-        conversion = cls.config and 'translate' in cls.config and text in cls.config['translate']
-        return cls.config['translate'][text] if conversion else text
+        return qid if (qid := cls.config('translate', text)) else text
 
     @staticmethod
     def get_next_chunk(offset: any) -> Tuple[list[str], any]:
@@ -356,16 +366,6 @@ class Element:
         reference['wdpy'] = 1
         return reference
 
-    def process_affected_properties(self, properties):
-        for property_id in properties:
-            self.compact_refs(property_id)
-            if property_id in ['P6257', 'P6258']:
-                self.keep_only_best_value(property_id)
-            elif property_id.upper() in self.config:
-                self.keep_only_best_value(property_id, self.config[property_id.upper()]['id'])
-            elif property_id not in ['P31']:
-                self.normalize(self.entity['claims'][property_id])
-
     @staticmethod
     def deprecate_less_precise_values(statements):
         for claim1 in statements:
@@ -380,33 +380,32 @@ class Element:
                                 claim1['qualifiers'] = {} if 'qualifiers' not in claim1 else claim1['qualifiers']
                                 claim1['qualifiers']['P2241'] = [Model.create_snak('P2241', 'Q42727519')]
 
-    @staticmethod
-    def normalize(statements):
+    def deprecate_all_but_one(self, property_id: str):
         minimal = 999999
-        for statement in statements:
+        for statement in self.entity['claims'][property_id]:
             if 'rank' in statement and statement['rank'] == 'preferred':
                 return  # do not change any ranks
 
-            if 'mespos' in statement and minimal > int(statement['mespos']):
+            if 'mespos' in statement and minimal > int(statement['mespos']):  # ToDo: mespos should not be in wd.py
                 minimal = int(statement['mespos'])
 
-        for statement in statements:
+        for statement in self.entity['claims'][property_id]:
             if 'mespos' in statement:  # normal for statements with minimal mespos, deprecated for the rest
                 if int(statement['mespos']) == minimal:
                     statement['rank'] = 'normal'
                 elif 'hash' not in statement['mainsnak'] and 'rank' not in statement:
                     statement['rank'] = 'deprecated'
 
-        Element.deprecate_less_precise_values(statements)
+        Element.deprecate_less_precise_values(self.entity['claims'][property_id])
 
         latest = 0
-        for statement in statements:
+        for statement in self.entity['claims'][property_id]:
             if 'rank' not in statement or statement['rank'] == 'normal':
                 if (current := Element.get_latest_ref_date(statement)) > latest:
                     latest = current
 
         remaining_normal = 1  # only one statement supported by latest sources should remain normal
-        for statement in statements:
+        for statement in self.entity['claims'][property_id]:
             if 'rank' not in statement or statement['rank'] == 'normal':
                 if remaining_normal == 0 or latest > Element.get_latest_ref_date(statement):
                     statement['rank'] = 'deprecated'
@@ -499,7 +498,8 @@ class Element:
                         latest = Element._pub_dates[ref_id]
         return latest
 
-    def keep_only_best_value(self, property_id, group_by=None):
+    def remove_all_but_one(self, property_id):
+        group_by = self.config(property_id, 'id')
         latest = {}  # None if leave as is otherwise latest publication date for all claims
         for claim in list(self.entity['claims'][property_id]):
             if 'remove' not in claim:
@@ -565,9 +565,16 @@ class Element:
                 if (claim := self.obtain_claim(snak)) and (claim['mainsnak']['datatype'] != 'external-id'):
                     affected_properties.add(snak['property'])
                     self.add_refs(claim, set(snak['source']) if 'source' in snak else set())
-            self.process_affected_properties(affected_properties)
+
+            for property_id in affected_properties:
+                self.compact_refs(property_id)
+                if self.config(property_id):
+                    self.remove_all_but_one(property_id)
+                else:
+                    self.deprecate_all_but_one(property_id)
 
             self.post_process()
+
             if not self.qid or json.dumps(self.entity) != original:
                 return self.save()
 

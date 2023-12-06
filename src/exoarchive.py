@@ -76,7 +76,7 @@ class ExoArchive(ADQL):
 
 
 if ExoArchive.initialize(__file__):  # if not imported
-    ExoArchive.redirect = ExoArchive.tap_query(ExoArchive.config['endpoint'], ExoArchive.config['redirects'])
+    ExoArchive.redirect = ExoArchive.tap_query(ExoArchive.config('endpoint'), ExoArchive.config('redirects'))
     wd_items = ExoArchive.get_all_items('SELECT ?id ?item {?item p:P5667/ps:P5667 ?id}', ExoArchive.resolve_redirects)
     for ex_id in OrderedDict(sorted(wd_items.items())):
         # ex_id = 'eps Tau b'
