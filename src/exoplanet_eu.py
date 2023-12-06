@@ -117,41 +117,44 @@ class ExoplanetEu(ADQL):
 
     @staticmethod
     def parse_value(property_id: str, value: str):
-        prefix = 'http://www.wikidata.org/entity/'
-        num = '\\d[-\\+.eE\\d]+'
-        unit = '\\s*(?P<unit>[A-Za-z]\\S*)?'
         if not value or (value := value.strip()) == '—':
             return
-        elif property_id == 'P397':
-            # ToDo: add P5997 qualifier to source
-            return ExoplanetEu.create_snak(property_id, ADQL.get_parent_object(value))
-        elif reg := re.search(
-                '(?P<value>{})\\s*\\(\\s*-+(?P<min>{})\\s+(?P<max>\\+{})\\s*\\){}'.format(num, num, num, unit),
-                value):
-            result = ExoplanetEu.create_snak(property_id, reg.group('value'), reg.group('min'), reg.group('max'))
-        elif reg := re.search(  # ToDo: Add source circumstance qualifier if > or < found
-                '^[<>]?\\s*(?P<value>' + num + ')\\s*(\\(\\s*±\\s*(?P<bound>' + num + ')\\s*\\))?' + unit + '$', value):
-            if bound := reg.group('bound'):
-                result = ExoplanetEu.create_snak(property_id, reg.group('value'), bound, bound)
-            else:
-                result = ExoplanetEu.create_snak(property_id, reg.group('value'))
-        elif len(deg := value.split(':')) == 3:  # coordinates
-            try:
-                deg[1], deg[2] = ('-' + deg[1], '-' + deg[2]) if deg[0].startswith('-') else (deg[1], deg[2])
-                angle = (float(deg[2]) / 60 + float(deg[1])) / 60 + float(deg[0])
-                digits = 3 + (len(value) - value.find('.') - 1 if value.find('.') > 0 else 0)
-                value = Model.format_float(15 * angle if property_id == 'P6257' else angle, digits)
-                if result := ExoplanetEu.create_snak(property_id, value):
-                    result['datavalue']['value']['unit'] = prefix + 'Q28390'
-            except (ValueError, DecimalException):
-                return ExoplanetEu.create_snak(property_id, value)
-        else:
-            value = value[:-2] + value[-1] if property_id == 'P528' and value[-2] == ' ' else value
-            result = ExoplanetEu.create_snak(property_id, value)
 
-        if result and reg and (unit := reg.group('unit')) and unit in ExoplanetEu.config['translate']:
-            result['datavalue']['value']['unit'] = prefix + ExoplanetEu.config['translate'][unit]
-        return ExoplanetEu.enrich_qualifier(result, value)
+        if Wikidata.type_of(property_id) == 'quantity':
+            num = '\\d[-\\+.eE\\d]+'
+            unit = '\\s*(?P<unit>[A-Za-z]\\S*)?'
+            if reg := re.search(
+                    '(?P<value>{})\\s*\\(\\s*-+(?P<min>{})\\s+(?P<max>\\+{})\\s*\\){}'.format(num, num, num, unit),
+                    value):
+                result = ExoplanetEu.create_snak(property_id, reg.group('value'), reg.group('min'), reg.group('max'))
+            elif reg := re.search(  # ToDo: Add source circumstance qualifier if > or < found
+                    '^[<>]?\\s*(?P<value>' + num + ')\\s*(\\(\\s*±\\s*(?P<bound>' + num + ')\\s*\\))?' + unit + '$',
+                    value):
+                if bound := reg.group('bound'):
+                    result = ExoplanetEu.create_snak(property_id, reg.group('value'), bound, bound)
+                else:
+                    result = ExoplanetEu.create_snak(property_id, reg.group('value'))
+            elif len(deg := value.split(':')) == 3:  # coordinates
+                try:
+                    deg[1], deg[2] = ('-' + deg[1], '-' + deg[2]) if deg[0].startswith('-') else (deg[1], deg[2])
+                    angle = (float(deg[2]) / 60 + float(deg[1])) / 60 + float(deg[0])
+                    digits = 3 + (len(value) - value.find('.') - 1 if value.find('.') > 0 else 0)
+                    value = Model.format_float(15 * angle if property_id == 'P6257' else angle, digits)
+                    if result := ExoplanetEu.create_snak(property_id, value):
+                        result['datavalue']['value']['unit'] = 'http://www.wikidata.org/entity/Q28390'
+                except (ValueError, DecimalException):
+                    return ExoplanetEu.create_snak(property_id, value)
+            else:
+                return ExoplanetEu.create_snak(property_id, value)
+
+            if result and reg and (unit := ExoplanetEu.lut(reg.group('unit'))):
+                result['datavalue']['value']['unit'] = 'http://www.wikidata.org/entity/' + unit
+            return result
+
+        if property_id == 'P397':
+            return ExoplanetEu.create_snak('P397', ADQL.get_parent_object(value))  # ToDo: P5997: value
+        value = value[:-2] + value[-1] if (property_id == 'P528') and (value[-2] == ' ') else value
+        return ExoplanetEu.enrich_qualifier(ExoplanetEu.create_snak(property_id, value), value)
 
     def obtain_claim(self, snak):
         if snak:
@@ -168,7 +171,7 @@ class ExoplanetEu(ADQL):
 
     def confirm(self, reference):
         reference = super().confirm(reference)
-        if 'P215' in ExoplanetEu.properties.values():
+        if 'P215' in ExoplanetEu.properties.values():  # it is the host star
             reference['snaks'][self.db_property] = [self.create_snak(self.db_property, self.external_id)]
         return reference
 
