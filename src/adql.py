@@ -100,6 +100,8 @@ class ADQL(Element):
         if ADQL._parents is None:
             ADQL._parents = Wikidata.query('SELECT DISTINCT ?c ?i { ?i ^ps:P397 []; wdt:P528 ?c }',
                                            lambda row, _: (row[0].lower(), row[1]))
+
+        name = name[:-1] if re.search('OGLE.+L$', name) else name  # In SIMBAD OGLE names are w/o trailing 'L'
         if name.lower() in ADQL._parents:
             return ADQL._parents[name.lower()]
 
