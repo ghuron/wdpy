@@ -1,5 +1,6 @@
 #!/usr/bin/python3
 from adql import ADQL
+from wd import Wikidata
 
 
 class SimbadDAP(ADQL):
@@ -17,12 +18,22 @@ class SimbadDAP(ADQL):
         SimbadDAP.load('id BETWEEN {} AND {}'.format(0, 10000))
         return SimbadDAP.dataset.keys(), None
 
+    __var_types = None
+
     @classmethod
     def construct_snak(cls, row, col, new_col=None):
         if (new_col := col) == 'p397':
             new_col = 'p361' if row['parent_type'] in SimbadDAP.config("groups") else new_col
         elif col == 'p215':
             row[col] = row[col].replace(' ', '')
+        elif col == 'p881':
+            if not SimbadDAP.__var_types:
+                SimbadDAP.__var_types = Wikidata.query(
+                    'SELECT ?c ?i {?i wdt:P279+ wd:Q6243; p:P528[ps:P528 ?c; pq:P972 wd:Q222662]}')
+            if (gcvs := row[col].upper().strip(':')) in SimbadDAP.__var_types:
+                row[col] = SimbadDAP.__var_types[gcvs]
+            else:
+                return
         elif col == 'p2216' and row['p2216t'] != 'v':
             return
         return super().construct_snak(row, col, new_col)

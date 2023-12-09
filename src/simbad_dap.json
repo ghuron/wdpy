@@ -1497,6 +1497,11 @@
       "       fe_h_prec AS P2227p",
       "  FROM mesFe_H",
       "  JOIN basic ON oidref = oid"
+    ],
+    [
+      "SELECT main_id, oidref AS id, bibcode AS reference, mespos, vartyp AS P881",
+      "  FROM mesVar",
+      "  JOIN basic ON oidref = oid"
     ]
   ]
 }
