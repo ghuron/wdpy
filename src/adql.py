@@ -49,10 +49,6 @@ class ADQL(Element):
         if property_id not in ['P528']:
             super().remove_all_but_one(property_id)
 
-    def deprecate_all_but_one(self, property_id: str):
-        if property_id not in ['P31']:
-            super().deprecate_all_but_one(property_id)
-
     __const = None
 
     def post_process(self):

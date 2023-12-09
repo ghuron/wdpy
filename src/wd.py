@@ -570,7 +570,7 @@ class Element:
                 self.compact_refs(property_id)
                 if self.config(property_id):
                     self.remove_all_but_one(property_id)
-                else:
+                elif Wikidata.type_of(property_id) in ['quantity', 'string']:
                     self.deprecate_all_but_one(property_id)
 
             self.post_process()
