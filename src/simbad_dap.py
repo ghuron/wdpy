@@ -1,4 +1,6 @@
 #!/usr/bin/python3
+import math
+
 from adql import ADQL
 from wd import Wikidata
 
@@ -26,6 +28,12 @@ class SimbadDAP(ADQL):
             new_col = 'p361' if row['parent_type'] in SimbadDAP.config("groups") else new_col
         elif col == 'p215':
             row[col] = row[col].replace(' ', '')
+        elif col == 'p7015':
+            row['p7015'] = math.pow(10, (n := float(row['p7015'])))
+            row['p7015p'] = p if (p := int(row['p7015p'])) > -round(n) else -round(n)
+            while ((c := round(row['p7015'], row['p7015p'] - 1)) > 0) and (round(math.log10(c), p) == n):
+                row['p7015p'] = row['p7015p'] - 1
+            row['p7015'] = round(row['p7015'], row['p7015p'])
         elif col == 'p881':
             if not SimbadDAP.__var_types:
                 SimbadDAP.__var_types = Wikidata.query(

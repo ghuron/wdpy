@@ -1494,7 +1494,7 @@
     ],
     [
       "SELECT main_id, oidref AS id, bibcode AS reference, mespos, teff AS P6879, 'Q11579' AS P6879u, fe_h AS P2227,",
-      "       fe_h_prec AS P2227p",
+      "       fe_h_prec AS P2227p, log_g AS P7015, log_g_prec AS P7015p, 'Q39699418' AS P7015u",
       "  FROM mesFe_H",
       "  JOIN basic ON oidref = oid"
     ],
