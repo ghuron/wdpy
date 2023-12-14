@@ -1493,6 +1493,13 @@
       " WHERE unit = 'mas'"
     ],
     [
+      "SELECT main_id, oidref AS id, bibcode AS P2216r, 'Q3674704' AS P2216u, mespos, velType AS P2216t,",
+      "       velValue AS P2216, velValue_prec AS P2216p, meanError AS P2216h, meanError_prec AS P2216hp,",
+      "       meanError AS P2216l, meanError_prec AS P2216lp",
+      "  FROM mesVelocities",
+      "  JOIN basic ON oidref = oid"
+    ],
+    [
       "SELECT main_id, oidref AS id, bibcode AS reference, mespos, teff AS P6879, 'Q11579' AS P6879u, fe_h AS P2227,",
       "       fe_h_prec AS P2227p, log_g AS P7015, log_g_prec AS P7015p, 'Q39699418' AS P7015u",
       "  FROM mesFe_H",
