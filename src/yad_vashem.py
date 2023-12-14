@@ -88,6 +88,7 @@ class YadVashem(Element):
         input_snaks = [YadVashem.create_snak(cls.db_property, YadVashem._group_id)]
         input_snaks[0]['qualifiers'] = {'P1810': external_id}
         input_snaks.append(cls.create_snak('P31', 'Q5'))
+        input_snaks.append(cls.create_snak('P166', 'Q112197'))
         for element in YadVashem._rows[external_id]:
             if property_id := YadVashem.config('properties', element['Title']):
                 input_snaks.append(cls.create_snak(property_id, element['Value']))
