@@ -20,6 +20,7 @@ class TestADQL(TestCase):
 class TestDeprecateLessPreciseValues(TestCase):
     @classmethod
     def setUp(cls):
+        ADQL.db_ref = 'Q1'
         cls.adql = ADQL('')
 
     def test_year_and_month(self):

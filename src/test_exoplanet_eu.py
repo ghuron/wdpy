@@ -8,6 +8,7 @@ from exoplanet_eu import ExoplanetEu
 class TestExoplanetEu(TestCase):
     @classmethod
     def setUp(cls):
+        ExoplanetEu.properties = {}
         cls.exo = ExoplanetEu('55 Cnc e')
 
     def test_obtain_claim(self):

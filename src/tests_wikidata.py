@@ -103,6 +103,7 @@ class TestModel(TestCase):
 class TestElement(TestCase):
     @classmethod
     def setUp(cls):
+        Element.db_ref = 'Q1'
         cls.wd = Element('0000 0001 2197 5163')
 
     @mock.patch('logging.log')
@@ -136,12 +137,13 @@ class TestElement(TestCase):
     @mock.patch('wd.Wikidata.type_of', return_value='wikibase-item')
     def test_preload(self, mock_typeof, mock_load):
         mock_typeof.return_value = 'time'
+        pub_date = Element.create_snak('P577', '2022-02-02')
+        mock_typeof.return_value = 'wikibase-item'
         (fake_redirect := Element('')).entity['redirects'] = {'to': 'Q2222'}
-        fake_redirect.obtain_claim(Element.create_snak('P577', '2022-02-02'))
+        fake_redirect.obtain_claim(pub_date)
         mock_load.return_value = {'Q1111': fake_redirect.entity, 'Q3333': Element('').entity}
         Element._redirects['Q4444'] = 'Q2222'
 
-        mock_typeof.return_value = 'wikibase-item'
         Element.preload([{'snaks': {'P248': [Model.create_snak('P248', 'Q1111')]}},
                          {'snaks': {'P248': [Model.create_snak('P248', 'Q3333')]}},
                          {'snaks': {'P248': [Model.create_snak('P248', 'Q4444')]}},

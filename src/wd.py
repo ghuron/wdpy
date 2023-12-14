@@ -348,6 +348,10 @@ class Element:
             claim['qualifiers'] = {} if 'qualifiers' not in claim else claim['qualifiers']
             for property_id in snak['qualifiers']:
                 claim['qualifiers'][property_id] = [self.create_snak(property_id, snak['qualifiers'][property_id])]
+
+        if ('source' in snak) or (claim['mainsnak']['datatype'] != 'external-id'):
+            self.add_refs(claim, set(snak['source']) if 'source' in snak else set())
+
         return claim
 
     @staticmethod
@@ -564,7 +568,6 @@ class Element:
             for snak in parsed_data:
                 if (claim := self.obtain_claim(snak)) and (claim['mainsnak']['datatype'] != 'external-id'):
                     affected_properties.add(snak['property'])
-                    self.add_refs(claim, set(snak['source']) if 'source' in snak else set())
 
             for property_id in affected_properties:
                 self.compact_refs(property_id)
