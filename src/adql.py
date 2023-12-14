@@ -40,6 +40,8 @@ class ADQL(Element):
                 for col in row:
                     if row[col] and re.search('\\d+$', col) and (snak := cls.construct_snak(row, col)):
                         input_snaks.append(snak)
+                        if col.upper() in ['P6257', 'P6258']:  # add J2000 epoch
+                            input_snaks.append(cls.create_snak('P6259', 'Q1264450'))
         else:
             logging.warning('{}:"{}"\tcould not be extracted'.format(cls.db_property, external_id))
             input_snaks = None
@@ -53,17 +55,22 @@ class ADQL(Element):
 
     def post_process(self):
         super().post_process()
-        if 'P6257' in self.entity['claims'] and 'datavalue' in self.entity['claims']['P6257'][0]['mainsnak']:
-            if 'P6258' in self.entity['claims'] and 'datavalue' in self.entity['claims']['P6258'][0]['mainsnak']:
-                self.obtain_claim(self.create_snak('P6259', 'Q1264450'))  # J2000
-                if 'P59' not in self.entity['claims']:
-                    ra = self.entity['claims']['P6257'][0]['mainsnak']['datavalue']['value']['amount']
-                    dec = self.entity['claims']['P6258'][0]['mainsnak']['datavalue']['value']['amount']
-                    tla = coordinates.SkyCoord(ra, dec, frame='icrs', unit='deg').get_constellation(short_name=True)
-                    if ADQL.__const is None:
-                        ADQL.__const = Wikidata.query(
-                            'SELECT DISTINCT ?n ?i {?i wdt:P31/wdt:P279* wd:Q8928; wdt:P1813 ?n}')
-                    self.obtain_claim(self.create_snak('P59', ADQL.__const[tla]))
+        try:
+            ra = self.entity['claims']['P6257'][0]['mainsnak']['datavalue']['value']['amount']
+            dec = self.entity['claims']['P6258'][0]['mainsnak']['datavalue']['value']['amount']
+            tla = coordinates.SkyCoord(ra, dec, frame='icrs', unit='deg').get_constellation(short_name=True)
+            if ADQL.__const is None:
+                ADQL.__const = Wikidata.query('SELECT DISTINCT ?n ?i {?i wdt:P31/wdt:P279* wd:Q8928; wdt:P1813 ?n}')
+            target = None
+            for claim in list(self.entity['claims']['P59'] if 'P59' in self.entity['claims'] else []):
+                if target or (claim['mainsnak']['datavalue']['value']['id'] != ADQL.__const[tla]):
+                    self.delete_claim(claim)
+                else:
+                    target = claim
+            target = target if target else self.obtain_claim(self.create_snak('P59', ADQL.__const[tla]))
+            target['references'] = [{'snaks': {'P887': [self.create_snak('P887', 'Q123764736')]}}]
+        except KeyError:
+            return
 
     @staticmethod
     def tap_query(url, sql, result=None):

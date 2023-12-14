@@ -87,6 +87,8 @@ class ExoplanetEu(ADQL):
                         result['input'] = result['input'] + ExoplanetEu.parse_snaks(property_id, text.split(','), ref)
                     else:
                         result['input'] = result['input'] + ExoplanetEu.parse_snaks(property_id, [text], ref)
+                        if property_id in ['P6257', 'P6258']:  # add J2000 epoch
+                            result['input'].append(ExoplanetEu.create_snak('P6259', 'Q1264450'))
             return result
 
     @staticmethod
