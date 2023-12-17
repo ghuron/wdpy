@@ -350,7 +350,7 @@ class Element:
                 claim['qualifiers'][property_id] = [self.create_snak(property_id, snak['qualifiers'][property_id])]
 
         if ('source' in snak) or (claim['mainsnak']['datatype'] != 'external-id'):
-            self.add_refs(claim, set(snak['source']) if 'source' in snak else set())
+            self.add_refs(claim, snak)
 
         return claim
 
@@ -448,6 +448,9 @@ class Element:
                             if 'P12132' not in prior[_id]['snaks']:
                                 prior[_id]['snaks']['P12132'] = []
                             prior[_id]['snaks']['P12132'].append(p12132)
+                    for property_id in ref['snaks']:
+                        if property_id not in prior[_id]['snaks']:
+                            prior[_id]['snaks'][property_id] = ref['snaks'][property_id]
                     if 'wdpy' in ref:
                         self.confirm(prior[_id])
                     continue
@@ -485,10 +488,12 @@ class Element:
                     self.delete_claim(claim)
                 claim['references'] = result
 
-    def add_refs(self, claim, sources: set = None):
-        claim['references'] = claim['references'] if 'references' in claim else []
-        for src_id in (sources if sources else set()) | {self.db_ref}:
-            claim['references'].append(self.confirm({'snaks': {'P248': [Model.create_snak('P248', src_id)]}}))
+    def add_refs(self, claim, snak):
+        result = []
+        for src_id in (set(snak['source']) if 'source' in snak else set()) | {self.db_ref}:
+            result.append(self.confirm({'snaks': {'P248': [Model.create_snak('P248', src_id)]}}))
+        claim['references'] = claim['references'] + result if 'references' in claim else result
+        return result
 
     @staticmethod
     def get_latest_ref_date(claim: dict):

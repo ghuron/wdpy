@@ -57,7 +57,7 @@ class TestReferences(TestCase):
         self.wd = Element('')
 
     def test_add_external_id(self, _):
-        self.wd.add_refs(claim := {})
+        self.wd.add_refs(claim := {}, {})
         self.assertEqual(1, len(claim['references']))
         self.assertCountEqual(['Q654724'], Element.get_snaks(claim['references'][0], 'P248'))
 
