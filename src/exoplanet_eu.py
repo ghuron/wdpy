@@ -154,24 +154,9 @@ class ExoplanetEu(ADQL):
             return result
 
         if property_id == 'P397':
-            if snak := ExoplanetEu.create_snak('P397', ADQL.get_parent_object(value)):
-                snak['named'] = value
-            return snak
+            return ExoplanetEu.get_parent_snak(value)
         value = value[:-2] + value[-1] if (property_id == 'P528') and (value[-2] == ' ') else value
         return ExoplanetEu.enrich_qualifier(ExoplanetEu.create_snak(property_id, value), value)
-
-    def add_refs(self, claim, snak):
-        result = super().add_refs(claim, snak)
-        if 'named' in snak:
-            for ref in result:
-                added = False
-                ref['snaks']['P5997'] = ref['snaks']['P5997'] if 'P5997' in ref['snaks'] else []
-                for p5997 in ref['snaks']['P5997']:
-                    if added := (p5997['datavalue']['value'] == snak['named']):
-                        break
-                if not added:
-                    ref['snaks']['P5997'].append(self.create_snak('P5997', snak['named']))
-        return result
 
     def obtain_claim(self, snak):
         if snak:

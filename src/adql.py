@@ -98,15 +98,15 @@ class ADQL(Element):
 
     _parents = None
 
-    @staticmethod
-    def get_parent_object(name: str):
+    @classmethod
+    def get_parent_snak(cls, name: str):
         if ADQL._parents is None:
             ADQL._parents = Wikidata.query('SELECT DISTINCT ?c ?i { ?i ^ps:P397 []; wdt:P528 ?c }',
                                            lambda row, _: (row[0].lower(), row[1]))
 
         name = name[:-1] if re.search('OGLE.+L$', name) else name  # In SIMBAD OGLE names are w/o trailing 'L'
-        if name.lower() in ADQL._parents:
-            return ADQL._parents[name.lower()]
+        if name.lower() in ADQL._parents and (snak := cls.create_snak('P397', ADQL._parents[name.lower()])):
+            return {**snak, 'named': name}
 
         from simbad_dap import SimbadDAP
         if simbad_id := SimbadDAP.get_id_by_name(name):
@@ -116,15 +116,27 @@ class ADQL(Element):
                 ADQL._parents[simbad_id.lower()] = qid
             ADQL._parents[name.lower()] = ADQL._parents[simbad_id.lower()]
             logging.info('Cache miss: "{}" for {}'.format(name, ADQL._parents[name.lower()]))
-            return ADQL._parents[name.lower()]
+            if snak := cls.create_snak('P397', ADQL._parents[name.lower()]):
+                return {**snak, 'named': name}
+
+    def add_refs(self, claim, snak):
+        result = super().add_refs(claim, snak)
+        if 'named' in snak:
+            for ref in result:
+                added = False
+                ref['snaks']['P5997'] = ref['snaks']['P5997'] if 'P5997' in ref['snaks'] else []
+                for p5997 in ref['snaks']['P5997']:
+                    if added := (p5997['datavalue']['value'] == snak['named']):
+                        break
+                if not added:
+                    ref['snaks']['P5997'].append(self.create_snak('P5997', snak['named']))
+        return result
 
     @classmethod
     def construct_snak(cls, row, col, new_col=None):
         new_col = (new_col if new_col else col).upper()
         if Wikidata.type_of(new_col) != 'quantity':
-            if col == 'p397' and (qid := ADQL.get_parent_object(row[col])):
-                row[col] = qid
-            result = cls.create_snak(new_col, row[col])
+            result = cls.get_parent_snak(row[col]) if col == 'p397' else cls.create_snak(new_col, row[col])
         elif col + 'h' not in row or row[col + 'h'] == '':
             result = cls.create_snak(new_col, cls.format_figure(row, col))
         else:
