@@ -312,7 +312,10 @@ class Element:
     @property
     def entity(self):
         if not self._entity:
-            self.qid = self.qid if self.qid else self.haswbstatement(self.external_id)
+            try:
+                self.qid = self.qid if self.qid else self.haswbstatement(self.external_id)
+            except ValueError as e:
+                logging.warning('Found {} items of {}="{}"'.format(e.args[0], self.db_property, self.external_id))
             self._entity = {'labels': {}, 'claims': {}}
             if self.qid and (result := Wikidata.load({self.qid})):
                 self._entity = result[self.qid]
