@@ -12,7 +12,7 @@ class SimbadDAP(ADQL):
     def get_next_chunk(offset):
         if isinstance(offset, str):
             query = 'SELECT oidref FROM ident WHERE id=\'{}\''.format(offset)
-            if len(ident := SimbadDAP.tap_query(SimbadDAP.config('endpoint'), query)) == 1:
+            if (ident := SimbadDAP.tap_query(SimbadDAP.config('endpoint'), query)) and (len(ident) == 1):
                 SimbadDAP.load('id = \'{}\''.format(list(ident.keys())[0]))
             return [], None
         elif len(ADQL.dataset) > 0:  # TODO: sliding window
