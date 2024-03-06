@@ -1041,6 +1041,7 @@
       "ENACS ": "Q66617840",
       "EO ": "Q66710288",
       "EON ": "Q69072572",
+      "EPIC ": "Q25377854",
       "ESDO ": "Q68966255",
       "ESG ": "Q68785988",
       "ESO ": "Q5413234",
@@ -1132,6 +1133,7 @@
       "ITG ": "Q68813507",
       "IXO ": "Q68943994",
       "JP11 ": "Q6108661",
+      "K2-": "Q124749278",
       "Karmn ": "Q60305026",
       "KD ": "Q68606924",
       "Kepler-": "Q122841443",
@@ -1413,12 +1415,6 @@
       "       rvz_err_prec AS P2216hp, rvz_err_prec AS P2216lp, 'Q3674704' AS P2216u,",
       "       rvz_bibcode AS P2216r, rvz_type AS P2216t",
       "       FROM basic"
-    ],
-    [
-      "SELECT b.main_id, b.oid AS id, s.main_id AS P397, link_bibcode AS P397r, s.otype AS parent_type, 0 AS mespos",
-      "  FROM basic b",
-      "  JOIN h_link ON h_link.child = b.oid",
-      "  JOIN basic s ON h_link.parent = s.oid"
     ],
     [
       "SELECT main_id, oidref AS id, bibcode AS reference, mespos,",
