@@ -66,7 +66,7 @@ class TestModel(TestCase):
     @mock.patch('wd.Wikidata.type_of', return_value='time')
     def testIgnoreInsignificantDatePart(self, _):
         self.assertIsNotNone(
-            Model.find_claim({'datavalue': {'value': {'time': '+1999-12-31T00:00:00Z', 'precision': 9}}},
+            Model.find_claim({'snaktype': 0, 'datavalue': {'value': {'time': '+1999-12-31T00:00:00Z', 'precision': 9}}},
                              [Model.create_claim(Model.create_snak('P575', '1999'))]))
 
     def test_format_float(self):
