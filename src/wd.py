@@ -234,7 +234,10 @@ class Model:
     @staticmethod
     def find_claim(snak: dict, claims: list):
         for c in claims:
-            if Model.qualifier_filter(snak, c) and Model.compare(c['mainsnak'], snak['datavalue']['value']):
+            if snak['snaktype'] == 'novalue':
+                if c['mainsnak']['snaktype'] == 'novalue':
+                    return c
+            elif Model.qualifier_filter(snak, c) and Model.compare(c['mainsnak'], snak['datavalue']['value']):
                 return c
         if len(claims) > 0 and Wikidata.type_of(snak['property']) == 'external-id':
             claims[0]['mainsnak']['datavalue']['value'] = snak['datavalue']['value']
@@ -334,7 +337,7 @@ class Element:
         """Find or create claim, corresponding to the provided snak"""
         if snak is None:
             return
-        if isinstance(snak['datavalue']['value'], dict) and 'id' in snak['datavalue']['value']:
+        if 'datavalue' in snak and isinstance(snak['datavalue']['value'], dict) and 'id' in snak['datavalue']['value']:
             if self.qid == snak['datavalue']['value']['id']:
                 return
 

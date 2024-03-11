@@ -77,6 +77,8 @@ class ExoplanetEu(ADQL):
                 if star := ExoplanetEu.page.select_one('[id^=star-detail] dd'):
                     if snak := ExoplanetEu.parse_value('P397', star.text.strip()):
                         result['input'].append(snak)
+                elif ExoplanetEu.page.select_one('[id=system-detail-basic-header]'):
+                    result['input'].append({'property': 'P397', 'datatype': 'wikibase-item', 'snaktype': 'novalue'})
 
             if 'label' in result and (snak := ExoplanetEu.parse_value('P528', result['label'])):
                 result['input'].append(snak)
