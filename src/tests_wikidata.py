@@ -212,3 +212,31 @@ class TestKeepOnlyBestValue(TestCase):
         self.wd.remove_all_but_one('P31')
         self.assertNotIn('remove', claim1)
         self.assertNotIn('remove', claim2)
+
+
+@mock.patch('wd.Wikidata.type_of', return_value='wikibase-item')
+class TestRemoveNonConfirmed(TestCase):
+    def setUp(self):
+        Element.db_ref = 'Q654724'
+
+    def test_own_P248(self, _):
+        p248 = {'snaks': {'P248': [Model.create_snak('P248', Element.db_ref)]}}
+        self.assertEqual(0, len(Element.remove_nonconfirmed([p248])))
+        self.assertCountEqual([p248], Element.remove_nonconfirmed([{**p248, 'wdpy': 1}]))
+        p12132 = {'snaks': {'P12132': [Model.create_snak('P12132', Element.db_ref)]}}
+        self.assertCountEqual([p12132], Element.remove_nonconfirmed([{**p248, 'wdpy': 1}, {**p12132, 'wdpy': 1}]))
+        self.assertCountEqual([p12132], Element.remove_nonconfirmed([{**p12132, 'wdpy': 1}, {**p248, 'wdpy': 1}]))
+
+    def test_foreign_P248(self, _):
+        p248 = {'snaks': {'P248': [Model.create_snak('P248', Element.db_ref + '1')]}}
+        self.assertCountEqual(p248, Element.remove_nonconfirmed([p248])[0])
+        p12132 = {'snaks': {'P12132': [Model.create_snak('P12132', Element.db_ref)]}}
+        self.assertCountEqual([p248, p12132], Element.remove_nonconfirmed([{**p248, 'wdpy': 1}, {**p12132, 'wdpy': 1}]))
+        self.assertCountEqual([p248, p12132], Element.remove_nonconfirmed([{**p12132, 'wdpy': 1}, {**p248, 'wdpy': 1}]))
+
+    def test_non_confirmed_P12132(self, _):
+        own = Model.create_snak('P12132', Element.db_ref)
+        self.assertEqual(0, len(Element.remove_nonconfirmed([{'snaks': {'P12132': [own]}}])))
+        foreign = Model.create_snak('P12132', Element.db_ref + '1')
+        self.assertEqual({'snaks': {'P12132': [foreign]}},
+                         Element.remove_nonconfirmed([{'snaks': {'P12132': [own, foreign]}}])[0])

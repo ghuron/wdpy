@@ -474,7 +474,13 @@ class Element:
                 else:
                     aggregator_needed = False
                     result.append(ref)
-            elif cls.db_ref not in cls.get_snaks(ref, 'P248') + cls.get_snaks(ref, 'P12132'):
+            elif cls.db_ref not in cls.get_snaks(ref, 'P248'):
+                if 'P12132' in ref['snaks']:
+                    for item in list(ref['snaks']['P12132']):
+                        if item['datavalue']['value']['id'] == cls.db_ref:
+                            ref['snaks']['P12132'].remove(item)
+                    if len(ref['snaks']['P12132']) == 0:
+                        continue
                 result.append(ref)
         if aggregator and aggregator_needed:
             result.append(aggregator)
