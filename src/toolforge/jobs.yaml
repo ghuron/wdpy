@@ -3,7 +3,7 @@
 - name: exoplanet-eu
   command: src/toolforge/run.sh exoplanet-eu
   image: tf-python39
-  mem: 1Gi
+  mem: 2Gi
   schedule: "8 20 * * SUN"
 - name: exoarchive
   command: src/toolforge/run.sh exoarchive
