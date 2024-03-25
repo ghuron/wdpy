@@ -51,7 +51,8 @@ class ExoArchive(ADQL):
             if (response := Wikidata.request(prefix + external_id)) and 'system' in response.json():
                 if external_id in (data := response.json()['system']['objects']['planet_set']['planets']):
                     for code in data[external_id]['alias_set']['aliases']:
-                        if snak := cls.construct_snak({'p528': code.replace(' ', '')}, 'p528'):
+                        if snak := cls.construct_snak({'p528': code[:-2] + code[-1] if code[-2] == ' ' else code},
+                                                      'p528'):
                             input_snaks.append(snak)
                 else:
                     logging.info('{} appears to have redirect'.format(prefix + external_id))
