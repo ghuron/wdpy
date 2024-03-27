@@ -385,7 +385,7 @@ class Element:
                         if 'datavalue' in claim1['mainsnak'] and 'datavalue' in claim2['mainsnak']:  # novalue
                             val1 = claim1['mainsnak']['datavalue']['value']
                             val2 = claim2['mainsnak']['datavalue']['value']
-                            if Model.serialize(val2, val1) == Model.serialize(val1):
+                            if 'remove' not in claim2 and (Model.serialize(val2, val1) == Model.serialize(val1)):
                                 claim1['rank'] = 'deprecated'
                                 claim1['qualifiers'] = {} if 'qualifiers' not in claim1 else claim1['qualifiers']
                                 claim1['qualifiers']['P2241'] = [Model.create_snak('P2241', 'Q42727519')]
@@ -410,13 +410,13 @@ class Element:
 
         latest = 0
         for statement in self.entity['claims'][property_id]:
-            if 'rank' not in statement or statement['rank'] == 'normal':
+            if 'remove' not in statement and ('rank' not in statement or statement['rank'] == 'normal'):
                 if (current := Element.get_latest_ref_date(statement)) > latest:
                     latest = current
 
         remaining_normal = 1  # only one statement supported by latest sources should remain normal
         for statement in self.entity['claims'][property_id]:
-            if 'rank' not in statement or statement['rank'] == 'normal':
+            if 'remove' not in statement and ('rank' not in statement or statement['rank'] == 'normal'):
                 if remaining_normal == 0 or latest > Element.get_latest_ref_date(statement):
                     statement['rank'] = 'deprecated'
                 else:
