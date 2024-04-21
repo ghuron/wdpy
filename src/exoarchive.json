@@ -77,8 +77,13 @@
       "SELECT DISTINCT pl_name AS id, gaia_id AS P397, disposition||pl_controv_flag AS P31 FROM k2pandc"
     ],
     [
-      "SELECT hostname AS id, st_age AS P7584, st_ageerr1 AS P7584h, st_ageerr2 AS P7584l, 'Q524410' AS P7584u,",
-      "st_refname AS P7584r, '' AS P31, 0 AS mespos FROM ps"
+      "SELECT hostname AS id, '' AS P31, 0 AS mespos, ",
+      "       st_age AS P7584, st_ageerr1 AS P7584h, st_ageerr2 AS P7584l, 'Q524410' AS P7584u, st_refname AS P7584r,",
+      "       st_teff AS P6879, st_tefferr1 AS P6879h, st_tefferr2 AS P6879l, 'Q11579' AS P6879u, st_refname AS P6879r,",
+      "       st_mass AS P2067, st_masserr1 AS P2067h, st_masserr2 AS P2067l, 'Q180892' AS P2067u, st_refname AS P2067r,",
+      "       sy_dist AS P2583, sy_disterr1 AS P2583h, sy_disterr2 AS P2583l, 'Q12129' AS P2583u, st_refname AS P2583r,",
+      "       st_rad AS P2120, st_raderr1 AS P2120h, st_raderr2 AS P2120l, 'Q48440' AS P2120u, st_refname AS P2120r",
+      "  FROM ps"
     ]
   ]
 }
