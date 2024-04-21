@@ -4,26 +4,25 @@ from collections import OrderedDict
 from decimal import Decimal, InvalidOperation
 from time import sleep
 
-from adql import ADQL
-from wd import Wikidata
+import adql
+import wd
 
 
-class ExoArchive(ADQL):
-    db_property, db_ref = 'P5667', 'Q5420639'
-    redirect = {}
+class Model(adql.Model):
+    property, redirect = 'P5667', {}
 
     @staticmethod
     def resolve_redirects(new, _):
         norm_id = new[0].replace('KOI-', 'K0')
-        return (ExoArchive.redirect[norm_id][0]['pl_name'] if norm_id in ExoArchive.redirect else new[0]), new[1]
+        return (Model.redirect[norm_id][0]['pl_name'] if norm_id in Model.redirect else new[0]), new[1]
 
     @staticmethod
     def get_next_chunk(offset):
-        if not offset and not ExoArchive.dataset:  # load only confirmed non-controversial exoplanets
-            ExoArchive.load('P31 = \'CONFIRMED0\'')
-            return ExoArchive.dataset.keys(), None
-        elif offset and ExoArchive.dataset:  # try to load specific exoplanet ignoring its status
-            ExoArchive.load('id = \'{}\''.format(offset))
+        if not offset and not Model.dataset:  # load only confirmed non-controversial exoplanets
+            Model.load('P31 = \'CONFIRMED0\'')
+            return Model.dataset.keys(), None
+        elif offset and Model.dataset:  # try to load specific exoplanet ignoring its status
+            Model.load('id = \'{}\''.format(offset))
         return [], None
 
     @classmethod
@@ -48,24 +47,26 @@ class ExoArchive(ADQL):
     def prepare_data(cls, external_id) -> []:
         if input_snaks := super().prepare_data(external_id):
             prefix = 'https://exoplanetarchive.ipac.caltech.edu/cgi-bin/Lookup/nph-aliaslookup.py?objname='
-            if (response := Wikidata.request(prefix + external_id)) and 'system' in response.json():
+            if (response := wd.Wikidata.request(prefix + external_id)) and 'system' in response.json():
                 if external_id in (data := response.json()['system']['objects']['planet_set']['planets']):
                     for code in data[external_id]['alias_set']['aliases']:
-                        if snak := cls.construct_snak({'p528': code[:-2] + code[-1] if code[-2] == ' ' else code},
-                                                      'p528'):
+                        if snak := cls.construct_snak(
+                                {'p528': code[:-2] + code[-1] if code[-2] == ' ' else code}, 'p528'):
                             input_snaks.append(snak)
                 else:
                     logging.info('{} appears to have redirect'.format(prefix + external_id))
             return input_snaks
 
-    __p5653 = None
+
+class Element(adql.Element):
+    __p5653, _model, _claim = None, Model, type('Claim', (wd.Claim,), {'db_ref': 'Q5420639'})
 
     def update(self, parsed_data):
-        if not self.qid:  # Try to reuse item from Exoplanet.eu
-            if not ExoArchive.__p5653:
-                ExoArchive.__p5653 = Wikidata.query('SELECT ?c ?i {?i wdt:P5653 ?c MINUS {?i wdt:P5667 []}}')
-            if self.external_id in ExoArchive.__p5653:
-                self.qid = ExoArchive.__p5653[self.external_id]
+        if not self.qid:
+            if not Element.__p5653:
+                Element.__p5653 = wd.Wikidata.query('SELECT ?c ?i {?i wdt:P5653 ?c MINUS {?i wdt:P5667 []}}')
+            if self.external_id in Element.__p5653:  # Try to reuse item from Exoplanet.eu
+                self.qid = Element.__p5653[self.external_id]
         return super().update(parsed_data)
 
     def obtain_claim(self, snak):
@@ -76,10 +77,10 @@ class ExoArchive(ADQL):
         return super().obtain_claim(snak)
 
 
-if ExoArchive.initialize(__file__):  # if not imported
-    ExoArchive.redirect = ExoArchive.tap_query(ExoArchive.config('endpoint'), ExoArchive.config('redirects'))
-    wd_items = ExoArchive.get_all_items('SELECT ?id ?item {?item p:P5667/ps:P5667 ?id}', ExoArchive.resolve_redirects)
+if Model.initialize(__file__):  # if not imported
+    Model.redirect = Model.tap_query(Model.config('endpoint'), Model.config('redirects'))
+    wd_items = Model.get_all_items('SELECT ?id ?item {?item p:P5667/ps:P5667 ?id}', Model.resolve_redirects)
     for ex_id in OrderedDict(sorted(wd_items.items())):
         # ex_id = 'eps Tau b'
-        ExoArchive(ex_id, wd_items[ex_id]).update(ExoArchive.prepare_data(ex_id))
+        Element.run(ex_id, wd_items[ex_id])
         sleep(1)

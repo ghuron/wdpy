@@ -1,20 +1,20 @@
 from unittest import TestCase, mock
 
-from yad_vashem import YadVashem
+from yad_vashem import Model, Element
 
 
 class TestYadVashem(TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.yv = YadVashem('Succi Luigi (1882 - 1945 )', None)
+        cls.yv = Element('Succi Luigi (1882 - 1945 )', None)
 
     def test_obtain_claim_no_qualifiers_for_award(self):
-        self.yv.obtain_claim(self.yv.create_snak('P166', 'Q112197'))
-        self.yv.obtain_claim(self.yv.create_snak('P27', 'Q36'))
+        self.yv.obtain_claim(Model.create_snak('P166', 'Q112197'))
+        self.yv.obtain_claim(Model.create_snak('P27', 'Q36'))
 
     def test_process_sparql_row(self):
         def get_value(new, result):
-            key, value = YadVashem.process_sparql_row(new, result)
+            key, value = Model.process_sparql_row(new, result)
             self.assertEqual(new[0], key)
             return value
 
@@ -25,6 +25,6 @@ class TestYadVashem(TestCase):
 
     @mock.patch('wd.Wikidata.request', return_value=mock.MagicMock(json=lambda: {'d': 0}))
     def test_post(self, _):
-        self.assertIn('d', YadVashem.post('BuildQuery'))
-        self.assertIn('d', YadVashem.post('GetRighteousList', 0))
-        self.assertIn('d', YadVashem.post('GetPersonDetailsBySession', 6658068))
+        self.assertIn('d', Model.post('BuildQuery'))
+        self.assertIn('d', Model.post('GetRighteousList', 0))
+        self.assertIn('d', Model.post('GetPersonDetailsBySession', 6658068))
