@@ -347,9 +347,9 @@ class Claim:
     def check_if_no_refs(self) -> bool:
         if 'remove' not in self.claim:
             Claim._preload(refs := self.claim['references'] if 'references' in self.claim else [])
-            if len(refs := self._confirms(self._remove_duplicates(refs))) == 0:
+            if len(new_refs := self._confirms(self._remove_duplicates(refs))) == 0 and len(refs) > 0:
                 return True
-            self.claim['references'] = refs
+            self.claim['references'] = new_refs
 
     @staticmethod
     def _preload(references: []):
