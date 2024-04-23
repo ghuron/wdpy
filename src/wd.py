@@ -591,7 +591,7 @@ class Element:
 
                 if self._model.config(property_id):
                     self.remove_all_but_one(property_id)
-                elif Wikidata.type_of(property_id) in ['quantity', 'string']:
+                elif Wikidata.type_of(property_id) in ['quantity', 'string'] or property_id == 'P577':
                     self.deprecate_all_but_one(property_id)
 
             self.post_process()
