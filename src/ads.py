@@ -20,7 +20,8 @@ class Model(adql.Model):
     @classmethod
     def construct_snak(cls, row, col, new_col=None):
         if (result := super().construct_snak(row, col, new_col)) and (col == 'p356'):
-            Model.__doi = result['datavalue']['value'].upper()
+            result['datavalue']['value'] = result['datavalue']['value'].upper()
+            Model.__doi = result['datavalue']['value']
         return result
 
 
