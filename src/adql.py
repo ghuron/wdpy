@@ -121,10 +121,10 @@ class Model(wd.Model):
 
     @staticmethod
     def parse_url(url: str) -> str:
+        """Try to find qid of the reference based on the url provided"""
         import ads
         import arxiv
 
-        """Try to find qid of the reference based on the url provided"""
         if url and url.strip() and (url := url.split()[0]):  # get text before first whitespace and strip
             for pattern, repl in Model.config('transform').items():
                 if (query := unquote(re.sub(pattern, repl, url, flags=re.S))).startswith('P'):
