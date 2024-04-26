@@ -78,7 +78,7 @@ class Model(wd.Model):
             Model._parents[name.lower()] = Model._parents[simbad_id.lower()]
             logging.info('Cache miss: "{}" for {}'.format(name, Model._parents[name.lower()]))
         if snak := Model.create_snak('P397', Model._parents[name.lower()]):
-            return {**snak, 'decorators': {'P5997': name}}  # TODO: will not be transferred to the existing claim!
+            return {**snak, 'decorators': {'P5997': name}}
 
     @staticmethod
     def format_figure(row, col):  # SIMBAD-specific way to specify figure precision
