@@ -54,7 +54,7 @@ class Model(wd.Model):
                         if col.upper() in ['P6257', 'P6258']:  # add J2000 epoch
                             input_snaks.append(cls.create_snak('P6259', 'Q1264450'))
         else:
-            logging.warning('{}:"{}"\tcould not be extracted'.format(Model.property, external_id))
+            logging.warning('{}:"{}"\tcould not be extracted'.format(cls.property, external_id))
             input_snaks = None
         return input_snaks
 
