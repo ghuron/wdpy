@@ -3,6 +3,7 @@ import logging
 from collections import OrderedDict
 from decimal import Decimal, InvalidOperation
 from time import sleep
+from urllib.parse import quote_plus
 
 import adql
 import wd
@@ -45,17 +46,22 @@ class Model(adql.Model):
 
     @classmethod
     def prepare_data(cls, external_id) -> []:
-        if input_snaks := super().prepare_data(external_id):
-            prefix = 'https://exoplanetarchive.ipac.caltech.edu/cgi-bin/Lookup/nph-aliaslookup.py?objname='
-            if (response := wd.Wikidata.request(prefix + external_id)) and 'system' in response.json():
-                if external_id in (data := response.json()['system']['objects']['planet_set']['planets']):
-                    for code in data[external_id]['alias_set']['aliases']:
-                        if snak := cls.construct_snak(
-                                {'p528': code[:-2] + code[-1] if code[-2] == ' ' else code}, 'p528'):
-                            input_snaks.append(snak)
-                else:
-                    logging.info('{} appears to have redirect'.format(prefix + external_id))
-            return input_snaks
+        prefix, response = 'https://exoplanetarchive.ipac.caltech.edu/cgi-bin/Lookup/nph-aliaslookup.py?objname=', None
+        if content := wd.Wikidata.request(prefix + quote_plus(external_id)):
+            if 'resolved_name' not in (response := content.json())['manifest']:
+                logging.error('"{}" not found'.format(external_id))
+                return
+            if (response_id := response['manifest']['resolved_name']) != external_id:
+                logging.info('"{}" will be replaced with {}'.format(external_id, external_id := response_id))
+
+        if (input_snaks := super().prepare_data(external_id)) and response:
+            try:  # ToDo: code below works for planets only, we need to add stars as well
+                for code in response['system']['objects']['planet_set']['planets'][external_id]['alias_set']['aliases']:
+                    if snak := cls.construct_snak({'p528': code[:-2] + code[-1] if code[-2] == ' ' else code}, 'p528'):
+                        input_snaks.append(snak)
+            except KeyError:
+                pass
+        return input_snaks
 
 
 class Element(adql.Element):
@@ -82,5 +88,6 @@ if Model.initialize(__file__):  # if not imported
     wd_items = Model.get_all_items('SELECT ?id ?item {?item p:P5667/ps:P5667 ?id}', Model.resolve_redirects)
     for ex_id in OrderedDict(sorted(wd_items.items())):
         # ex_id = 'eps Tau b'
-        Element.run(ex_id, wd_items[ex_id])
-        sleep(1)
+        if wd_items[ex_id]:  # Temporary disable creation of new items
+            Element.run(ex_id, wd_items[ex_id])
+            sleep(1)
