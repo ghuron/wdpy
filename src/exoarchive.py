@@ -65,7 +65,7 @@ class Model(adql.Model):
 
 
 class Element(adql.Element):
-    __p5653, _model, _claim = None, Model, type('Claim', (wd.Claim,), {'db_ref': 'Q5420639'})
+    __p5653, __cache, _model, _claim = None, {}, Model, type('Claim', (wd.Claim,), {'db_ref': 'Q5420639'})
 
     def update(self, parsed_data):
         if not self.qid:

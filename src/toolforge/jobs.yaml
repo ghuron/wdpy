@@ -3,11 +3,12 @@
 - name: exoplanet-eu
   command: src/toolforge/run.sh exoplanet-eu
   image: tf-python39
-  mem: 2Gi
+  mem: 4Gi
   schedule: "8 20 * * SUN"
 - name: exoarchive
   command: src/toolforge/run.sh exoarchive
   image: tf-python39
+  mem: 4Gi
   schedule: "8 20 * * MON"
 - name: simbad-id
   command: src/toolforge/run.sh simbad-id
@@ -16,7 +17,8 @@
 - name: arxiv
   command: src/toolforge/run.sh arxiv
   image: tf-python39
-  schedule: "8 20 * * WED"  
+  mem: 4Gi
+  schedule: "8 20 * * WED"
 - name: yad-vashem
   command: src/toolforge/run.sh yad-vashem
   image: tf-python39

@@ -431,8 +431,7 @@ class Claim:
 
 
 class Element:
-    _model: Model = Model
-    _claim: Claim = Claim
+    _model, _claim, __cache = Model, Claim, {}
 
     def __init__(self, external_id: str, qid: str = None):
         self.external_id, self.qid, self._entity = external_id, qid, None
@@ -612,6 +611,11 @@ class Element:
     def get_by_id(cls, external_id: str):
         """Attempt to find qid by external_id or create it"""
         try:
-            return qid if (qid := cls.haswbstatement(external_id)) else cls.run(external_id)
+            if cls.__cache is None:
+                sparql = 'SELECT ?c ?i {{ ?i p:{}/ps:{} ?c }}'.format(cls._model.property, cls._model.property)
+                cls.__cache = result if (result := Wikidata.query(sparql)) else {}
+            if external_id not in cls.__cache:
+                cls.__cache[external_id] = qid if (qid := cls.haswbstatement(external_id)) else cls.run(external_id)
+            return cls.__cache[external_id]
         except ValueError as e:
             logging.warning('Found {} instances of {}="{}", skip'.format(e.args[0], cls._model.property, external_id))

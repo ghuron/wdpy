@@ -145,7 +145,7 @@ class Model(adql.Model):
 
 
 class Element(adql.Element):
-    __p5667, _model, _claim = None, Model, type('Claim', (wd.Claim,), {'db_ref': 'Q1385430'})
+    __p5667, __cache, _model, _claim = None, {}, Model, type('Claim', (wd.Claim,), {'db_ref': 'Q1385430'})
 
     def trace(self, message: str, level=20):
         super().trace('http://exoplanet.eu/catalog/{}\t{}'.format(self.external_id.replace(' ', '_'), message), level)

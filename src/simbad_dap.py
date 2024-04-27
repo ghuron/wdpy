@@ -58,7 +58,7 @@ class Model(adql.Model):
 
 
 class Element(adql.Element):
-    _model, _claim = Model, type('Claim', (wd.Claim,), {'db_ref': 'Q654724'})
+    __cache, _model, _claim = {}, Model, type('Claim', (wd.Claim,), {'db_ref': 'Q654724'})
 
 
 if Model.initialize(__file__):  # if not imported

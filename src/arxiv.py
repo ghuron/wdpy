@@ -62,7 +62,7 @@ class Model(wd.Model):
 
 class Element(wd.Element):
     """When called get_by_id() for a new pre-print, fill as many properties as possible via regular ArXiv API"""
-    _model, _claim = Model, type('Claim', (wd.Claim,), {'db_ref': 'Q118398'})
+    _model, _claim, __cache = Model, type('Claim', (wd.Claim,), {'db_ref': 'Q118398'}), None
 
     def update(self, parsed_data: dict):
         if parsed_data:
@@ -87,7 +87,8 @@ class Element(wd.Element):
 
 
 if Model.initialize(__file__):  # if not imported
-    # Element.get_by_id('2404.12363')  # Uncomment to debug processing single preprint
+    Element.get_by_id('2404.12363')  # Uncomment to debug processing single preprint
+    Element.get_by_id('2404.12363')  # Uncomment to debug processing single preprint
     SUMMARY = 'extracted from [[Q118398]] based on [[Property:{}]]: {}'
     QUERY = 'SELECT ?c ?i {{VALUES ?c {{\'{}\'}} ?i p:P356/ps:P356 ?c MINUS {{?i p:P818 []; p:P356 []}}}}'
     no_doi_items = wd.Wikidata.query('SELECT ?c ?i {?i p:P818/ps:P818 ?c MINUS {?i p:P818 []; p:P356 []}}')
