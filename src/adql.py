@@ -72,9 +72,9 @@ class Model(wd.Model):
             if (simbad_id := simbad_dap.Model.get_id_by_name(name)) is None:
                 return
             if simbad_id.lower() not in Model._parents:
-                if (qid := simbad_dap.Element.get_by_id(simbad_id)) is None:
+                if (instance := simbad_dap.Element.get_by_id(simbad_id)) is None:
                     return
-                Model._parents[simbad_id.lower()] = qid
+                Model._parents[simbad_id.lower()] = instance.qid
             Model._parents[name.lower()] = Model._parents[simbad_id.lower()]
             logging.info('Cache miss: "{}" for {}'.format(name, Model._parents[name.lower()]))
         if snak := Model.create_snak('P397', Model._parents[name.lower()]):
@@ -128,10 +128,10 @@ class Model(wd.Model):
         if url and url.strip() and (url := url.split()[0]):  # get text before first whitespace and strip
             for pattern, repl in Model.config('transform').items():
                 if (query := unquote(re.sub(pattern, repl, url, flags=re.S))).startswith('P'):
-                    if query.startswith('P818=') and (qid := arxiv.Element.get_by_id(query.replace('P818=', ''))):
-                        return qid
-                    if query.startswith('P819=') and (qid := ads.Element.get_by_id(query.replace('P819=', ''))):
-                        return qid
+                    if query.startswith('P818=') and (item := arxiv.Element.get_by_id(query.replace('P818=', ''))):
+                        return item.qid
+                    if query.startswith('P819=') and (item := ads.Element.get_by_id(query.replace('P819=', ''))):
+                        return item.qid
                     try:  # fallback
                         return wd.Wikidata.search('haswbstatement:' + query)
                     except ValueError as e:

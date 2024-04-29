@@ -89,5 +89,5 @@ if Model.initialize(__file__):  # if not imported
     for ex_id in OrderedDict(sorted(wd_items.items())):
         # ex_id = 'eps Tau b'
         if wd_items[ex_id]:  # Temporary disable creation of new items
-            Element.run(ex_id, wd_items[ex_id])
+            Element(ex_id, wd_items[ex_id]).update(Model.prepare_data(ex_id))
             sleep(1)

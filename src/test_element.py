@@ -6,7 +6,8 @@ from wd import Element, Model
 class TestElement(TestCase):
     @classmethod
     def setUp(cls):
-        cls.wd = Element('0000 0001 2197 5163')
+        cls.wd = (item := Element('0000 0001 2197 5163'))
+        item.qid = None
 
     @mock.patch('logging.log')
     def test_trace_without_entity(self, info):
@@ -46,7 +47,8 @@ class TestKeepOnlyBestValue(TestCase):
     @classmethod
     def setUp(cls):
         Model._config = {}
-        cls.wd = Element('0000 0001 2197 5163')
+        cls.wd = (item := Element('0000 0001 2197 5163'))
+        item.qid = None
 
     def test_remove_if_no_qualifier(self, _):
         Model._config = {'P31': {'id': 'P2241'}}

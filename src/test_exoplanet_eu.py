@@ -24,12 +24,16 @@ class TestExoplanetEu(TestCase):
         claim = self.exo.obtain_claim(Model.create_snak('P4501', 0.5))
         self.assertEqual('Q2832068', claim['qualifiers']['P1013'][0]['datavalue']['value']['id'])  # Always geometric
 
+
+class TestGetById(TestCase):
     @mock.patch('wd.Wikidata.search', return_value='Q50668')
     def test_get_by_id(self, api_search):
         value = Element.get_by_id('55 Cnc e')
-        self.assertEqual('Q50668', value)
+        self.assertEqual('Q50668', value.qid)
         api_search.assert_called_with('haswbstatement:"P5653=55 Cnc e"')
 
+
+class TestModel(TestCase):
     @mock.patch('wd.Wikidata.type_of', return_value='quantity')
     def test_parse_value(self, _):
         value = Model.parse_value('P1096', '0.98')['datavalue']['value']

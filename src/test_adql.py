@@ -1,4 +1,5 @@
 from unittest import TestCase, mock
+from unittest.mock import MagicMock
 
 from adql import Element, Model
 
@@ -25,43 +26,43 @@ class TestGetParentSnak(TestCase):
 
 
 class TestParseUrl(TestCase):
-    @mock.patch('wd.Wikidata.search', return_value='Q55882019')
+    @mock.patch('ads.Element.get_by_id', return_value=MagicMock(qid='Q55882019'))
     def test_parse_ads_encoded(self, api_search):
         value = Model.parse_url('https://ui.adsabs.harvard.edu/abs/2018A%26A...609A.117T/abstract')
         self.assertEqual('Q55882019', value)
-        api_search.assert_called_with('haswbstatement:"P819=2018A&A...609A.117T"')
+        api_search.assert_called_with('2018A&A...609A.117T')
 
-    @mock.patch('arxiv.Element.get_by_id', return_value='Q100255765')
+    @mock.patch('arxiv.Element.get_by_id', return_value=MagicMock(qid='Q100255765'))
     def test_parse_arxiv_old_format(self, get_by_id):
         value = Model.parse_url('http://fr.arxiv.org/abs/gr-qc/0204022')
         self.assertEqual('Q100255765', value)
         get_by_id.assert_called_with('gr-qc/0204022')
 
-    @mock.patch('arxiv.Element.get_by_id', return_value='Q113365244')
+    @mock.patch('arxiv.Element.get_by_id', return_value=MagicMock(qid='Q113365244'))
     def test_parse_arxiv_without_prefix(self, get_by_id):
         value = Model.parse_url('arxiv.org/abs/1205.5704')
         self.assertEqual('Q113365244', value)
         get_by_id.assert_called_with('1205.5704')
 
-    @mock.patch('arxiv.Element.get_by_id', return_value='Q113365525')
+    @mock.patch('arxiv.Element.get_by_id', return_value=MagicMock(qid='Q113365525'))
     def test_parse_arxiv_with_double_quote(self, get_by_id):
         value = Model.parse_url('http://arxiv.org/abs/1108.0031""')
         self.assertEqual('Q113365525', value)
         get_by_id.assert_called_with('1108.0031')
 
-    @mock.patch('arxiv.Element.get_by_id', return_value='Q114396162')
+    @mock.patch('arxiv.Element.get_by_id', return_value=MagicMock(qid='Q114396162'))
     def test_parse_doi_arxiv_with_double_quote(self, get_by_id):
         value = Model.parse_url('https://doi.org/10.48550/arXiv.2011.10424"')
         self.assertEqual('Q114396162', value)
         get_by_id.assert_called_with('2011.10424')
 
-    @mock.patch('arxiv.Element.get_by_id', return_value='Q114347665')
+    @mock.patch('arxiv.Element.get_by_id', return_value=MagicMock(qid='Q114347665'))
     def test_parse_arxiv_with_version(self, get_by_id):
         value = Model.parse_url('http://arxiv.org/abs/0902.4554\narXiv:0902.4554')
         self.assertEqual('Q114347665', value)
         get_by_id.assert_called_with('0902.4554')
 
-    @mock.patch('arxiv.Element.get_by_id', return_value='Q114140841')
+    @mock.patch('arxiv.Element.get_by_id', return_value=MagicMock(qid='Q114140841'))
     def test_parse_arxiv_newline(self, get_by_id):
         value = Model.parse_url('https://arxiv.org/abs/2207.00101v1')
         self.assertEqual('Q114140841', value)

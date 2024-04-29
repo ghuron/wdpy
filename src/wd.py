@@ -435,12 +435,20 @@ class Element:
 
     def __init__(self, external_id: str, qid: str = None):
         self.external_id, self.qid, self._entity = external_id, qid, None
+        if self.__cache is None:
+            sparql = 'SELECT ?c ?i {{ ?i p:{}/ps:{} ?c }}'.format(self._model.property, self._model.property)
+            self.__cache = result if (result := Wikidata.query(sparql)) else {}
+        if (external_id not in self.__cache) or (self.__cache[external_id] is None):
+            self.__cache[external_id] = qid
+        elif self.qid is None:
+            self.qid = self.__cache[external_id]
 
     @property
     def entity(self):
         if not self._entity:
             try:
                 self.qid = self.qid if self.qid else self.haswbstatement(self.external_id)
+                self.__cache[self.external_id] = self.qid
             except ValueError as e:
                 logging.warning('Found {} items of {}="{}"'.format(e.args[0], self._model.property, self.external_id))
             self._entity = {'labels': {}, 'claims': {}}
@@ -569,6 +577,7 @@ class Element:
         if response := Wikidata.edit(data, 'wbeditentity'):
             if 'nochange' not in response['entity']:
                 self._entity, self.qid = response['entity'], response['entity']['id']
+                self.__cache[self.external_id] = self.qid
                 self.trace('modified' if 'id' in data else 'created')
                 return self.qid
             # else:  # Too many
@@ -610,12 +619,12 @@ class Element:
     @classmethod
     def get_by_id(cls, external_id: str):
         """Attempt to find qid by external_id or create it"""
+        instance = cls(external_id, None)
         try:
-            if cls.__cache is None:
-                sparql = 'SELECT ?c ?i {{ ?i p:{}/ps:{} ?c }}'.format(cls._model.property, cls._model.property)
-                cls.__cache = result if (result := Wikidata.query(sparql)) else {}
-            if external_id not in cls.__cache:
-                cls.__cache[external_id] = qid if (qid := cls.haswbstatement(external_id)) else cls.run(external_id)
-            return cls.__cache[external_id]
+            if instance.qid is None:
+                if (instance := cls(external_id, cls.haswbstatement(external_id))).qid is None:
+                    instance.update(cls._model.prepare_data(external_id))
         except ValueError as e:
             logging.warning('Found {} instances of {}="{}", skip'.format(e.args[0], cls._model.property, external_id))
+
+        return instance if cls.__cache[external_id] else None
