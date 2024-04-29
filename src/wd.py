@@ -627,4 +627,4 @@ class Element:
         except ValueError as e:
             logging.warning('Found {} instances of {}="{}", skip'.format(e.args[0], cls._model.property, external_id))
 
-        return instance if cls.__cache[external_id] else None
+        return instance if cls.__cache and cls.__cache[external_id] else None
