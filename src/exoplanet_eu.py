@@ -175,8 +175,9 @@ class Element(adql.Element):
                                 return  # if found - skip provided snak
         if claim := super().obtain_claim(snak):
             if self._claim(claim).find_more_precise_claim(self.entity['claims'][snak['property']]):
-                self.delete_claim(claim)
-                return
+                if 'hash' not in claim['mainsnak']:  # Do not delete already saved claim
+                    self.delete_claim(claim)
+                    return
         return claim
 
 
