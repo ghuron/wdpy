@@ -279,6 +279,7 @@ class Model:
 
 
 class Claim:
+    __slots__ = 'claim'
     db_ref = None
 
     def __init__(self, claim: dict):
@@ -431,26 +432,27 @@ class Claim:
 
 
 class Element:
+    __slots__ = 'qid', 'external_id', '_entity'
     _model, _claim, __cache = Model, Claim, {}
 
     def __init__(self, external_id: str, qid: str = None):
+        self._init_cache()
+        if qid:  # is not None
+            type(self).__cache[external_id] = qid
+        elif external_id not in type(self).__cache:  # and qid is None
+            try:
+                qid = self.haswbstatement(external_id)
+            except ValueError as e:
+                logging.warning('{} instances {}="{}", skip'.format(e.args[0], type(self)._model.property, external_id))
+            type(self).__cache[external_id] = qid  # whenever it is None or not
+        else:  # if external_id in type(self).__cache and qid is None
+            qid = type(self).__cache[external_id]
+
         self.external_id, self.qid, self._entity = external_id, qid, None
-        if self.__cache is None:
-            sparql = 'SELECT ?c ?i {{ ?i p:{}/ps:{} ?c }}'.format(self._model.property, self._model.property)
-            self.__cache = result if (result := Wikidata.query(sparql)) else {}
-        if (external_id not in self.__cache) or (self.__cache[external_id] is None):
-            self.__cache[external_id] = qid
-        elif self.qid is None:
-            self.qid = self.__cache[external_id]
 
     @property
     def entity(self):
         if not self._entity:
-            try:
-                self.qid = self.qid if self.qid else self.haswbstatement(self.external_id)
-                self.__cache[self.external_id] = self.qid
-            except ValueError as e:
-                logging.warning('Found {} items of {}="{}"'.format(e.args[0], self._model.property, self.external_id))
             self._entity = {'labels': {}, 'claims': {}}
             if self.qid and (result := Wikidata.load({self.qid})):
                 self._entity = result[self.qid]
@@ -459,18 +461,18 @@ class Element:
     def trace(self, message: str, level=20):
         # CRITICAL: 50, ERROR: 40, WARNING: 30, INFO: 20, DEBUG: 10
         pattern = 'https://www.wikidata.org/wiki/{}#{}\t{}'
-        logging.log(level, pattern.format(self.qid, self._model.property, message) if self.qid else message)
+        logging.log(level, pattern.format(self.qid, type(self)._model.property, message) if self.qid else message)
 
     def find_claim(self, snak: dict):
         for c in (claim_list := self.entity['claims'][snak['property']]):
             if snak['snaktype'] == 'novalue':
                 if c['mainsnak']['snaktype'] == 'novalue':
-                    return self._claim(c)
+                    return type(self)._claim(c)
             elif Model.qualifier_filter(snak, c) and Model.equals(c['mainsnak'], snak['datavalue']['value']):
-                return self._claim(c)
+                return type(self)._claim(c)
         if len(claim_list) > 0 and Wikidata.type_of(snak['property']) == 'external-id':  # Force rewrite external id
             claim_list[0]['mainsnak']['datavalue']['value'] = snak['datavalue']['value']
-            return self._claim(claim_list[0])
+            return type(self)._claim(claim_list[0])
 
     def obtain_claim(self, snak: dict):
         """Find or create claim, corresponding to the provided snak"""
@@ -480,7 +482,7 @@ class Element:
         if claim := self.find_claim(snak):
             claim.process_decorators(snak)
             return claim.claim
-        if claim := self._claim.construct(snak, self.qid):
+        if claim := type(self)._claim.construct(snak, self.qid):
             self.entity['claims'][snak['property']].append(claim.claim)
             return claim.claim
 
@@ -619,12 +621,16 @@ class Element:
     @classmethod
     def get_by_id(cls, external_id: str):
         """Attempt to find qid by external_id or create it"""
-        instance = cls(external_id, None)
-        try:
-            if instance.qid is None:
-                if (instance := cls(external_id, cls.haswbstatement(external_id))).qid is None:
-                    instance.update(cls._model.prepare_data(external_id))
-        except ValueError as e:
-            logging.warning('Found {} instances of {}="{}", skip'.format(e.args[0], cls._model.property, external_id))
+        cls._init_cache()
+        if (external_id not in cls.__cache) or (cls.__cache[external_id]):
+            if (instance := cls(external_id)).qid is None:
+                instance.update(cls._model.prepare_data(external_id))
+            return instance if instance.qid else None
 
-        return instance if cls.__cache and cls.__cache[external_id] else None
+    @classmethod
+    def _init_cache(cls, explicit=None):
+        if explicit is not None:
+            cls.__cache = explicit
+        elif cls.__cache is None:
+            sparql = 'SELECT ?c ?i {{ ?i p:{}/ps:{} ?c }}'.format(cls._model.property, cls._model.property)
+            cls.__cache = result if (result := Wikidata.query(sparql)) else {}

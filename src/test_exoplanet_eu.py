@@ -5,29 +5,34 @@ from bs4 import BeautifulSoup
 from exoplanet_eu import Element, Model
 
 
-class TestExoplanetEu(TestCase):
-    @classmethod
-    def setUp(cls):
-        Element.properties = {}
-        cls.exo = Element('55 Cnc e')
+def mock_type_off(p):
+    return {'P248': 'wikibase-item', 'P528': 'string', 'P575': 'time', 'P1013': 'wikibase-item', 'P1215': 'quantity',
+            'P1227': 'wikibase-item', 'P4501': 'quantity', 'P5653': 'external-id'}[p]
 
-    def test_obtain_claim(self):
+
+class TestExoplanetEu(TestCase):
+    @mock.patch('wd.Wikidata.search', return_value=None)
+    @mock.patch('wd.Wikidata.type_of', side_effect=mock_type_off)
+    def test_obtain_claim(self, _, __):
+        exo = Element('55 Cnc e')
+
         (snak := Model.create_snak('P1215', '8.88'))['qualifiers'] = {'P1227': 'Q4892529'}  # V diapason
-        self.assertEqual(0, (claim := self.exo.obtain_claim(snak))['mespos'])  # mespos present and always 0
+        self.assertEqual(0, (claim := exo.obtain_claim(snak))['mespos'])  # mespos present and always 0
 
         (snak := Model.create_snak('P1215', '9.99'))['qualifiers'] = {'P1227': 'Q4892529'}  # V diapason
-        self.assertIsNone(self.exo.obtain_claim(snak))  # Do not mess with existing V mag
+        self.assertIsNone(exo.obtain_claim(snak))  # Do not mess with existing V mag
 
         claim['qualifiers'] = {'P1227': [Model.create_snak('P1227', 'Q66659648')]}  # G diapason
-        self.assertEqual('9.99', self.exo.obtain_claim(snak)['mainsnak']['datavalue']['value']['amount'])
+        self.assertEqual('9.99', exo.obtain_claim(snak)['mainsnak']['datavalue']['value']['amount'])
 
-        claim = self.exo.obtain_claim(Model.create_snak('P4501', 0.5))
+        claim = exo.obtain_claim(Model.create_snak('P4501', 0.5))
         self.assertEqual('Q2832068', claim['qualifiers']['P1013'][0]['datavalue']['value']['id'])  # Always geometric
 
 
 class TestGetById(TestCase):
     @mock.patch('wd.Wikidata.search', return_value='Q50668')
     def test_get_by_id(self, api_search):
+        Element._init_cache({})
         value = Element.get_by_id('55 Cnc e')
         self.assertEqual('Q50668', value.qid)
         api_search.assert_called_with('haswbstatement:"P5653=55 Cnc e"')
@@ -70,7 +75,8 @@ class TestModel(TestCase):
     def test_create_snak(self, _):
         self.assertEqual('aa:bb:cc', Model.create_snak('P213', 'aa:bb:cc')['datavalue']['value'])
 
-    def test_prepare_data(self):
+    @mock.patch('wd.Wikidata.type_of', side_effect=mock_type_off)
+    def test_prepare_data(self, _):
         Model.page = BeautifulSoup('''<div id="planet-detail-basic-info">
             <dd class="col-sm-8"> Kepler-338 d </dd>
             <div class="row d-flex justify-content-between "><span>2022</span></div>

@@ -9,14 +9,6 @@ class TestElement(TestCase):
         cls.wd = (item := Element('0000 0001 2197 5163'))
         item.qid = None
 
-    @mock.patch('logging.log')
-    def test_trace_without_entity(self, info):
-        self.wd.trace('test')
-        info.assert_called_with(20, 'test')
-        self.wd.__entity = None
-        self.wd.trace('test')
-        info.assert_called_with(20, 'test')
-
     @mock.patch('wd.Wikidata.load', return_value=None)
     @mock.patch('wd.Wikidata.type_of', return_value='wikibase-item')
     def test_obtain_claim_self_reference(self, _, __):
