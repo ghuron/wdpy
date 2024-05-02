@@ -32,7 +32,7 @@ class TestExoplanetEu(TestCase):
 class TestGetById(TestCase):
     @mock.patch('wd.Wikidata.search', return_value='Q50668')
     def test_get_by_id(self, api_search):
-        Element._init_cache({})
+        Element.is_bad_id('', {})
         value = Element.get_by_id('55 Cnc e')
         self.assertEqual('Q50668', value.qid)
         api_search.assert_called_with('haswbstatement:"P5653=55 Cnc e"')

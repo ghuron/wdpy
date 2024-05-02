@@ -53,6 +53,7 @@ class Model(wd.Model):
                         input_snaks.append(snak)
                         if col.upper() in ['P6257', 'P6258']:  # add J2000 epoch
                             input_snaks.append(cls.create_snak('P6259', 'Q1264450'))
+            cls.dataset.pop(external_id)  # ToDo: check if too aggressive when we are postponing item creation
         else:
             logging.warning('{}:"{}"\tcould not be extracted'.format(cls.property, external_id))
             input_snaks = None
@@ -139,7 +140,7 @@ class Model(wd.Model):
 
 
 class Element(wd.Element):
-    __const, _model = None, Model
+    __const, _model, __cache, __existing = None, Model, {}, {}
 
     def obtain_claim(self, snak):
         snak['decorators'] = snak['decorators'] if 'decorators' in snak else {}

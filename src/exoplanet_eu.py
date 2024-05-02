@@ -145,7 +145,7 @@ class Model(adql.Model):
 
 
 class Element(adql.Element):
-    __p5667, __cache, _model, _claim = None, {}, Model, type('Claim', (wd.Claim,), {'db_ref': 'Q1385430'})
+    __ids, __cache, __existing, _model, _claim = None, {}, {}, Model, type('Claim', (wd.Claim,), {'db_ref': 'Q1385430'})
 
     def trace(self, message: str, level=20):
         super().trace('http://exoplanet.eu/catalog/{}\t{}'.format(self.external_id.replace(' ', '_'), message), level)
@@ -153,10 +153,10 @@ class Element(adql.Element):
     def update(self, parsed_data):
         if parsed_data and 'label' in parsed_data:
             if not self.qid:  # Try to reuse item from NASA Exoplanet Archive
-                if not Element.__p5667:
-                    Element.__p5667 = wd.Wikidata.query('SELECT ?c ?i {?i wdt:P5667 ?c MINUS {?i wdt:P5653 []}}')
-                if parsed_data['label'] in Element.__p5667:
-                    self.qid = Element.__p5667[parsed_data['label']]
+                if not Element.__ids:
+                    Element.__ids = wd.Wikidata.query('SELECT ?c ?i {?i wdt:P5667 ?c MINUS {?i wdt:P5653 []}}')
+                if parsed_data['label'] in Element.__ids:
+                    self.qid = Element.__ids[parsed_data['label']]
             if 'en' not in self.entity['labels']:
                 self.entity['labels']['en'] = {'value': parsed_data['label'], 'language': 'en'}
         if parsed_data and 'input' in parsed_data:

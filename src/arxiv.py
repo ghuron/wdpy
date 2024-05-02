@@ -62,7 +62,7 @@ class Model(wd.Model):
 
 class Element(wd.Element):
     """When called get_by_id() for a new pre-print, fill as many properties as possible via regular ArXiv API"""
-    _model, _claim, __cache = Model, type('Claim', (wd.Claim,), {'db_ref': 'Q118398'}), None
+    _model, _claim, __cache, __existing = Model, type('Claim', (wd.Claim,), {'db_ref': 'Q118398'}), {}, None
 
     def update(self, parsed_data: dict):
         if parsed_data:

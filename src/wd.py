@@ -433,22 +433,18 @@ class Claim:
 
 class Element:
     __slots__ = 'qid', 'external_id', '_entity'
-    _model, _claim, __cache = Model, Claim, {}
+    _model, _claim, __cache, __existing = Model, Claim, {}, {}
 
     def __init__(self, external_id: str, qid: str = None):
-        self._init_cache()
-        if qid:  # is not None
-            type(self).__cache[external_id] = qid
-        elif external_id not in type(self).__cache:  # and qid is None
-            try:
-                qid = self.haswbstatement(external_id)
-            except ValueError as e:
-                logging.warning('{} instances {}="{}", skip'.format(e.args[0], type(self)._model.property, external_id))
-            type(self).__cache[external_id] = qid  # whenever it is None or not
-        else:  # if external_id in type(self).__cache and qid is None
-            qid = type(self).__cache[external_id]
-
         self.external_id, self.qid, self._entity = external_id, qid, None
+        self.is_bad_id(external_id)
+        if self.qid:  # is not None
+            type(self).__cache[external_id] = self.qid
+        elif external_id not in type(self).__cache:  # and qid is None
+            type(self).__cache[external_id] = None
+            type(self).__cache[external_id] = self.qid = self.haswbstatement(external_id)
+        else:  # if external_id in type(self).__cache and qid is None
+            self.qid = type(self).__cache[external_id]
 
     @property
     def entity(self):
@@ -619,18 +615,34 @@ class Element:
         return cls(external_id, qid).update(cls._model.prepare_data(external_id))
 
     @classmethod
-    def get_by_id(cls, external_id: str):
+    def get_by_id(cls, external_id: str, forced: bool = False):
         """Attempt to find qid by external_id or create it"""
-        cls._init_cache()
-        if (external_id not in cls.__cache) or (cls.__cache[external_id]):
-            if (instance := cls(external_id)).qid is None:
-                instance.update(cls._model.prepare_data(external_id))
+        if not cls.is_bad_id(external_id):
+            try:
+                instance = cls(external_id)
+            except ValueError as e:
+                logging.warning('{} instances {}="{}", skip'.format(e.args[0], cls._model.property, external_id))
+                return
+            if (instance.qid is None) or forced:
+                try:
+                    instance.update(cls._model.prepare_data(external_id))
+                except ValueError:
+                    logging.error('https://www.wikidata.org/wiki/{}#{}\tincorrect identifier'
+                                  .format(instance.qid, cls._model.property))
             return instance if instance.qid else None
 
     @classmethod
-    def _init_cache(cls, explicit=None):
-        if explicit is not None:
-            cls.__cache = explicit
-        elif cls.__cache is None:
+    def is_bad_id(cls, external_id: str, reset=None) -> bool:
+        if reset is not None:
+            cls.__existing, cls.__cache = reset, reset
+        elif cls.__existing is None:
             sparql = 'SELECT ?c ?i {{ ?i p:{}/ps:{} ?c }}'.format(cls._model.property, cls._model.property)
-            cls.__cache = result if (result := Wikidata.query(sparql)) else {}
+            cls.__existing = result if (result := Wikidata.query(sparql)) else {}
+
+        if external_id in cls.__existing:
+            cls.__cache[external_id] = cls.__existing.pop(external_id)
+        return (external_id in cls.__cache) and cls.__cache[external_id] is None
+
+    @classmethod
+    def get_remaining(cls):
+        return cls.__existing.keys()
