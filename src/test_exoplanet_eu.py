@@ -1,6 +1,5 @@
 from unittest import TestCase, mock
-
-from bs4 import BeautifulSoup
+from unittest.mock import MagicMock
 
 from exoplanet_eu import Element, Model
 
@@ -76,8 +75,7 @@ class TestModel(TestCase):
         self.assertEqual('aa:bb:cc', Model.create_snak('P213', 'aa:bb:cc')['datavalue']['value'])
 
     @mock.patch('wd.Wikidata.type_of', side_effect=mock_type_off)
-    def test_prepare_data(self, _):
-        Model.page = BeautifulSoup('''<div id="planet-detail-basic-info">
+    @mock.patch('wd.Wikidata.request', return_value=MagicMock(content='''<div id="planet-detail-basic-info">
             <dd class="col-sm-8"> Kepler-338 d </dd>
             <div class="row d-flex justify-content-between "><span>2022</span></div>
             <div class="row collapse" id="planet_field_publications_discovered"><ul class="list-group">
@@ -85,8 +83,9 @@ class TestModel(TestCase):
                 <a href="#publication_2540">
                     <i class="bi-file-earmark-text" aria-hidden="true" aria-label="document icon"></i>
                     TOI-969: a late-K dwarf with a hot mini-Neptune in the desert and an eccentric cold Jupiter
-            </a></li></ul></div></div''', 'html.parser')
-        Model.properties = {'planet_field_publications_discovered': 'P575'}
-        input_snaks = Model.prepare_data('kepler_338_d--1930')['input']
+            </a></li></ul></div></div'''))
+    def test_prepare_data(self, _, __):
+        Model.set_parse_mode()
+        input_snaks = Model.prepare_data('kepler_338_d--1930').input_snaks
         self.assertEqual('+2022-00-00T00:00:00Z', input_snaks[2]['datavalue']['value']['time'])
         self.assertEqual(['Q54012702'], input_snaks[2]['source'])

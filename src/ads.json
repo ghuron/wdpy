@@ -2,7 +2,7 @@
   "endpoint": "https://simbad.u-strasbg.fr/simbad/sim-tap",
   "queries": [
     [
-      "SELECT bibcode AS id, doi AS P356, \"year\" AS P577 FROM ref"
+      "SELECT bibcode AS main_id, doi AS P356, \"year\" AS P577 FROM ref"
     ]
   ]
 }

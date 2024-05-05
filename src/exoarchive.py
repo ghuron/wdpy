@@ -15,17 +15,12 @@ class Model(adql.Model):
         norm_id = new[0].replace('KOI-', 'K0')
         return (Model.redirect[norm_id][0]['pl_name'] if norm_id in Model.redirect else new[0]), new[1]
 
-    @staticmethod
-    def get_next_chunk(offset):
-        if not offset and not Model.dataset:  # load only confirmed non-controversial exoplanets
-            Model.load('P31 = \'CONFIRMED0\'')
-            return Model.dataset.keys(), None
-        elif offset and Model.dataset:  # try to load specific exoplanet ignoring its status
-            Model.load('id = \'{}\''.format(offset))
-        return [], None
-
     @classmethod
-    def construct_snak(cls, row, col, new_col=None):
+    def next(cls):
+        cls._dataset = cls.load('P31 = \'CONFIRMED0\'') if not cls._dataset else {}
+        return cls._dataset.keys()
+
+    def construct_snak(self, row, col, new_col=None):
         def count_digits(idx):
             return len(str(Decimal(row[idx]).normalize()))
 
@@ -38,12 +33,10 @@ class Model(adql.Model):
                     return
             except InvalidOperation:
                 return
-        return super().construct_snak(row, col, 'p' + col[1:])
-
-    missing = None
+        super().construct_snak(row, col, 'p' + col[1:])
 
     @classmethod
-    def prepare_data(cls, external_id) -> []:
+    def prepare_data(cls, external_id):
         prefix, response = 'https://exoplanetarchive.ipac.caltech.edu/cgi-bin/Lookup/nph-aliaslookup.py?objname=', None
         if content := wd.Wikidata.request(prefix + quote_plus(external_id)):
             if 'resolved_name' not in (response := content.json())['manifest']:
@@ -51,14 +44,13 @@ class Model(adql.Model):
             if (response_id := response['manifest']['resolved_name']) != external_id:
                 logging.info('"{}" will be replaced with {}'.format(external_id, external_id := response_id))
 
-        if (input_snaks := super().prepare_data(external_id)) and response:
+        if (model := super().prepare_data(external_id)) and response:
             try:  # ToDo: code below works for planets only, we need to add stars as well
                 for code in response['system']['objects']['planet_set']['planets'][external_id]['alias_set']['aliases']:
-                    if snak := cls.construct_snak({'p528': code[:-2] + code[-1] if code[-2] == ' ' else code}, 'p528'):
-                        input_snaks.append(snak)
+                    model.construct_snak({'p528': code[:-2] + code[-1] if code[-2] == ' ' else code}, 'p528')
             except KeyError:
                 pass
-        return input_snaks
+        return model
 
 
 class Element(adql.Element):
@@ -92,17 +84,14 @@ class Element(adql.Element):
 
 if Model.initialize(__file__):  # if not imported
     # Element.get_by_id('eps Tau b', forced=True)
-    postponed, start_at = [], None
-    while True:
-        chunk, start_at = Model.get_next_chunk(start_at)
-        if len(chunk) == 0:
-            break
-        logging.info('Start updating of {} mandatory items'.format(len(chunk)))
+    postponed = []
+    while chunk := Model.next():
+        logging.info('Updating {} mandatory items'.format(len(chunk)))
         for ex_id in sorted(chunk):
             Element.get_by_id(ex_id, forced=True)
 
-    logging.info('Start updating of {} optional items'.format(len(Element.get_remaining())))
+    logging.info('Updating {} optional items'.format(len(Element.get_remaining())))
     for ex_id in Element.get_remaining():
         Element.get_by_id(ex_id, forced=True)
 
-    logging.info('Start processing of {} presumably new items'.format(len(postponed)))
+    logging.info('Processing {} presumably new items'.format(len(postponed)))

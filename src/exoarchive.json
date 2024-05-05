@@ -29,7 +29,7 @@
   "redirects": "SELECT koi_name, pl_name FROM keplernames",
   "queries": [
     [
-      "SELECT pl_name AS id, 1-default_flag AS mespos, pl_refname as reference, 'CONFIRMED'||pl_controv_flag AS P31,",
+      "SELECT pl_name AS main_id, 1-default_flag AS mespos, pl_refname as reference, 'CONFIRMED'||pl_controv_flag AS P31,",
       "       pl_orbeccen AS P1096, pl_orbeccenerr1 AS P1096h, pl_orbeccenerr2 AS P1096l,",
       "       pl_orbincl AS P2045, pl_orbinclerr1 AS P2045h, pl_orbinclerr2 AS P2045l, 'Q28390' AS P2045u,",
       "       pl_msinie AS E2051, pl_msinieerr1 AS E2051h, pl_msinieerr2 AS E2051l, 'Q681996' AS E2051u,",
@@ -44,16 +44,16 @@
       "  FROM ps WHERE 'Published Confirmed' = soltype"
     ],
     [
-      "SELECT DISTINCT pl_name AS id, disc_refname AS reference, hostname AS P397,",
+      "SELECT DISTINCT pl_name AS main_id, disc_refname AS reference, hostname AS P397,",
       "       ra AS P6257, 'Q28390' AS P6257u, dec AS P6258, 'Q28390' AS P6258u,",
       "       discoverymethod AS P1046, disc_pubdate AS P575, 'CONFIRMED'||pl_controv_flag AS P31",
       "  FROM ps"
     ],
     [
-      "SELECT DISTINCT pl_name AS id, gaia_id AS P397, 'CONFIRMED'||pl_controv_flag AS P31 FROM ps"
+      "SELECT DISTINCT pl_name AS main_id, gaia_id AS P397, 'CONFIRMED'||pl_controv_flag AS P31 FROM ps"
     ],
     [
-      "SELECT pl_name AS id, 1-default_flag AS mespos, pl_refname as reference, disposition||pl_controv_flag AS P31,",
+      "SELECT pl_name AS main_id, 1-default_flag AS mespos, pl_refname as reference, disposition||pl_controv_flag AS P31,",
       "       pl_orbeccen AS P1096, pl_orbeccenerr1 AS P1096h, pl_orbeccenerr2 AS P1096l,",
       "       pl_orbincl AS P2045, pl_orbinclerr1 AS P2045h, pl_orbinclerr2 AS P2045l, 'Q28390' AS P2045u,",
       "       pl_msinie AS E2051, pl_msinieerr1 AS E2051h, pl_msinieerr2 AS E2051l, 'Q681996' AS E2051u,",
@@ -68,16 +68,16 @@
       "  FROM k2pandc WHERE 'Published Confirmed' = soltype"
     ],
     [
-      "SELECT DISTINCT pl_name AS id, disc_refname AS reference, hostname AS P397,",
+      "SELECT DISTINCT pl_name AS main_id, disc_refname AS reference, hostname AS P397,",
       "       ra AS P6257, 'Q28390' AS P6257u, dec AS P6258, 'Q28390' AS P6258u, disposition||pl_controv_flag AS P31,",
       "       discoverymethod AS P1046, disc_pubdate AS P575",
       "  FROM k2pandc"
     ],
     [
-      "SELECT DISTINCT pl_name AS id, gaia_id AS P397, disposition||pl_controv_flag AS P31 FROM k2pandc"
+      "SELECT DISTINCT pl_name AS main_id, gaia_id AS P397, disposition||pl_controv_flag AS P31 FROM k2pandc"
     ],
     [
-      "SELECT hostname AS id, '' AS P31, 0 AS mespos, ",
+      "SELECT hostname AS main_id, '' AS P31, 0 AS mespos, ",
       "       st_age AS P7584, st_ageerr1 AS P7584h, st_ageerr2 AS P7584l, 'Q524410' AS P7584u, st_refname AS P7584r,",
       "       st_teff AS P6879, st_tefferr1 AS P6879h, st_tefferr2 AS P6879l, 'Q11579' AS P6879u, st_refname AS P6879r,",
       "       st_mass AS P2067, st_masserr1 AS P2067h, st_masserr2 AS P2067l, 'Q180892' AS P2067u, st_refname AS P2067r,",

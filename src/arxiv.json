@@ -1,5 +1,11 @@
 {
   "P2093": {
     "id": "P1545"
+  },
+  "ns": {
+    "oa": "http://arxiv.org/OAI/arXiv/",
+    "oai": "http://www.openarchives.org/OAI/2.0/",
+    "w3": "http://www.w3.org/2005/Atom",
+    "arxiv": "http://arxiv.org/schemas/atom"
   }
 }

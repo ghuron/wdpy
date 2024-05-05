@@ -166,8 +166,15 @@ class Model:
         return results
 
     @classmethod
-    def prepare_data(cls, external_id: str) -> []:
-        return [cls.create_snak(cls.property, external_id)]
+    def next(cls):
+        return
+
+    def __init__(self, external_id: str, snaks: list = None):
+        self.input_snaks = snaks if snaks is not None else [self.create_snak(self.property, external_id)]
+
+    @classmethod
+    def prepare_data(cls, external_id: str):
+        return cls(external_id)
 
     @staticmethod
     def format_float(figure, digits: int = -1):
@@ -276,6 +283,14 @@ class Model:
             if not was_found:  # Above loop did not find anything
                 return False
         return True  # All conditions are met
+
+    @classmethod
+    def enrich_qualifier(cls, snak, value):
+        if (not snak) or (not cls.config(snak['property'].upper(), 'id')):
+            return snak
+        for pattern in (config := cls.config(snak['property'].upper()))['translate']:
+            if value.startswith(pattern):
+                return {**snak, 'qualifiers': {config['id']: config['translate'][pattern]}}
 
 
 class Claim:
@@ -586,7 +601,7 @@ class Element:
             original = json.dumps(self.entity)
 
             affected_properties = set()
-            for snak in parsed_data:
+            for snak in parsed_data.input_snaks:
                 if (claim := self.obtain_claim(snak)) and (claim['mainsnak']['datatype'] != 'external-id'):
                     affected_properties.add(snak['property'])
 
@@ -609,10 +624,6 @@ class Element:
     def haswbstatement(cls, external_id, property_id=None):
         if external_id and (property_id := property_id if property_id else cls._model.property):
             return Wikidata.search('haswbstatement:"{}={}"'.format(property_id, external_id))
-
-    @classmethod
-    def run(cls, external_id: str, qid: str = None):
-        return cls(external_id, qid).update(cls._model.prepare_data(external_id))
 
     @classmethod
     def get_by_id(cls, external_id: str, forced: bool = False):

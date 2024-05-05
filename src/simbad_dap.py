@@ -6,22 +6,15 @@ import wd
 
 
 class Model(adql.Model):
-    property, __var_types = 'P3083', None
-
-    @staticmethod
-    def get_next_chunk(offset):
-        if isinstance(offset, str):
-            query = 'SELECT oidref FROM ident WHERE id=\'{}\''.format(offset)
-            if (ident := Model.tap_query(Model.config('endpoint'), query)) and (len(ident) == 1):
-                Model.load('id = \'{}\''.format(list(ident.keys())[0]))
-            return [], None
-        elif len(Model.dataset) > 0:  # TODO: sliding window
-            return [], None
-        Model.load('id BETWEEN {} AND {}'.format(0, 10000))
-        return Model.dataset.keys(), None
+    property, __offset, __var_types, ADQL_WRAPPER = 'P3083', 0, None, '{} WHERE {}'
 
     @classmethod
-    def construct_snak(cls, row, col, new_col=None):
+    def next(cls):
+        cls._dataset = cls.load('oid BETWEEN {} AND {}'.format(cls.__offset, cls.__offset + 10000))
+        cls.__offset = cls.__offset + 10000
+        return cls._dataset.keys()
+
+    def construct_snak(self, row, col, new_col=None):
         if (new_col := col) == 'p397':
             new_col = 'p361' if row['parent_type'] in Model.config("groups") else new_col
         elif col == 'p215':
@@ -62,7 +55,7 @@ class Element(adql.Element):
 
 
 if Model.initialize(__file__):  # if not imported
-    wd_items = Model.get_all_items('SELECT DISTINCT ?id ?item {?item wdt:P3083 ?id; ^wdt:P397 []}')
-    for simbad_id in wd_items:
-        # simbad_id = '* 51 Eri b'
-        Element.run(simbad_id, wd_items[simbad_id])
+    # Element.get_by_id('* 51 Eri b', forced=True)
+    while chunk := Model.next():
+        for ex_id in sorted(chunk):
+            Element.get_by_id(ex_id, forced=True)

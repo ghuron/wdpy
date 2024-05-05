@@ -56,6 +56,14 @@
     "K": "Q11579",
     "MSun": "Q180892"
   },
+  "post": {
+    "sSearch": "",
+    "iSortCol_0": 9,
+    "sEcho": 1,
+    "iDisplayLength": 1000,
+    "sSortDir_0": "desc",
+    "status_1": "on"
+  },
   "P528": {
     "id": "P972",
     "translate": {
@@ -73,12 +81,13 @@
       "": "Q4892529"
     }
   },
-  "post": {
-    "sSearch": "",
-    "iSortCol_0": 9,
-    "sEcho": 1,
-    "iDisplayLength": 1000,
-    "sSortDir_0": "desc",
-    "status_1": "on"
+  "P6257": "keep only one value",
+  "P6258": "and here as well",
+  "P6259": "i guess this also should be alone",
+  "P11796": {
+    "id": "P6259",
+    "translate": {
+      "": "Q1264450"
+    }
   }
 }

@@ -11,6 +11,65 @@ import wd
 
 
 class Model(wd.Model):
+    """Retrieve data from TAP 'endpoint' using 'queries' specified in json-file"""
+    _dataset, ADQL_WRAPPER = {}, 'SELECT * FROM ({}) a WHERE {}'
+
+    @classmethod
+    def load(cls, condition=None) -> dict:
+        result = {}
+        for lines in cls.config('queries'):
+            query = ''.join(lines)
+            if condition:
+                query = cls.ADQL_WRAPPER.format(query, condition)
+            Model.tap_query(cls.config('endpoint'), query, result)
+        return result
+
+    @classmethod
+    def prepare_data(cls, external_id):
+        model = super().prepare_data(external_id)
+        if external_id in cls._dataset:
+            rows = cls._dataset[external_id]
+        elif external_id in (result := cls.load('main_id = \'{}\''.format(external_id))):
+            rows = result[external_id]
+        else:
+            return None
+
+        for row in rows:
+            for col in row:
+                if row[col] and re.search('\\d+$', col):
+                    model.construct_snak(row, col)
+                    if col.upper() in ['P6257', 'P6258']:  # add J2000 epoch
+                        model.input_snaks.append(cls.create_snak('P6259', 'Q1264450'))
+        return model
+
+    def construct_snak(self, row, col, new_col=None):
+        new_col = (new_col if new_col else col).upper()
+        if wd.Wikidata.type_of(new_col) != 'quantity':
+            result = Model.get_parent_snak(row[col]) if col == 'p397' else Model.create_snak(new_col, row[col])
+        elif col + 'h' not in row or row[col + 'h'] == '':
+            result = Model.create_snak(new_col, Model.format_figure(row, col))
+        else:
+            try:
+                high = Model.format_figure(row, col + 'h')
+                low = Model.format_figure(row, col + 'l')
+                figure = Model.format_figure(row, col)
+                result = Model.create_snak(new_col, figure, low, high)
+            except InvalidOperation:
+                return
+
+        if result is not None:
+            if 'mespos' in row:
+                result['mespos'] = row['mespos']
+            if col + 'u' in row and (unit := self.lut(row[col + 'u'])):
+                result['datavalue']['value']['unit'] = 'http://www.wikidata.org/entity/' + unit
+            reference = row[col + 'r'] if col + 'r' in row and row[col + 'r'] else None
+            reference = row['reference'] if 'reference' in row and row['reference'] else reference
+            if reference and (ref_id := Model.parse_url(re.sub('.*(http\\S+).*', '\\g<1>', reference))):
+                result['source'] = [ref_id] if 'source' not in result else result['source'] + [ref_id]
+
+        if result := self.enrich_qualifier(result, row['qualifier'] if 'qualifier' in row else row[col]):
+            self.input_snaks.append(result)
+
     @staticmethod
     def tap_query(url, sql, result=None):
         if response := wd.Wikidata.request(url + '/sync', data={'request': 'doQuery', 'lang': 'adql', 'format': 'csv',
@@ -31,38 +90,10 @@ class Model(wd.Model):
                             result[object_id] = [row]
         return result
 
-    dataset = {}
-
-    @classmethod
-    def load(cls, condition=None):
-        for lines in cls.config('queries'):
-            query = ''.join(lines)
-            if condition:
-                query = 'SELECT * FROM ({}) a WHERE {}'.format(query, condition)  # condition uses "final" column names
-            Model.tap_query(cls.config('endpoint'), query, Model.dataset)
-
-    @classmethod
-    def prepare_data(cls, external_id) -> []:
-        input_snaks = super().prepare_data(external_id)
-        if (external_id not in cls.dataset) and cls.config('endpoint'):
-            cls.get_next_chunk(external_id)  # attempt to load this specific object
-        if external_id in cls.dataset:
-            for row in cls.dataset[external_id]:
-                for col in row:
-                    if row[col] and re.search('\\d+$', col) and (snak := cls.construct_snak(row, col)):
-                        input_snaks.append(snak)
-                        if col.upper() in ['P6257', 'P6258']:  # add J2000 epoch
-                            input_snaks.append(cls.create_snak('P6259', 'Q1264450'))
-            cls.dataset.pop(external_id)  # ToDo: check if too aggressive when we are postponing item creation
-        else:
-            logging.warning('{}:"{}"\tcould not be extracted'.format(cls.property, external_id))
-            input_snaks = None
-        return input_snaks
-
     _parents = None
 
-    @classmethod
-    def get_parent_snak(cls, name: str):
+    @staticmethod
+    def get_parent_snak(name: str):
         if Model._parents is None:
             Model._parents = wd.Wikidata.query('SELECT DISTINCT ?c ?i { ?i ^ps:P397 []; wdt:P528 ?c }',
                                                lambda row, _: (row[0].lower(), row[1]))
@@ -85,41 +116,6 @@ class Model(wd.Model):
     def format_figure(row, col):  # SIMBAD-specific way to specify figure precision
         return Model.format_float(row[col], int(row[col + 'p']) if col + 'p' in row and row[col + 'p'] != '' else -1)
 
-    @classmethod
-    def construct_snak(cls, row, col, new_col=None):
-        new_col = (new_col if new_col else col).upper()
-        if wd.Wikidata.type_of(new_col) != 'quantity':
-            result = cls.get_parent_snak(row[col]) if col == 'p397' else cls.create_snak(new_col, row[col])
-        elif col + 'h' not in row or row[col + 'h'] == '':
-            result = cls.create_snak(new_col, cls.format_figure(row, col))
-        else:
-            try:
-                high = cls.format_figure(row, col + 'h')
-                low = cls.format_figure(row, col + 'l')
-                figure = cls.format_figure(row, col)
-                result = cls.create_snak(new_col, figure, low, high)
-            except InvalidOperation:
-                return
-
-        if result is not None:
-            if 'mespos' in row:
-                result['mespos'] = row['mespos']
-            if col + 'u' in row and (unit := cls.lut(row[col + 'u'])):
-                result['datavalue']['value']['unit'] = 'http://www.wikidata.org/entity/' + unit
-            reference = row[col + 'r'] if col + 'r' in row and row[col + 'r'] else None
-            reference = row['reference'] if 'reference' in row and row['reference'] else reference
-            if reference and (ref_id := Model.parse_url(re.sub('.*(http\\S+).*', '\\g<1>', reference))):
-                result['source'] = [ref_id] if 'source' not in result else result['source'] + [ref_id]
-        return cls.enrich_qualifier(result, row['qualifier'] if 'qualifier' in row else row[col])
-
-    @classmethod
-    def enrich_qualifier(cls, snak, value):
-        if (not snak) or (not cls.config(snak['property'].upper(), 'id')):
-            return snak
-        for pattern in (config := cls.config(snak['property'].upper()))['translate']:
-            if value.startswith(pattern):
-                return {**snak, 'qualifiers': {config['id']: config['translate'][pattern]}}
-
     @staticmethod
     def parse_url(url: str) -> str:
         """Try to find qid of the reference based on the url provided"""
@@ -129,14 +125,17 @@ class Model(wd.Model):
         if url and url.strip() and (url := url.split()[0]):  # get text before first whitespace and strip
             for pattern, repl in Model.config('transform').items():
                 if (query := unquote(re.sub(pattern, repl, url, flags=re.S))).startswith('P'):
-                    if query.startswith('P818=') and (item := arxiv.Element.get_by_id(query.replace('P818=', ''))):
-                        return item.qid
-                    if query.startswith('P819=') and (item := ads.Element.get_by_id(query.replace('P819=', ''))):
-                        return item.qid
-                    try:  # fallback
-                        return wd.Wikidata.search('haswbstatement:' + query)
-                    except ValueError as e:
-                        logging.warning('Found {} instances of {}'.format(e.args[0], query))
+                    if query.startswith('P818='):
+                        if item := arxiv.Element.get_by_id(query.replace('P818=', '')):
+                            return item.qid
+                    elif query.startswith('P819='):
+                        if item := ads.Element.get_by_id(query.replace('P819=', '')):
+                            return item.qid
+                    else:  # fallback
+                        try:
+                            return wd.Wikidata.search('haswbstatement:' + query)
+                        except ValueError as e:
+                            logging.warning('Found {} instances of {}'.format(e.args[0], query))
 
 
 class Element(wd.Element):

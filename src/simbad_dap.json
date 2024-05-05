@@ -1401,7 +1401,7 @@
   "endpoint": "https://simbad.u-strasbg.fr/simbad/sim-tap",
   "queries": [
     [
-      "SELECT main_id, oid AS id, otype AS P31, morph_type AS P223, morph_bibcode AS P223r, 0 AS mespos,",
+      "SELECT main_id, oid, otype AS P31, morph_type AS P223, morph_bibcode AS P223r, 0 AS mespos,",
       "       ra AS P6257, ra_prec AS P6257p, 'Q28390' AS P6257u, coo_bibcode AS P6257r,",
       "       dec AS P6258, dec_prec AS P6258p, 'Q28390' AS P6258u, coo_bibcode AS P6258r,",
       "       sp_type AS P215, sp_bibcode AS P215r,",
@@ -1419,51 +1419,50 @@
       "       FROM basic"
     ],
     [
-      "SELECT main_id, oidref AS id, bibcode AS reference, mespos,",
+      "SELECT main_id, oid, bibcode AS reference, mespos,",
       "       m.pmra AS P10752, m.pmra_prec AS P10752p, pmra_err AS P10752h, pmra_err AS P10752l,",
       "       pmra_err_prec AS P10752hp, pmra_err_prec AS P10752lp, 'Q22137107' AS P10752u,",
       "       pmde AS P10751, pmde_prec AS P10751p, pmde_err AS P10751h, pmde_err AS P10751l,",
       "       pmde_err_prec AS P10751hp, pmde_err_prec AS P10751lp, 'Q22137107' AS P10751u",
       "  FROM basic",
-      "  JOIN mesPM m ON oidref = oid",
-      "  WHERE coosystem='ICRS'"
+      "  JOIN mesPM m ON oidref = oid AND coosystem='ICRS'"
     ],
     [
-      "SELECT main_id, oidref AS id, otypes.otype AS P31, origin AS P31r, 1 AS mespos",
+      "SELECT main_id, oid, otypes.otype AS P31, origin AS P31r, 1 AS mespos",
       "  FROM otypes",
       "  JOIN basic ON oid=oidref"
     ],
     [
-      "SELECT main_id, oidref AS id, sptype AS P215, bibcode AS P215r, mespos",
+      "SELECT main_id, oid, sptype AS P215, bibcode AS P215r, mespos",
       "  FROM mesSpT",
       "  JOIN basic ON oidref = oid"
     ],
     [
-      "SELECT main_id, oidref AS id, mespos, plx AS P2214, m.plx_prec AS P2214p,",
+      "SELECT main_id, oid, mespos, plx AS P2214, m.plx_prec AS P2214p,",
       "       m.plx_err AS P2214h, m.plx_err AS P2214l, 'Q21500224' AS P2214u, bibcode AS P2214r",
       "  FROM mesPlx m",
       "  JOIN basic ON oidref = oid"
     ],
     [
-      "SELECT main_id, oidref AS id, vsini AS P4296, vsini_prec AS P4296p, 'Q3674704' AS P4296u, bibcode AS P4296r,",
+      "SELECT main_id, oid, vsini AS P4296, vsini_prec AS P4296p, 'Q3674704' AS P4296u, bibcode AS P4296r,",
       "       vsini_err AS P4296h, vsini_err_prec AS P4296hp, vsini_err AS P4296l, vsini_err_prec AS P4296lp, mespos",
       "  FROM mesRot",
       "  JOIN basic ON oidref = oid"
     ],
     [
-      "SELECT main_id, oidref AS id, flux AS P1215, flux_prec AS P1215p, flux_err AS P1215h, filter AS qualifier,",
+      "SELECT main_id, oid, flux AS P1215, flux_prec AS P1215p, flux_err AS P1215h, filter AS qualifier,",
       "       flux_err_prec AS P1215hp, flux_err AS P1215l, flux_err_prec AS P1215lp, bibcode AS P1215r, 0 AS mespos",
       "  FROM flux",
       "  JOIN basic ON oidref = oid"
     ],
     [
-      "SELECT main_id, oidref AS id, mespos, dist AS P2583, dist_prec AS P2583p, plus_err AS P2583h, bibcode AS P2583r,",
+      "SELECT main_id, oid, mespos, dist AS P2583, dist_prec AS P2583p, plus_err AS P2583h, bibcode AS P2583r,",
       "       plus_err_prec AS P2583hp, minus_err AS P2583l, minus_err_prec AS P2583lp, unit AS P2583u",
       "  FROM mesDistance",
       "  JOIN basic ON oidref = oid"
     ],
     [
-      "SELECT main_id, oidref AS id, mespos, bibcode AS reference,",
+      "SELECT main_id, oid, mespos, bibcode AS reference,",
       "       pmde AS P10751, pmde_prec AS P10751p, pmde_err AS P10751h, pmde_err_prec AS P10751hp,",
       "       pmde_err AS P10751l, pmde_err_prec AS P10751lp, 'Q22137107' AS P10751u,",
       "       m.pmra AS P10752, m.pmra_prec AS P10752p, pmra_err AS P10752h, pmra_err_prec AS P10752hp,",
@@ -1472,39 +1471,37 @@
       "  JOIN basic ON oidref = oid"
     ],
     [
-      "SELECT main_id, oidref AS id, id AS P528, id AS qualifier",
+      "SELECT main_id, oid, id AS P528, id AS qualifier",
       "  FROM ident",
       "  JOIN basic ON oidref = oid"
     ],
     [
-      "SELECT main_id, oidref AS id, bibcode AS P2386r, 'Q828224' AS P2386u, diameter AS P2386, mespos,",
+      "SELECT main_id, oid, bibcode AS P2386r, 'Q828224' AS P2386u, diameter AS P2386, mespos,",
       "        diameter_prec AS P2386p, error AS P2386h, error_prec AS P2386hp, error AS P2386l, error_prec AS P2386lp",
       "  FROM mesDiameter",
-      "  JOIN basic ON oidref = oid",
-      " WHERE unit = 'km'"
+      "  JOIN basic ON oidref = oid AND unit = 'km'"
     ],
     [
-      "SELECT main_id, oidref AS id, bibcode AS P5348r, 'Q21500224' AS P5348u, diameter AS P5348, mespos,",
+      "SELECT main_id, oid, bibcode AS P5348r, 'Q21500224' AS P5348u, diameter AS P5348, mespos,",
       "       diameter_prec AS P5348p, error AS P5348h, error_prec AS P5348hp, error AS P5348l, error_prec AS P5348lp",
       "  FROM mesDiameter",
-      "  JOIN basic ON oidref = oid",
-      " WHERE unit = 'mas'"
+      "  JOIN basic ON oidref = oid AND unit = 'mas'"
     ],
     [
-      "SELECT main_id, oidref AS id, bibcode AS P2216r, 'Q3674704' AS P2216u, mespos, velType AS P2216t,",
+      "SELECT main_id, oid, bibcode AS P2216r, 'Q3674704' AS P2216u, mespos, velType AS P2216t,",
       "       velValue AS P2216, velValue_prec AS P2216p, meanError AS P2216h, meanError_prec AS P2216hp,",
       "       meanError AS P2216l, meanError_prec AS P2216lp",
       "  FROM mesVelocities",
       "  JOIN basic ON oidref = oid"
     ],
     [
-      "SELECT main_id, oidref AS id, bibcode AS reference, mespos, teff AS P6879, 'Q11579' AS P6879u, fe_h AS P2227,",
+      "SELECT main_id, oid, bibcode AS reference, mespos, teff AS P6879, 'Q11579' AS P6879u, fe_h AS P2227,",
       "       fe_h_prec AS P2227p, log_g AS P7015, log_g_prec AS P7015p, 'Q39699418' AS P7015u",
       "  FROM mesFe_H",
       "  JOIN basic ON oidref = oid"
     ],
     [
-      "SELECT main_id, oidref AS id, bibcode AS reference, mespos, vartyp AS P881",
+      "SELECT main_id, oid, bibcode AS reference, mespos, vartyp AS P881",
       "  FROM mesVar",
       "  JOIN basic ON oidref = oid"
     ]
