@@ -93,7 +93,7 @@ class Element(wd.Element):
 
 
 if Model.initialize(__file__):  # if not imported
-    Element.get_by_id('2405.00850')  # Uncomment to debug processing single preprint
+    # Element.get_by_id('2405.00850')  # Uncomment to debug processing single preprint
     SUMMARY = 'extracted from [[Q118398]] based on [[Property:{}]]: {}'
     QUERY = 'SELECT ?c ?i {{VALUES ?c {{\'{}\'}} ?i p:P356/ps:P356 ?c MINUS {{?i p:P818 []; p:P356 []}}}}'
     no_doi_items = wd.Wikidata.query('SELECT ?c ?i {?i p:P818/ps:P818 ?c MINUS {?i p:P818 []; p:P356 []}}')
