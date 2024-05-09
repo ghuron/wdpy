@@ -12,7 +12,6 @@ import uuid
 from contextlib import closing
 from datetime import datetime
 from decimal import Decimal, DecimalException
-from typing import Tuple
 
 import requests
 
@@ -147,30 +146,14 @@ class Model:
     def lut(cls, text: str):
         return qid if (qid := cls.config('translate', text)) else text
 
-    @staticmethod
-    def get_next_chunk(_: any) -> Tuple[list[str], any]:
-        """Fetch array of external identifiers starting from specified offset"""
-        return [], None
-
     @classmethod
-    def get_all_items(cls, sparql: str, process=lambda row, _: (row[0], row[1])):
-        results = Wikidata.query(sparql, process)
-        offset = None
-        while True:
-            chunk, offset = cls.get_next_chunk(offset)
-            if len(chunk) == 0:
-                break
-            for external_id in chunk:
-                if external_id not in results:
-                    results[external_id] = None
-        return results
-
-    @classmethod
-    def next(cls):
-        return
+    def next(cls) -> list:
+        """Retrieves next chunk of external identifiers"""
+        return []
 
     def __init__(self, external_id: str, snaks: list = None):
         self.input_snaks = snaks if snaks is not None else [self.create_snak(self.property, external_id)]
+        self.external_id = external_id
 
     @classmethod
     def prepare_data(cls, external_id: str):
@@ -447,19 +430,17 @@ class Claim:
 
 
 class Element:
-    __slots__ = 'qid', 'external_id', '_entity'
     _model, _claim, __cache, __existing = Model, Claim, {}, {}
+    __slots__ = 'qid', 'external_id', '_entity', '_affected', '__original'
 
     def __init__(self, external_id: str, qid: str = None):
-        self.external_id, self.qid, self._entity = external_id, qid, None
-        self.is_bad_id(external_id)
-        if self.qid:  # is not None
-            type(self).__cache[external_id] = self.qid
-        elif external_id not in type(self).__cache:  # and qid is None
-            type(self).__cache[external_id] = None
-            type(self).__cache[external_id] = self.qid = self.haswbstatement(external_id)
-        else:  # if external_id in type(self).__cache and qid is None
-            self.qid = type(self).__cache[external_id]
+        self.external_id, self.qid, self._entity, self._affected, self.__original = external_id, qid, None, set(), ''
+        self.apply(type(self)._model(external_id, []))
+
+    def set_qid(self, qid):
+        type(self).__cache[self.external_id] = self.qid = qid
+        self._entity, self.__original = None, ''
+        return qid
 
     @property
     def entity(self):
@@ -467,6 +448,7 @@ class Element:
             self._entity = {'labels': {}, 'claims': {}}
             if self.qid and (result := Wikidata.load({self.qid})):
                 self._entity = result[self.qid]
+            self.__original = json.dumps(self._entity)
         return self._entity
 
     def trace(self, message: str, level=20):
@@ -575,50 +557,58 @@ class Element:
         return 'batch import from [[' + self._claim.db_ref + ']] for object ' + self.external_id
 
     def save(self):
-        if 'labels' in self.entity and 'ak' in self.entity['labels']:
-            self.entity['labels'].pop('ak')
-        if 'aliases' in self.entity and 'ak' in self.entity['aliases']:
-            self.entity['aliases'].pop('ak')
+        for property_id in self._affected:
+            for c in list(self.entity['claims'][property_id]):
+                if self._claim(c).check_if_no_refs():
+                    self.delete_claim(c)
 
-        data = {'data': json.dumps(self.entity), 'summary': self.get_summary()}
-        if 'id' in self.entity:
-            data['id'] = self.entity['id']
-            data['baserevid'] = self.entity['lastrevid']
-        else:
-            data['new'] = 'item'
+            if self._model.config(property_id):
+                self.remove_all_but_one(property_id)
+            elif Wikidata.type_of(property_id) in ['quantity', 'string'] or property_id == 'P577':
+                self.deprecate_all_but_one(property_id)
 
-        if response := Wikidata.edit(data, 'wbeditentity'):
-            if 'nochange' not in response['entity']:
-                self._entity, self.qid = response['entity'], response['entity']['id']
-                self.__cache[self.external_id] = self.qid
-                self.trace('modified' if 'id' in data else 'created')
-                return self.qid
-            # else:  # Too many
-            #     self.trace('no change while saving {}'.format(data['data']))
+        self.post_process()
 
-    def update(self, parsed_data):
+        if not self.qid or json.dumps(self.entity) != self.__original:
+            if 'labels' in self.entity and 'ak' in self.entity['labels']:
+                self.entity['labels'].pop('ak')
+            if 'aliases' in self.entity and 'ak' in self.entity['aliases']:
+                self.entity['aliases'].pop('ak')
+
+            data = {'data': json.dumps(self.entity), 'summary': self.get_summary()}
+            if 'id' in self.entity:
+                data['id'] = self.entity['id']
+                data['baserevid'] = self.entity['lastrevid']
+            else:
+                data['new'] = 'item'
+
+            if response := Wikidata.edit(data, 'wbeditentity'):
+                if 'nochange' not in response['entity']:
+                    self.set_qid(response['entity']['id'])
+                    self.trace('modified' if 'id' in data else 'created')
+                    return self.qid
+                # else:  # Too many
+                #     self.trace('no change while saving {}'.format(data['data']))
+
+    def apply(self, parsed_data: Model):
         if parsed_data:
-            original = json.dumps(self.entity)
+            if self.external_id != parsed_data.external_id:
+                self.trace('"{}" will be replaced with "{}"'.format(self.external_id, parsed_data.external_id))
+                self.external_id = parsed_data.external_id
 
-            affected_properties = set()
+            if not self.is_bad_id(self.external_id):
+                if self.qid:  # is not None
+                    type(self).__cache[self.external_id] = self.qid
+                elif self.external_id not in type(self).__cache:  # and (self.qid is None)
+                    type(self).__cache[self.external_id] = None  # Because next line might raise exception
+                    if self.set_qid(self.haswbstatement(self.external_id)):
+                        self.trace('primary cache miss "{}"'.format(self.external_id))
+                else:  # if (self.external_id in type(self).__cache) and (qid is None)
+                    self.set_qid(type(self).__cache[self.external_id])
+
             for snak in parsed_data.input_snaks:
                 if (claim := self.obtain_claim(snak)) and (claim['mainsnak']['datatype'] != 'external-id'):
-                    affected_properties.add(snak['property'])
-
-            for property_id in affected_properties:
-                for c in list(self.entity['claims'][property_id]):
-                    if self._claim(c).check_if_no_refs():
-                        self.delete_claim(c)
-
-                if self._model.config(property_id):
-                    self.remove_all_but_one(property_id)
-                elif Wikidata.type_of(property_id) in ['quantity', 'string'] or property_id == 'P577':
-                    self.deprecate_all_but_one(property_id)
-
-            self.post_process()
-
-            if not self.qid or json.dumps(self.entity) != original:
-                return self.save()
+                    self._affected.add(snak['property'])
 
     @classmethod
     def haswbstatement(cls, external_id, property_id=None):
@@ -636,10 +626,14 @@ class Element:
                 return
             if (instance.qid is None) or forced:
                 try:
-                    instance.update(cls._model.prepare_data(external_id))
+                    if (model := cls._model.prepare_data(external_id)) is None:
+                        return
+                    instance.apply(model)
+                    instance.save()
                 except ValueError:
                     logging.error('https://www.wikidata.org/wiki/{}#{}\tincorrect identifier'
                                   .format(instance.qid, cls._model.property))
+                    return
             return instance if instance.qid else None
 
     @classmethod

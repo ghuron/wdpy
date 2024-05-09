@@ -19,12 +19,13 @@ class Model(adql.Model):
 class Element(adql.Element):
     _model, _claim, __cache, __existing = Model, type('Claim', (wd.Claim,), {'db_ref': 'Q654724'}), {}, None
 
-    def update(self, parsed_data: Model):
-        if parsed_data:
-            if self.qid is None and parsed_data.doi:
-                self.qid = Element.haswbstatement(parsed_data.doi, 'P356')
-            if self.qid:  # ToDo: create a new source if necessary
-                return super().update(parsed_data)
+    def apply(self, parsed_data: Model):
+        if parsed_data and parsed_data.doi and (self.qid is None):
+            self.set_qid(Element.haswbstatement(parsed_data.doi, 'P356'))
+        super().apply(parsed_data)
+
+    def save(self):
+        return super().save() if self.qid else None  # ToDo: item creation
 
 
 Model.initialize(__file__)  # in order to load config

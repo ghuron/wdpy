@@ -68,15 +68,13 @@ class Element(wd.Element):
     """When called get_by_id() for a new pre-print, fill as many properties as possible via regular ArXiv API"""
     _model, _claim, __cache, __existing = Model, type('Claim', (wd.Claim,), {'db_ref': 'Q118398'}), {}, None
 
-    def update(self, parsed_data: Model):
-        if parsed_data:
-            if self.qid is None and parsed_data.doi:
-                self.qid = Element.haswbstatement(parsed_data.doi, 'P356')
-                if self.qid:  # If found by DOI existing item that has no ArXiv-ID
-                    parsed_data = Model(self.external_id)  # no need to update anything besides ArXiv-ID
-            if 'en' not in self.entity['labels']:
-                self.entity['labels']['en'] = {'value': parsed_data.label, 'language': 'en'}
-            return super().update(parsed_data)
+    def apply(self, parsed_data: Model):
+        if (self.qid is None) and parsed_data and parsed_data.doi:
+            if self.set_qid(Element.haswbstatement(parsed_data.doi, 'P356')):  # Found by DOI
+                parsed_data = Model(self.external_id)  # only ArXiv-ID need to be set
+        super().apply(parsed_data)
+        if ('en' not in self.entity['labels']) and parsed_data and parsed_data.label:
+            self.entity['labels']['en'] = {'value': parsed_data.label, 'language': 'en'}
 
     def obtain_claim(self, snak: dict):
         if snak is not None:

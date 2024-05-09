@@ -155,16 +155,15 @@ class Element(adql.Element):
     def trace(self, message: str, level=20):
         super().trace('http://exoplanet.eu/catalog/{}\t{}'.format(self.external_id.replace(' ', '_'), message), level)
 
-    def update(self, parsed_data: Model):
-        if parsed_data and parsed_data.label:
-            if not self.qid:  # Try to reuse item from NASA Exoplanet Archive
-                if not Element.__ids:
-                    Element.__ids = wd.Wikidata.query('SELECT ?c ?i {?i wdt:P5667 ?c MINUS {?i wdt:P5653 []}}')
-                if parsed_data.label in Element.__ids:
-                    self.qid = Element.__ids[parsed_data.label]
-            if 'en' not in self.entity['labels']:
-                self.entity['labels']['en'] = {'value': parsed_data.label, 'language': 'en'}
-        return super().update(parsed_data)
+    def apply(self, parsed_data: Model):
+        if parsed_data and parsed_data.label and not self.qid:
+            if not Element.__ids:
+                Element.__ids = wd.Wikidata.query('SELECT ?c ?i {?i wdt:P5667 ?c MINUS {?i wdt:P5653 []}}')
+            if parsed_data.label in Element.__ids:  # Try to reuse item from NASA Exoplanet Archive
+                self.qid = Element.__ids[parsed_data.label]
+        super().apply(parsed_data)
+        if ('en' not in self.entity['labels']) and parsed_data and parsed_data.label:
+            self.entity['labels']['en'] = {'value': parsed_data.label, 'language': 'en'}
 
     def obtain_claim(self, snak):
         if snak:
@@ -191,12 +190,13 @@ if Model.initialize(__file__):  # if just imported - do nothing
     updated_hosts = []
     while chunk := Model.next():
         for ex_id in sorted(chunk):
-            (item := Element(ex_id)).update(Model.prepare_data(ex_id))
+            item = Element.get_by_id(ex_id, forced=True)
             if item.entity and 'P397' in item.entity['claims'] and len(item.entity['claims']['P397']) == 1:
                 if 'datavalue' in (parent := item.entity['claims']['P397'][0]['mainsnak']):  # parent != "novalue"
                     if (host := Element(ex_id, parent['datavalue']['value']['id'])).qid not in updated_hosts:
                         if Model.property not in host.entity['claims']:  # If initial item was not exo-moon
                             Model.set_parse_mode(host_star=True)
-                            host.update(Model.prepare_data(ex_id))
+                            host.apply(Model.prepare_data(ex_id))
+                            host.save()
                             updated_hosts.append(host.qid)
             Model.set_parse_mode(host_star=False)

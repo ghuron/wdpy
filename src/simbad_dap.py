@@ -6,7 +6,7 @@ import wd
 
 
 class Model(adql.Model):
-    property, __offset, __var_types, ADQL_WRAPPER = 'P3083', 0, None, '{} WHERE {}'
+    property, __offset, __var_types, _ADQL_WRAPPER = 'P3083', 0, None, '{} WHERE {}'
 
     @classmethod
     def next(cls):

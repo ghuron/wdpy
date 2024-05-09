@@ -12,7 +12,7 @@ import wd
 
 class Model(wd.Model):
     """Retrieve data from TAP 'endpoint' using 'queries' specified in json-file"""
-    _dataset, ADQL_WRAPPER = {}, 'SELECT * FROM ({}) a WHERE {}'
+    _dataset, _ADQL_WRAPPER = {}, 'SELECT * FROM ({}) a WHERE {}'
 
     @classmethod
     def load(cls, condition=None) -> dict:
@@ -20,7 +20,7 @@ class Model(wd.Model):
         for lines in cls.config('queries'):
             query = ''.join(lines)
             if condition:
-                query = cls.ADQL_WRAPPER.format(query, condition)
+                query = cls._ADQL_WRAPPER.format(query, condition)
             Model.tap_query(cls.config('endpoint'), query, result)
         return result
 
@@ -90,7 +90,7 @@ class Model(wd.Model):
                             result[object_id] = [row]
         return result
 
-    _parents = None
+    _parents, __PATTERN = None, 'https://www.wikidata.org/wiki/{}#P528\tcatalogue cache miss "{}"'
 
     @staticmethod
     def get_parent_snak(name: str):
@@ -108,7 +108,7 @@ class Model(wd.Model):
                     return
                 Model._parents[simbad_id.lower()] = instance.qid
             Model._parents[name.lower()] = Model._parents[simbad_id.lower()]
-            logging.info('Cache miss: "{}" for {}'.format(name, Model._parents[name.lower()]))
+            logging.info(Model.__PATTERN.format(Model._parents[name.lower()], name))
         if snak := Model.create_snak('P397', Model._parents[name.lower()]):
             return {**snak, 'decorators': {'P5997': name}}
 
