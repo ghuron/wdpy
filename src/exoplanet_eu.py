@@ -11,7 +11,7 @@ import wd
 
 
 class Model(wd.Model):
-    property, __session, __properties, __offset, __page = 'P5653', None, None, 0, None
+    property, __session, __properties, __offset, __page, __ids = 'P5653', None, None, 0, None, None
     articles = {'publication_2540': 'Q54012702', 'publication_4966': 'Q66424531', 'publication_3182': 'Q56032677'}
 
     @classmethod
@@ -147,20 +147,16 @@ class Model(wd.Model):
         value = value[:-2] + value[-1] if (property_id == 'P528') and (value[-2] == ' ') else value
         return Model.enrich_qualifier(Model.create_snak(property_id, value), value)
 
+    def get_qid(self):
+        if not Model.__ids:
+            Model.__ids = wd.Wikidata.query('SELECT ?c ?i {?i wdt:P5667 ?c MINUS {?i wdt:P5653 []}}')
+        return Model.__ids[self.label] if self.label in Model.__ids else None
+
 
 class Element(adql.Element):
-    __ids, __cache, __existing, _model, _claim = None, {}, None, Model, type('Claim', (wd.Claim,),
-                                                                             {'db_ref': 'Q1385430'})
-
-    def trace(self, message: str, level=20):
-        super().trace('http://exoplanet.eu/catalog/{}\t{}'.format(self.external_id.replace(' ', '_'), message), level)
+    _model, _claim, __cache = Model, type('Claim', (wd.Claim,), {'db_ref': 'Q1385430'}), None
 
     def apply(self, parsed_data: Model):
-        if parsed_data and parsed_data.label and not self.qid:
-            if not Element.__ids:
-                Element.__ids = wd.Wikidata.query('SELECT ?c ?i {?i wdt:P5667 ?c MINUS {?i wdt:P5653 []}}')
-            if parsed_data.label in Element.__ids:  # Try to reuse item from NASA Exoplanet Archive
-                self.qid = Element.__ids[parsed_data.label]
         super().apply(parsed_data)
         if ('en' not in self.entity['labels']) and parsed_data and parsed_data.label:
             self.entity['labels']['en'] = {'value': parsed_data.label, 'language': 'en'}
@@ -185,18 +181,27 @@ class Element(adql.Element):
 
 
 if Model.initialize(__file__):  # if just imported - do nothing
+    def process(external_id):
+        item = Element.get_by_id(external_id, forced=True)
+        if 'P397' in item.entity['claims'] and len(item.entity['claims']['P397']) == 1:
+            if 'datavalue' in (parent := item.entity['claims']['P397'][0]['mainsnak']):  # parent != "novalue"
+                if (host := Element(external_id, parent['datavalue']['value']['id'])).qid not in updated_hosts:
+                    if Model.property not in host.entity['claims']:  # If initial item was not exo-moon
+                        Model.set_parse_mode(host_star=True)
+                        host.apply(Model.prepare_data(external_id))
+                        host.save()
+                        updated_hosts.append(host.qid)
+        Model.set_parse_mode(host_star=False)
+
+
     Model.set_parse_mode()
     # Element.get_by_id('2mass_j0249_0557_ab_c--6790', forced=True)  # uncomment to debug specific item only
     updated_hosts = []
+    logging.info('Start updating {} existing items'.format(len(Element.get_cache())))
+    for ex_id in sorted(Element.get_cache().keys()):
+        process(ex_id)
+    logging.info('Finish updating existing items')
     while chunk := Model.next():
         for ex_id in sorted(chunk):
-            item = Element.get_by_id(ex_id, forced=True)
-            if item.entity and 'P397' in item.entity['claims'] and len(item.entity['claims']['P397']) == 1:
-                if 'datavalue' in (parent := item.entity['claims']['P397'][0]['mainsnak']):  # parent != "novalue"
-                    if (host := Element(ex_id, parent['datavalue']['value']['id'])).qid not in updated_hosts:
-                        if Model.property not in host.entity['claims']:  # If initial item was not exo-moon
-                            Model.set_parse_mode(host_star=True)
-                            host.apply(Model.prepare_data(ex_id))
-                            host.save()
-                            updated_hosts.append(host.qid)
-            Model.set_parse_mode(host_star=False)
+            if ex_id not in Element.get_cache():
+                process(ex_id)

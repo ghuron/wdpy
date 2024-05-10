@@ -275,6 +275,9 @@ class Model:
             if value.startswith(pattern):
                 return {**snak, 'qualifiers': {config['id']: config['translate'][pattern]}}
 
+    def get_qid(self):
+        return None if self else None  # To disable "can be made static" warning
+
 
 class Claim:
     __slots__ = 'claim'
@@ -332,7 +335,6 @@ class Claim:
     def get_latest_ref_date(claim: dict):
         latest = 0
         if 'references' in claim:
-            Claim._preload(claim['references'] if 'references' in claim else [])
             for ref in claim['references']:
                 if 'P248' in ref['snaks']:
                     ref_id = ref['snaks']['P248'][0]['datavalue']['value']['id']
@@ -345,19 +347,23 @@ class Claim:
 
     def check_if_no_refs(self) -> bool:
         if 'remove' not in self.claim:
-            Claim._preload(refs := self.claim['references'] if 'references' in self.claim else [])
+            refs = self.claim['references'] if 'references' in self.claim else []
             if len(new_refs := self._confirms(self._remove_duplicates(refs))) == 0 and len(refs) > 0:
                 return True
             self.claim['references'] = new_refs
 
-    @staticmethod
-    def _preload(references: []):
-        qid = set()
-        for ref in references:
+    @classmethod
+    def extract_references(cls, claim: dict):
+        result = set()
+        for ref in claim['references'] if 'references' in claim else []:
             for p248 in ref['snaks']['P248'] if 'P248' in ref['snaks'] else []:
                 if p248['datavalue']['value']['id'] not in Claim._pub_dates:
-                    qid.add(p248['datavalue']['value']['id'])
-        if qid and (result := Wikidata.load(qid)):
+                    result.add(p248['datavalue']['value']['id'])
+        return result
+
+    @classmethod
+    def preload(cls, qids: set):
+        if qids and (result := Wikidata.load(qids)):
             for ref_id, item in result.items():
                 p577 = None
                 if 'redirects' in item:
@@ -430,17 +436,26 @@ class Claim:
 
 
 class Element:
-    _model, _claim, __cache, __existing = Model, Claim, {}, {}
+    _model, _claim, __cache = Model, Claim, {}
     __slots__ = 'qid', 'external_id', '_entity', '_affected', '__original'
 
     def __init__(self, external_id: str, qid: str = None):
-        self.external_id, self.qid, self._entity, self._affected, self.__original = external_id, qid, None, set(), ''
-        self.apply(type(self)._model(external_id, []))
+        self.external_id, self.qid, self._entity, self._affected, self.__original = external_id, qid, None, set(), None
+        if qid or (qid := self.get_qid()):  # There is a chance to find qid down the road
+            self.set_qid(qid)
 
     def set_qid(self, qid):
         type(self).__cache[self.external_id] = self.qid = qid
-        self._entity, self.__original = None, ''
+        self._entity = self.__original = None
         return qid
+
+    def get_qid(self):
+        if self.external_id in self.get_cache():
+            return self.get_cache()[self.external_id]
+        elif qid := self.haswbstatement(self.external_id):
+            self.qid = qid  # ToDo: find more elegant solution
+            self.trace('primary cache miss "{}"'.format(self.external_id))
+            return qid
 
     @property
     def entity(self):
@@ -557,6 +572,15 @@ class Element:
         return 'batch import from [[' + self._claim.db_ref + ']] for object ' + self.external_id
 
     def save(self):
+        if (self.__original is None) or (json.dumps(self.entity) == self.__original):
+            return
+
+        new_sources = set()
+        for property_id in self._affected:
+            for c in self.entity['claims'][property_id]:
+                new_sources.update(Claim.extract_references(c))
+        Claim.preload(new_sources)
+
         for property_id in self._affected:
             for c in list(self.entity['claims'][property_id]):
                 if self._claim(c).check_if_no_refs():
@@ -569,42 +593,36 @@ class Element:
 
         self.post_process()
 
-        if not self.qid or json.dumps(self.entity) != self.__original:
-            if 'labels' in self.entity and 'ak' in self.entity['labels']:
-                self.entity['labels'].pop('ak')
-            if 'aliases' in self.entity and 'ak' in self.entity['aliases']:
-                self.entity['aliases'].pop('ak')
+        if 'labels' in self.entity and 'ak' in self.entity['labels']:
+            self.entity['labels'].pop('ak')
+        if 'aliases' in self.entity and 'ak' in self.entity['aliases']:
+            self.entity['aliases'].pop('ak')
 
-            data = {'data': json.dumps(self.entity), 'summary': self.get_summary()}
-            if 'id' in self.entity:
-                data['id'] = self.entity['id']
-                data['baserevid'] = self.entity['lastrevid']
-            else:
-                data['new'] = 'item'
+        data = {'data': json.dumps(self.entity), 'summary': self.get_summary()}
+        if 'id' in self.entity:
+            data['id'] = self.entity['id']
+            data['baserevid'] = self.entity['lastrevid']
+        else:
+            data['new'] = 'item'
 
-            if response := Wikidata.edit(data, 'wbeditentity'):
-                if 'nochange' not in response['entity']:
-                    self.set_qid(response['entity']['id'])
-                    self.trace('modified' if 'id' in data else 'created')
-                    return self.qid
-                # else:  # Too many
-                #     self.trace('no change while saving {}'.format(data['data']))
+        if response := Wikidata.edit(data, 'wbeditentity'):
+            if 'nochange' not in response['entity']:
+                self.set_qid(response['entity']['id'])
+                self.trace('modified' if 'id' in data else 'created')
+                return self.qid
+            # else:  # Too many
+            #     self.trace('no change while saving {}'.format(data['data']))
 
     def apply(self, parsed_data: Model):
         if parsed_data:
             if self.external_id != parsed_data.external_id:
                 self.trace('"{}" will be replaced with "{}"'.format(self.external_id, parsed_data.external_id))
                 self.external_id = parsed_data.external_id
+                if self.qid is None and (qid := self.get_qid()):
+                    self.set_qid(qid)
 
-            if not self.is_bad_id(self.external_id):
-                if self.qid:  # is not None
-                    type(self).__cache[self.external_id] = self.qid
-                elif self.external_id not in type(self).__cache:  # and (self.qid is None)
-                    type(self).__cache[self.external_id] = None  # Because next line might raise exception
-                    if self.set_qid(self.haswbstatement(self.external_id)):
-                        self.trace('primary cache miss "{}"'.format(self.external_id))
-                else:  # if (self.external_id in type(self).__cache) and (qid is None)
-                    self.set_qid(type(self).__cache[self.external_id])
+            if self.qid is None:
+                self.set_qid(parsed_data.get_qid())
 
             for snak in parsed_data.input_snaks:
                 if (claim := self.obtain_claim(snak)) and (claim['mainsnak']['datatype'] != 'external-id'):
@@ -618,7 +636,7 @@ class Element:
     @classmethod
     def get_by_id(cls, external_id: str, forced: bool = False):
         """Attempt to find qid by external_id or create it"""
-        if not cls.is_bad_id(external_id):
+        if (external_id not in cls.get_cache()) or (cls.get_cache()[external_id]):
             try:
                 instance = cls(external_id)
             except ValueError as e:
@@ -637,17 +655,10 @@ class Element:
             return instance if instance.qid else None
 
     @classmethod
-    def is_bad_id(cls, external_id: str, reset=None) -> bool:
+    def get_cache(cls, reset=None) -> dict:
         if reset is not None:
-            cls.__existing, cls.__cache = reset, reset
-        elif cls.__existing is None:
+            cls.__cache = reset
+        elif cls.__cache is None:
             sparql = 'SELECT ?c ?i {{ ?i p:{}/ps:{} ?c }}'.format(cls._model.property, cls._model.property)
-            cls.__existing = result if (result := Wikidata.query(sparql)) else {}
-
-        if external_id in cls.__existing:
-            cls.__cache[external_id] = cls.__existing.pop(external_id)
-        return (external_id in cls.__cache) and cls.__cache[external_id] is None
-
-    @classmethod
-    def get_remaining(cls):
-        return cls.__existing.keys()
+            cls.__cache = result if (result := Wikidata.query(sparql)) else {}
+        return cls.__cache

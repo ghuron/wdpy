@@ -139,7 +139,7 @@ class Model(wd.Model):
 
 
 class Element(wd.Element):
-    __const, _model, __cache, __existing = None, Model, {}, {}
+    __const, _model = None, Model
 
     def obtain_claim(self, snak):
         snak['decorators'] = snak['decorators'] if 'decorators' in snak else {}

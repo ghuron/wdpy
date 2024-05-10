@@ -14,23 +14,19 @@ class TestPreload(TestCase):
     @mock.patch('wd.Wikidata.load')
     def test_simple_load(self, mock_load: MagicMock, _):
         mock_load.return_value = {'Q1111': self.q1.entity}
-        Claim._preload([Claim._create_ref('Q1111', {})])
+        Claim.preload({'Q1111'})
         self.assertEqual(20220202, Claim._pub_dates['Q1111'])
-
-        mock_load.reset_mock()  # Subsequent preload should not invoke Wikidata.load()
-        Claim._preload([Claim._create_ref('Q1111', {})])
-        mock_load.assert_not_called()
+        # Subsequent preload should be skipped
+        self.assertEqual(0, len(Claim.extract_references({'references': [Claim._create_ref('Q1111', {})]})))
 
     @mock.patch('wd.Wikidata.type_of', return_value='wikibase-item')
     @mock.patch('wd.Wikidata.load')
     def test_redirect_load(self, mock_load, _):
         mock_load.return_value = {'Q2222': {'redirects': {'to': 'Q1111'}}}
-        Claim._preload([Claim._create_ref('Q2222', {})])
+        Claim.preload({'Q2222'})
         self.assertEqual('Q1111', Claim._redirects['Q2222'])
-
-        mock_load.reset_mock()  # Subsequent preload should not invoke Wikidata.load()
-        Claim._preload([Claim._create_ref('Q2222', {})])
-        mock_load.assert_not_called()
+        # Subsequent preload should be skipped
+        self.assertEqual(0, len(Claim.extract_references({'references': [Claim._create_ref('Q2222', {})]})))
 
 
 @mock.patch('wd.Wikidata.type_of', return_value='wikibase-item')

@@ -8,21 +8,19 @@ class Model(adql.Model):
 
     def __init__(self, external_id: str, snaks: list = None):
         super().__init__(external_id, snaks)
-        self.doi = None
+        self.__doi = None
 
     def construct_snak(self, row, col, new_col=None):
         if col == 'p356':
-            self.doi = row[col] = row[col].upper()
+            self.__doi = row[col] = row[col].upper()
         super().construct_snak(row, col, new_col)
+
+    def get_qid(self):
+        return Element.haswbstatement(self.__doi, 'P356') if self.__doi else None
 
 
 class Element(adql.Element):
-    _model, _claim, __cache, __existing = Model, type('Claim', (wd.Claim,), {'db_ref': 'Q654724'}), {}, None
-
-    def apply(self, parsed_data: Model):
-        if parsed_data and parsed_data.doi and (self.qid is None):
-            self.set_qid(Element.haswbstatement(parsed_data.doi, 'P356'))
-        super().apply(parsed_data)
+    _model, _claim, __cache = Model, type('Claim', (wd.Claim,), {'db_ref': 'Q654724'}), None
 
     def save(self):
         return super().save() if self.qid else None  # ToDo: item creation

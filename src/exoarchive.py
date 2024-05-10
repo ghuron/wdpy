@@ -8,7 +8,7 @@ import wd
 
 
 class Model(adql.Model):
-    property = 'P5667'
+    property, __ids = 'P5667', None
 
     @classmethod
     def next(cls):
@@ -46,19 +46,15 @@ class Model(adql.Model):
                 pass
         return model
 
+    def get_qid(self):
+        if not Model.__ids:
+            Model.__ids = wd.Wikidata.query('SELECT ?iLabel ?i {?i wdt:P5653 [] MINUS {?i wdt:P5667 []} ' +
+                                            'SERVICE wikibase:label { bd:serviceParam wikibase:language "en" }}')
+        return Model.__ids[self.external_id] if self.external_id in Model.__ids else None
+
 
 class Element(adql.Element):
-    __ids, __cache, __existing = None, {}, None
-    _model, _claim = Model, type('Claim', (wd.Claim,), {'db_ref': 'Q5420639'})
-
-    def apply(self, parsed_data):
-        if not self.qid:
-            if not Element.__ids:
-                Element.__ids = wd.Wikidata.query('SELECT ?iLabel ?i {?i wdt:P5653 [] MINUS {?i wdt:P5667 []} ' +
-                                                  'SERVICE wikibase:label { bd:serviceParam wikibase:language "en" }}')
-            if self.external_id in Element.__ids:  # Try to reuse item from exoplanet.eu
-                self.set_qid(Element.__ids[self.external_id])
-        super().apply(parsed_data)
+    _model, _claim, __cache = Model, type('Claim', (wd.Claim,), {'db_ref': 'Q5420639'}), None
 
     def obtain_claim(self, snak):
         if snak and snak['property'] == 'P528':  # All catalogue codes for exoplanets should be aliases
@@ -68,27 +64,24 @@ class Element(adql.Element):
         return super().obtain_claim(snak)
 
     @classmethod
-    def is_bad_id(cls, external_id: str, reset=None) -> bool:
+    def get_cache(cls, reset=None) -> dict:
         def resolve_redirects(new, _):
             norm_id = new[0].replace('KOI-', 'K0')
             return (redirect[norm_id][0]['pl_name'] if norm_id in redirect else new[0]), new[1]
 
-        if cls.__existing is None:
+        if cls.__cache is None:
             redirect = Model.tap_query(Model.config('endpoint'), Model.config('redirects'))
-            cls.__existing = wd.Wikidata.query('SELECT ?id ?item {?item p:P5667/ps:P5667 ?id}', resolve_redirects)
-        return super().is_bad_id(external_id, reset)
+            cls.__cache = wd.Wikidata.query('SELECT ?id ?item {?item p:P5667/ps:P5667 ?id}', resolve_redirects)
+        return super().get_cache(reset)
 
 
 if Model.initialize(__file__):  # if not imported
     # Element.get_by_id('EPIC 210754593b', forced=True)  # uncomment to debug specific item only
-    postponed = []
-    while chunk := Model.next():
-        logging.info('Updating {} mandatory items'.format(len(chunk)))
-        for ex_id in sorted(chunk):
-            Element.get_by_id(ex_id, forced=True)
-
-    logging.info('Updating {} optional items'.format(len(Element.get_remaining())))
-    for ex_id in sorted(Element.get_remaining()):
+    wd_items, ex_items = sorted(Element.get_cache().keys()), sorted(Model.next())  # Preload both
+    logging.info('Start updating {} existing items'.format(len(wd_items)))
+    for ex_id in wd_items:
         Element.get_by_id(ex_id, forced=True)
-
-    logging.info('Processing {} presumably new items'.format(len(postponed)))
+    logging.info('Finish updating existing items')
+    for ex_id in ex_items:
+        if ex_id not in Element.get_cache():  # not wd_items!
+            Element.get_by_id(ex_id, forced=True)
