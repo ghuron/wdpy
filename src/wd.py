@@ -379,7 +379,7 @@ class Claim:
         """ Resolve redirects and merge P248 duplicates"""
         result, prior = [], {}
         for ref in references:
-            if 'P248' in ref['snaks']:
+            if ('P248' in ref['snaks']) and (len(ref['snaks']) == 1):
                 if (_id := ref['snaks']['P248'][0]['datavalue']['value']['id']) in Claim._redirects:
                     ref['snaks']['P248'][0]['datavalue']['value']['id'] = (_id := Claim._redirects[_id])
                 if _id in prior:
