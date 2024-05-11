@@ -369,8 +369,9 @@ class Claim:
                 p577 = None
                 if 'redirects' in item:
                     Claim._redirects[ref_id] = item['redirects']['to']
-                if 'claims' in item and 'P577' in item['claims']:
-                    p577 = item['claims']['P577'][0]['mainsnak']['datavalue']['value']
+                if ('claims' in item) and ('P577' in item['claims']):
+                    if 'datavalue' in (item['claims']['P577'][0]['mainsnak']):
+                        p577 = item['claims']['P577'][0]['mainsnak']['datavalue']['value']
                 Claim._pub_dates[ref_id] = int(Model.serialize(p577)) if p577 else None
 
     @staticmethod
