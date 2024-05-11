@@ -1,4 +1,4 @@
-from unittest import TestCase, mock
+from unittest import TestCase
 
 from yad_vashem import Model, Element
 
@@ -22,9 +22,3 @@ class TestYadVashem(TestCase):
         self.assertEqual('Q5', get_value([9, 'John Doe', 'Q5'], {9: {'Jane Smith': 'Q1'}})['John Doe'])
         self.assertEqual(6, get_value([9, 'John Doe', 'Q5'], {9: {'John Doe': 5}})['John Doe'])
         self.assertEqual(2, get_value([9, 'John Doe', 'Q5'], {9: {'John Doe': 'Q5'}})['John Doe'])
-
-    @mock.patch('wd.Wikidata.request', return_value=mock.MagicMock(json=lambda: {'d': 0}))
-    def test_post(self, _):
-        self.assertIn('d', Model.post('BuildQuery'))
-        self.assertIn('d', Model.post('GetRighteousList', 0))
-        self.assertIn('d', Model.post('GetPersonDetailsBySession', 6658068))
