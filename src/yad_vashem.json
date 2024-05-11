@@ -215,7 +215,7 @@
     "HABERDASHER": "Q17305512",
     "HABERDASHERY": "Q17305512",
     "HAIRDRESSER": "Q55187",
-    "HANDICRAFT": "Q19101121",
+    "HANDICRAFT": "Q11479517",
     "HANGING": "Q175111",
     "HATTER": "Q1639239",
     "HEAD GARDENER": "Q5689301",
@@ -285,7 +285,7 @@
     "MANUAL WORKER": "Q12713481",
     "MANUFACTURER": "Q13235160",
     "MASS KILLING": "Q750215",
-    "MATH TEACHER": "Q42418493",
+    "MATH TEACHER": "Q29182003",
     "MATHEMATICIAN": "Q170790",
     "MATRON": "Q1396008",
     "MAYOR": "Q30185",
@@ -503,11 +503,6 @@
     "WOUNDS": "Q16861372",
     "WRITER": "Q36180",
     "YUGOSLAVIA": "Q36704"
-  },
-  "api": {
-    "BuildQuery": "{{lang:\"eng\",uniqueId:\"987\", strSearch:\"\",newSearch:true,clearFilter:true,searchType:\"righteous_only\"}}",
-    "GetRighteousList": "{{lang:\"eng\",uniqueId:\"987\",searchType:\"righteous_only\",rowNum:{},sort:{{dir:\"\",field:\"\"}}}}",
-    "GetPersonDetailsBySession": "{{lang:\"eng\",bookId:\"{}\"}}"
   },
   "properties": {
     "recognition_date": "P585",

@@ -3,13 +3,21 @@ import json
 import logging
 import traceback
 
-import requests
-
 import wd
 
 
 class Model(wd.Model):
-    property = 'P1979'
+    property, __offset = 'P1979', 0
+
+    @classmethod
+    def next(cls):
+        pattern = 'https://yv360.yadvashem.org/api/Search/GetDataResultsQuery?pageNumber={}&pageSize=10&cardType=card'
+        payload = {"filters": {"filters": [{"fieldName": "data_bank", "values": ["righteous"]}]}, "currentTab": {}}
+        result, Model.__offset = [], Model.__offset + 1
+        if response := wd.Wikidata.request(pattern.format(Model.__offset), json=payload):
+            for card in response.json()['cards']:
+                result.append(card['id'])
+        return result
 
     @staticmethod
     def process_sparql_row(new, result):
@@ -22,45 +30,26 @@ class Model(wd.Model):
         else:
             return new[0], {**result[new[0]], new[1]: 2}  # convert to duplication count
 
-    __endpoint = requests.Session()
-    __endpoint.verify = False
-    __endpoint.headers.update({'Content-Type': 'application/json'})
-
-    @staticmethod
-    def post(method: str, num=0):
-        try:
-            if response := wd.Wikidata.request('https://righteous.yadvashem.org/RighteousWS.asmx/' + method,
-                                               Model.__endpoint, data=Model.config('api', method).format(num)):
-                return response.json()
-        except json.decoder.JSONDecodeError:
-            logging.error('Cannot decode {} response for {}'.format(method, num))
-
-    @staticmethod
-    def get_next_chunk(offset):
-        page, result = Model.post('GetRighteousList', (offset := 0 if offset is None else offset)), []
-        for case_item in page['d']:
-            result.append(str(case_item['BookId']))
-        return result, offset + len(result)
-
-    _rows, items, group_id = {}, {}, None
+    _rows, group_id = {}, None
 
     @staticmethod
     def extract(case_id, people: dict):
-        Element._rows, Element._items, Element._group_id = {}, {}, case_id
-        if case := Model.post('GetPersonDetailsBySession', case_id):
+        Model._rows, Model.group_id = {}, case_id
+        if case := wd.Wikidata.request(
+                'https://yv360.yadvashem.org/api/Righteous/GetFullDetails?lang=en&id=' + case_id).json():
             result, remaining = {}, []
-            for row in case['d']['Individuals']:
-                if row['Title'] is not None:
-                    row['Title'] = ' '.join(row['Title'].split())  # Fix multiple spaces
-                    Element._rows[row['Title']] = row['Details']  # Save for future parsing
-                    if row['Title'] in people:  # Find match is wikidata
-                        if isinstance(people[row['Title']], int):
-                            people[row['Title']] -= 1  # Counting how many are in Yad Vashem database
+            for row in case['righteousList']:
+                if row['title'] is not None:
+                    row['title'] = ' '.join(row['title'].split())  # Fix multiple spaces
+                    Model._rows[row['title']] = row['details']  # Save for future parsing
+                    if row['title'] in people:  # Find match is wikidata
+                        if isinstance(people[row['title']], int):
+                            people[row['title']] -= 1  # Counting how many are in Yad Vashem database
                         else:
-                            result[row['Title']] = people[row['Title']]  # Will process as normal match
-                            del people[row['Title']]  # Remove from the source
+                            result[row['title']] = people[row['title']]  # Will process as normal match
+                            del people[row['title']]  # Remove from the source
                     else:
-                        remaining.append(row['Title'])  # No match, save for future analysis
+                        remaining.append(row['title'])  # No match, save for future analysis
 
             if len(people) == 0:  # Copy remaining names to be created
                 for named_as in remaining:
@@ -76,36 +65,41 @@ class Model(wd.Model):
                     else:
                         Element.info(case_id, named_as, 'https://wikidata.org/wiki/' + people[named_as] + ' missing')
 
-            if loaded := wd.Wikidata.load(set(filter(lambda x: isinstance(x, str), result.values()))):
-                Element._items = loaded
-                return result
+            return result
 
         Element.info(case_id, '', 'could not load items, skipping')
         return {}
 
     @classmethod
-    def prepare_data(cls, external_id: str) -> []:
-        input_snaks = [Model.create_snak(Model.property, Model.group_id)]
-        input_snaks[0]['qualifiers'] = {'P1810': external_id}
-        input_snaks.append(cls.create_snak('P31', 'Q5'))
-        input_snaks.append(cls.create_snak('P166', 'Q112197'))
+    def prepare_data(cls, external_id: str):
+        (snak := Model.create_snak(Model.property, Model.group_id))['qualifiers'] = {'P1810': external_id}
+        result = Model(external_id, [snak])
+        result.input_snaks.append(cls.create_snak('P31', 'Q5'))
+        result.input_snaks.append(cls.create_snak('P166', 'Q112197'))
         for element in Model._rows[external_id]:
-            if property_id := Model.config('properties', element['Title']):
-                input_snaks.append(cls.create_snak(property_id, element['Value']))
-        return input_snaks
+            if property_id := Model.config('properties', element['title']):
+                for val in element['value']:
+                    result.input_snaks.append(cls.create_snak(property_id, val['value']))
+        return result
 
 
 class Element(wd.Element):
-    wd.Claim.db_ref = 'Q77598447'
+    _model, _claim, __cache, _items = Model, type('Claim', (wd.Claim,), {'db_ref': 'Q77598447'}), {}, {}
 
-    def __init__(self, named_as, qid):
+    def __init__(self, named_as, qid=None):
         super().__init__(named_as, qid)
         self.award_cleared_qualifiers = []
+
+    @staticmethod
+    def load(items: dict):
+        Element.get_cache(reset=items)
+        Element._items = wd.Wikidata.load(set(filter(lambda x: isinstance(x, str), items.values())))
 
     @property
     def entity(self) -> dict:
         if not self._entity:
-            self._entity = Model.items[self.qid] if self.qid in Model.items else {'labels': {}, 'claims': {}}
+            self._entity = Element._items[self.qid] if self.qid in Element._items else {'labels': {}, 'claims': {}}
+            self.__original = json.dumps(self._entity)
         return self._entity
 
     def obtain_claim(self, snak):
@@ -149,15 +143,15 @@ class Element(wd.Element):
 
 
 if Model.initialize(__file__):  # if not imported
-    Model.post('BuildQuery')
     QUERY = 'SELECT ?r ?n ?i { ?i wdt:P31 wd:Q5; p:P1979 ?s . ?s ps:P1979 ?r OPTIONAL {?s pq:P1810 ?n}}'
-    groups = Model.get_all_items(QUERY, Model.process_sparql_row)
+    groups = wd.Wikidata.query(QUERY, Model.process_sparql_row)
 
     for _id in groups:
         try:
             # _id = '4022505'  # uncomment to debug specific group of people
             if wd_items := Model.extract(_id, groups[_id]):
+                Element.load(wd_items)
                 for name in wd_items:
-                    Element(name, wd_items[name]).update(Model.prepare_data(name))
+                    Element.get_by_id(name, forced=True)
         except Exception as e:
             logging.critical('while processing {}. {}'.format(_id, traceback.format_exc()))
