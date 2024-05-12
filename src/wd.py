@@ -329,7 +329,7 @@ class Claim:
     def __get_snaks(reference: {}, property_id: str) -> []:
         result = []
         for ref in reference['snaks'][property_id] if property_id in reference['snaks'] else []:
-            result.append(ref['datavalue']['value']['id'])
+            result.append(v['id'] if 'id' in (v := ref['datavalue']['value']) else v)
         return result
 
     @staticmethod
@@ -379,7 +379,7 @@ class Claim:
         """ Resolve redirects and merge P248 duplicates"""
         result, prior = [], {}
         for ref in references:
-            if ('P248' in ref['snaks']) and (len(ref['snaks']) == 1):
+            if set(ref['snaks'].keys()) <= {'P248', 'P12132', 'P5997'}:
                 if (_id := ref['snaks']['P248'][0]['datavalue']['value']['id']) in Claim._redirects:
                     ref['snaks']['P248'][0]['datavalue']['value']['id'] = (_id := Claim._redirects[_id])
                 if _id in prior:
@@ -388,9 +388,9 @@ class Claim:
                             if 'P12132' not in prior[_id]['snaks']:
                                 prior[_id]['snaks']['P12132'] = []
                             prior[_id]['snaks']['P12132'].append(p12132)
-                    for property_id in ref['snaks']:
-                        if property_id not in prior[_id]['snaks']:
-                            prior[_id]['snaks'][property_id] = ref['snaks'][property_id]
+                    p5997 = sorted(Claim.__get_snaks(prior[_id], 'P5997') + Claim.__get_snaks(ref, 'P5997'))
+                    if len(p5997) > 0:
+                        prior[_id]['snaks']['P5997'] = [Model.create_snak('P5997', p5997[0])]
                     if 'wdpy' in ref:
                         prior[_id]['wdpy'] = 1
                     continue  # do not add into results
