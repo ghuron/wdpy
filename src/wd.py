@@ -329,7 +329,7 @@ class Claim:
     def __get_snaks(reference: {}, property_id: str) -> []:
         result = []
         for ref in reference['snaks'][property_id] if property_id in reference['snaks'] else []:
-            result.append(v['id'] if 'id' in (v := ref['datavalue']['value']) else v)
+            result.append(v['id'] if isinstance(v := ref['datavalue']['value'], dict) and 'id' in v else v)
         return result
 
     @staticmethod
