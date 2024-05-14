@@ -302,10 +302,10 @@ class Claim:
         if 'qualifiers' in snak:
             self.claim['qualifiers'] = self.claim['qualifiers'] if 'qualifiers' in self.claim else {}
             for p_id in snak['qualifiers']:
-                if (snak := Model.create_snak(p_id, snak['qualifiers'][p_id])) and (p_id in self.claim['qualifiers']):
-                    if Model.equals(self.claim['qualifiers'][p_id][0], snak['datavalue']['value']):
+                if new_qualifier := Model.create_snak(p_id, snak['qualifiers'][p_id]):
+                    if Model.equals(self.claim['qualifiers'][p_id][0], new_qualifier['datavalue']['value']):
                         continue
-                self.claim['qualifiers'][p_id] = [snak]
+                self.claim['qualifiers'][p_id] = [new_qualifier]
 
         if ('source' in snak) or (self.claim['mainsnak']['datatype'] != 'external-id'):  # ToDo why we need such if?
             self.claim['references'] = self.claim['references'] if 'references' in self.claim else []
