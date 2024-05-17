@@ -3,12 +3,11 @@ import logging
 from decimal import Decimal, InvalidOperation
 from urllib.parse import quote_plus
 
-import adql
 import wd
 
 
-class Model(adql.Model):
-    property, __ids = 'P5667', None
+class Model(wd.TAPClient):
+    property, db_ref, __ids = 'P5667', 'Q5420639', None
 
     @classmethod
     def next(cls):
@@ -35,7 +34,7 @@ class Model(adql.Model):
         prefix, response = 'https://exoplanetarchive.ipac.caltech.edu/cgi-bin/Lookup/nph-aliaslookup.py?objname=', None
         if content := wd.Wikidata.request(prefix + quote_plus(external_id)):
             if 'resolved_name' not in (response := content.json())['manifest']:
-                raise ValueError()
+                return
             external_id = response['manifest']['resolved_name']
 
         if (model := super().prepare_data(external_id)) and response:
@@ -53,8 +52,8 @@ class Model(adql.Model):
         return Model.__ids[self.external_id] if self.external_id in Model.__ids else None
 
 
-class Element(adql.Element):
-    _model, _claim, __cache = Model, type('Claim', (wd.Claim,), {'db_ref': 'Q5420639'}), None
+class Element(wd.AstroItem):
+    _model, __cache = Model, None
 
     def obtain_claim(self, snak):
         if snak and snak['property'] == 'P528':  # All catalogue codes for exoplanets should be aliases
@@ -70,13 +69,13 @@ class Element(adql.Element):
             return (redirect[norm_id][0]['pl_name'] if norm_id in redirect else new[0]), new[1]
 
         if cls.__cache is None:
-            redirect = Model.tap_query(Model.config('endpoint'), Model.config('redirects'))
+            redirect = Model.query(Model.config('endpoint'), Model.config('redirects'))
             cls.__cache = wd.Wikidata.query('SELECT ?id ?item {?item p:P5667/ps:P5667 ?id}', resolve_redirects)
         return super().get_cache(reset)
 
 
 if Model.initialize(__file__):  # if not imported
-    # Element.get_by_id('EPIC 210754593b', forced=True)  # uncomment to debug specific item only
+    # Element.get_by_id('30 Ari B b', forced=True).save()  # uncomment to debug specific item only
     wd_items, ex_items = sorted(Element.get_cache().keys()), sorted(Model.next())  # Preload both
     logging.info('Start updating {} existing items'.format(len(wd_items)))
     for ex_id in wd_items:
@@ -84,4 +83,4 @@ if Model.initialize(__file__):  # if not imported
     logging.info('Finish updating existing items')
     for ex_id in ex_items:
         if ex_id not in Element.get_cache():  # not wd_items!
-            Element.get_by_id(ex_id, forced=True)
+            Element.get_by_id(ex_id, forced=True).save()

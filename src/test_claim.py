@@ -33,50 +33,47 @@ class TestPreload(TestCase):
 class TestRemoveDuplicates(TestCase):
     def test_simple_duplicate_no_wdpy(self, _):
         ref = Claim._create_ref('Q1111', {})
-        self.assertEqual(1, len(result := Claim._remove_duplicates([ref, ref])))
+        self.assertEqual(1, len(result := Claim._remove_duplicates([ref, ref], {'P248'})))
         self.assertNotIn('wdpy', result[0])
 
     def test_simple_duplicate_combined_wdpy(self, _):
         ref = Claim._create_ref('Q1111', {})
-        self.assertEqual(1, len(result := Claim._remove_duplicates([ref, {**ref, 'wdpy': 1}])))
+        self.assertEqual(1, len(result := Claim._remove_duplicates([ref, {**ref, 'wdpy': 1}], {'P248'})))
         self.assertIn('wdpy', result[0])
 
 
 @mock.patch('wd.Wikidata.type_of', return_value='wikibase-item')
 class TestConfirms(TestCase):
-    def setUp(self):
-        Claim.db_ref = 'Q654724'
-
     def test_own_P248(self, _):
-        p248 = Claim._create_ref(Claim.db_ref, {})
-        self.assertEqual(0, len(Claim._confirms([p248])))
-        self.assertCountEqual([p248], Claim._confirms([{**p248, 'wdpy': 1}]))
+        p248 = Claim._create_ref('Q654724', {})
+        self.assertEqual(0, len(Claim._confirms([p248], 'Q654724')))
+        self.assertCountEqual([p248], Claim._confirms([{**p248, 'wdpy': 1}], 'Q654724'))
 
-        p12132 = {'snaks': {'P12132': [Model.create_snak('P12132', Claim.db_ref)]}}
-        self.assertCountEqual([p12132], Claim._confirms([{**p248, 'wdpy': 1}, {**p12132, 'wdpy': 1}]))
-        self.assertCountEqual([p12132], Claim._confirms([{**p12132, 'wdpy': 1}, {**p248, 'wdpy': 1}]))
+        p12132 = {'snaks': {'P12132': [Model.create_snak('P12132', 'Q654724')]}}
+        self.assertCountEqual([p12132], Claim._confirms([{**p248, 'wdpy': 1}, {**p12132, 'wdpy': 1}], 'Q654724'))
+        self.assertCountEqual([p12132], Claim._confirms([{**p12132, 'wdpy': 1}, {**p248, 'wdpy': 1}], 'Q654724'))
 
     def test_foreign_P248(self, _):
-        p248 = Claim._create_ref(Claim.db_ref + '1', {})
-        self.assertCountEqual([p248], Claim._confirms([p248]))
+        p248 = Claim._create_ref('Q654724' + '1', {})
+        self.assertCountEqual([p248], Claim._confirms([p248], 'Q654724'))
 
-        p12132 = {'snaks': {'P12132': [Model.create_snak('P12132', Claim.db_ref + '1')]}}
-        self.assertCountEqual([p248, p12132], Claim._confirms([{**p248, 'wdpy': 1}, {**p12132, 'wdpy': 1}]))
-        self.assertCountEqual([p248, p12132], Claim._confirms([{**p12132, 'wdpy': 1}, {**p248, 'wdpy': 1}]))
+        p12132 = {'snaks': {'P12132': [Model.create_snak('P12132', 'Q654724' + '1')]}}
+        self.assertCountEqual([p248, p12132], Claim._confirms([{**p248, 'wdpy': 1}, {**p12132, 'wdpy': 1}], 'Q654724'))
+        self.assertCountEqual([p248, p12132], Claim._confirms([{**p12132, 'wdpy': 1}, {**p248, 'wdpy': 1}], 'Q654724'))
 
     def test_non_confirmed_P12132(self, _):
-        own = Model.create_snak('P12132', Claim.db_ref)
-        self.assertEqual(0, len(Claim._confirms([{'snaks': {'P12132': [own]}}])))
+        own = Model.create_snak('P12132', 'Q654724')
+        self.assertEqual(0, len(Claim._confirms([{'snaks': {'P12132': [own]}}], 'Q654724')))
 
-        foreign = Model.create_snak('P12132', Claim.db_ref + '1')
-        self.assertEqual({'snaks': {'P12132': [foreign]}}, Claim._confirms([{'snaks': {'P12132': [own, foreign]}}])[0])
+        foreign = Model.create_snak('P12132', 'Q654724' + '1')
+        self.assertEqual({'snaks': {'P12132': [foreign]}},
+                         Claim._confirms([{'snaks': {'P12132': [own, foreign]}}], 'Q654724')[0])
 
 
 class TestProcessDecorators(TestCase):
     @mock.patch('wd.Wikidata.type_of', return_value='wikibase-item')
     def test_decorator(self, _):
-        Claim.db_ref = 'Q1'
-        (claim := Claim({})).process_decorators({'decorators': {'P12132': 'Q2'}, 'source': []})
+        (claim := Claim({})).process_decorators({'decorators': {'P12132': 'Q2'}, 'source': []}, 'Q1')
         self.assertEqual('Q1', claim.claim['references'][0]['snaks']['P248'][0]['datavalue']['value']['id'])
         self.assertEqual('Q2', claim.claim['references'][0]['snaks']['P12132'][0]['datavalue']['value']['id'])
 
@@ -142,5 +139,4 @@ class TestFindMorePreciseClaim(TestCase):
 class TestCreateRef(TestCase):
     @mock.patch('wd.Wikidata.type_of', return_value='wikibase-item')
     def test_db_ref(self, _):
-        Claim.db_ref = 'Q1385430'
-        self.assertNotIn('P12132', Claim._create_ref(Claim.db_ref, {'P12132': Claim.db_ref})['snaks'])
+        self.assertNotIn('P12132', Claim._create_ref('Q1385430', {'P12132': 'Q1385430'})['snaks'])

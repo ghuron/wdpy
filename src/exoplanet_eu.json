@@ -64,6 +64,12 @@
     "sSortDir_0": "desc",
     "status_1": "on"
   },
+  "references": [
+    "P248",
+    "P5653",
+    "P5997",
+    "P12132"
+  ],
   "P528": {
     "id": "P972",
     "translate": {

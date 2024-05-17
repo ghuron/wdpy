@@ -11,7 +11,8 @@ import time
 import uuid
 from contextlib import closing
 from datetime import datetime
-from decimal import Decimal, DecimalException
+from decimal import Decimal, DecimalException, InvalidOperation
+from urllib.parse import unquote
 
 import requests
 
@@ -118,7 +119,7 @@ class Wikidata:
 
 
 class Model:
-    property, _config = None, {}
+    property, db_ref, _config = None, None, {}
 
     @classmethod
     def initialize(cls, file_name: str) -> bool:
@@ -239,7 +240,7 @@ class Model:
             except (ValueError, DecimalException, KeyError):
                 return None
         elif snak['datatype'] == 'wikibase-item':
-            if not re.search('Q\\d+$', (value := cls.lut(value))):
+            if not (value := cls.lut(value)) or not re.search('Q\\d+$', value):
                 return None
             snak['datavalue'] = {'type': 'wikibase-entityid', 'value': {'entity-type': 'item', 'id': value}}
         elif snak['datatype'] == 'time':
@@ -280,9 +281,6 @@ class Model:
 
 
 class Claim:
-    __slots__ = 'claim'
-    db_ref = None
-
     def __init__(self, claim: dict):
         self.claim = claim
 
@@ -293,24 +291,25 @@ class Claim:
         if 'datavalue' in snak and isinstance(snak['datavalue']['value'], dict) and 'id' in snak['datavalue']['value']:
             if ident == snak['datavalue']['value']['id']:
                 return
-        (claim := cls({'type': 'statement', 'mainsnak': snak})).process_decorators(snak)
+        claim = Claim({'type': 'statement', 'mainsnak': snak})
         if ident:  # can be full claim id or just qid
             claim.claim['id'] = ident if '$' in ident else ident + '$' + str(uuid.uuid4())
         return claim
 
-    def process_decorators(self, snak: dict):
+    def process_decorators(self, snak: dict, db_ref: str):
         if 'qualifiers' in snak:
-            self.claim['qualifiers'] = self.claim['qualifiers'] if 'qualifiers' in self.claim else {}
             for p_id in snak['qualifiers']:
                 if new_qualifier := Model.create_snak(p_id, snak['qualifiers'][p_id]):
-                    if Model.equals(self.claim['qualifiers'][p_id][0], new_qualifier['datavalue']['value']):
-                        continue
-                self.claim['qualifiers'][p_id] = [new_qualifier]
+                    self.claim['qualifiers'] = self.claim['qualifiers'] if 'qualifiers' in self.claim else {}
+                    if p_id in self.claim['qualifiers']:
+                        if Model.equals(self.claim['qualifiers'][p_id][0], new_qualifier['datavalue']['value']):
+                            continue
+                    self.claim['qualifiers'][p_id] = [new_qualifier]
 
         if ('source' in snak) or (self.claim['mainsnak']['datatype'] != 'external-id'):  # ToDo why we need such if?
             self.claim['references'] = self.claim['references'] if 'references' in self.claim else []
             sources = set(snak['source']) if 'source' in snak else set()
-            sources = {self.db_ref} | sources if self.db_ref else sources
+            sources = {db_ref} | sources if db_ref else sources
             decorator = snak['decorators'] if 'decorators' in snak else {}
             for src_id in sources:
                 self.claim['references'].append({**Claim._create_ref(src_id, decorator), 'wdpy': 1})
@@ -346,12 +345,11 @@ class Claim:
     def save(self, summary):
         Wikidata.edit(data={'summary': summary, 'claim': json.dumps(self.claim)}, method='wbsetclaim')
 
-    def check_if_no_refs(self) -> bool:
-        if 'remove' not in self.claim:
-            refs = self.claim['references'] if 'references' in self.claim else []
-            if len(new_refs := self._confirms(self._remove_duplicates(refs))) == 0 and len(refs) > 0:
-                return True
-            self.claim['references'] = new_refs
+    def check_if_no_refs(self, db_ref: str, ref_properties: set) -> bool:
+        if 'remove' not in self.claim and ('references' in self.claim):
+            self.claim['references'] = self._remove_duplicates(self.claim['references'], ref_properties)
+            self.claim['references'] = self._confirms(self.claim['references'], db_ref)
+            return len(self.claim['references']) == 0
 
     @classmethod
     def extract_references(cls, claim: dict):
@@ -375,11 +373,11 @@ class Claim:
                 Claim._pub_dates[ref_id] = int(Model.serialize(p577)) if p577 else None
 
     @staticmethod
-    def _remove_duplicates(references: []) -> []:
+    def _remove_duplicates(references: [], ref_properties: set) -> []:
         """ Resolve redirects and merge P248 duplicates"""
         result, prior = [], {}
         for ref in references:
-            if set(ref['snaks'].keys()) <= {'P248', 'P12132', 'P5997'}:
+            if set(ref['snaks'].keys()) <= ref_properties:
                 if (_id := ref['snaks']['P248'][0]['datavalue']['value']['id']) in Claim._redirects:
                     ref['snaks']['P248'][0]['datavalue']['value']['id'] = (_id := Claim._redirects[_id])
                 if _id in prior:
@@ -398,20 +396,20 @@ class Claim:
             result.append(ref)
         return result
 
-    @classmethod
-    def _confirms(cls, references: []) -> []:
+    @staticmethod
+    def _confirms(references: [], db_ref: str) -> []:
         result, aggregator, aggregator_needed = [], None, True
         for ref in references:
             if ref.pop('wdpy', 0):
-                if cls.db_ref in Claim.__get_snaks(ref, 'P248'):
+                if db_ref in Claim.__get_snaks(ref, 'P248'):
                     aggregator = ref
                 else:
                     aggregator_needed = False
                     result.append(ref)  # .confirm(ref, self))
-            elif cls.db_ref not in Claim.__get_snaks(ref, 'P248'):
+            elif db_ref not in Claim.__get_snaks(ref, 'P248'):
                 if 'P12132' in ref['snaks']:
                     for r in list(ref['snaks']['P12132']):
-                        if r['datavalue']['value']['id'] == cls.db_ref:
+                        if r['datavalue']['value']['id'] == db_ref:
                             ref['snaks']['P12132'].remove(r)
                     if len(ref['snaks']['P12132']) == 0:
                         continue
@@ -438,7 +436,7 @@ class Claim:
 
 
 class Element:
-    _model, _claim, __cache = Model, Claim, {}
+    _model, __cache = Model, {}
     __slots__ = 'qid', 'external_id', '_entity', '_affected', '__original'
 
     def __init__(self, external_id: str, qid: str = None):
@@ -452,12 +450,16 @@ class Element:
         return qid
 
     def get_qid(self):
-        if self.external_id in self.get_cache():
-            return self.get_cache()[self.external_id]
-        elif qid := self.haswbstatement(self.external_id):
-            self.qid = qid  # ToDo: find more elegant solution
-            self.trace('primary cache miss "{}"'.format(self.external_id))
-            return qid
+        try:
+            if self.external_id in self.get_cache():
+                return self.get_cache()[self.external_id]
+            elif qid := self.haswbstatement(self.external_id):
+                self.set_qid(qid)  # ToDo: find more elegant solution
+                self.trace('primary cache miss "{}"'.format(self.external_id))
+                return qid
+        except ValueError as e:
+            logging.warning('{} instances {}="{}", skip'.format(e.args[0], self._model.property, self.external_id))
+            self.set_qid(None)
 
     @property
     def entity(self):
@@ -468,6 +470,10 @@ class Element:
             self.__original = json.dumps(self._entity)
         return self._entity
 
+    @property
+    def need_update(self) -> bool:
+        return ((self.external_id not in self.get_cache()) or (self.get_cache()[self.external_id])) and self.__original
+
     def trace(self, message: str, level=20):
         # CRITICAL: 50, ERROR: 40, WARNING: 30, INFO: 20, DEBUG: 10
         pattern = 'https://www.wikidata.org/wiki/{}#{}\t{}'
@@ -477,24 +483,24 @@ class Element:
         for c in (claim_list := self.entity['claims'][snak['property']]):
             if snak['snaktype'] == 'novalue':
                 if c['mainsnak']['snaktype'] == 'novalue':
-                    return type(self)._claim(c)
+                    return Claim(c)
             elif Model.qualifier_filter(snak, c) and Model.equals(c['mainsnak'], snak['datavalue']['value']):
-                return type(self)._claim(c)
+                return Claim(c)
         if len(claim_list) > 0 and Wikidata.type_of(snak['property']) == 'external-id':  # Force rewrite external id
             claim_list[0]['mainsnak']['datavalue']['value'] = snak['datavalue']['value']
-            return type(self)._claim(claim_list[0])
+            return Claim(claim_list[0])
 
     def obtain_claim(self, snak: dict):
         """Find or create claim, corresponding to the provided snak"""
         if snak['property'] not in self.entity['claims']:
             self.entity['claims'][snak['property']] = []
 
-        if claim := self.find_claim(snak):
-            claim.process_decorators(snak)
-            return claim.claim
-        if claim := type(self)._claim.construct(snak, self.qid):
+        if not (claim := self.find_claim(snak)):
+            if not (claim := Claim.construct(snak, self.qid)):
+                return
             self.entity['claims'][snak['property']].append(claim.claim)
-            return claim.claim
+        claim.process_decorators(snak, self._model.db_ref)
+        return claim.claim
 
     def deprecate_all_but_one(self, property_id: str):
         minimal = 999999
@@ -513,12 +519,12 @@ class Element:
                     statement['rank'] = 'deprecated'
 
         for statement in self.entity['claims'][property_id]:
-            self._claim(statement).find_more_precise_claim(self.entity['claims'][property_id])
+            Claim(statement).find_more_precise_claim(self.entity['claims'][property_id])
 
         latest = 0
         for statement in self.entity['claims'][property_id]:
             if 'remove' not in statement and ('rank' not in statement or statement['rank'] == 'normal'):
-                if (current := self._claim.get_latest_ref_date(statement)) > latest:
+                if (current := Claim.get_latest_ref_date(statement)) > latest:
                     latest = current
 
         remaining_normal = 1  # only one statement supported by latest sources should remain normal
@@ -571,7 +577,7 @@ class Element:
             self.entity['labels']['en'] = {'value': self.external_id, 'language': 'en'}
 
     def get_summary(self):
-        return 'batch import from [[' + self._claim.db_ref + ']] for object ' + self.external_id
+        return 'batch import from [[' + self._model.db_ref + ']] for object ' + self.external_id
 
     def save(self):
         if (self.__original is None) or (json.dumps(self.entity) == self.__original):
@@ -585,7 +591,7 @@ class Element:
 
         for property_id in self._affected:
             for c in list(self.entity['claims'][property_id]):
-                if self._claim(c).check_if_no_refs():
+                if Claim(c).check_if_no_refs(self._model.db_ref, set(self._model.config('references'))):
                     self.delete_claim(c)
 
             if self._model.config(property_id):
@@ -629,6 +635,9 @@ class Element:
             for snak in parsed_data.input_snaks:
                 if (claim := self.obtain_claim(snak)) and (claim['mainsnak']['datatype'] != 'external-id'):
                     self._affected.add(snak['property'])
+        else:
+            self.trace('no data retrieved for "{}"'.format(self.external_id), 30)
+            self.set_qid(None)
 
     @classmethod
     def haswbstatement(cls, external_id, property_id=None):
@@ -638,23 +647,9 @@ class Element:
     @classmethod
     def get_by_id(cls, external_id: str, forced: bool = False):
         """Attempt to find qid by external_id or create it"""
-        if (external_id not in cls.get_cache()) or (cls.get_cache()[external_id]):
-            try:
-                instance = cls(external_id)
-            except ValueError as e:
-                logging.warning('{} instances {}="{}", skip'.format(e.args[0], cls._model.property, external_id))
-                return
-            if (instance.qid is None) or forced:
-                try:
-                    if (model := cls._model.prepare_data(external_id)) is None:
-                        return
-                    instance.apply(model)
-                    instance.save()
-                except ValueError:
-                    logging.error('https://www.wikidata.org/wiki/{}#{}\tincorrect identifier'
-                                  .format(instance.qid, cls._model.property))
-                    return
-            return instance if instance.qid else None
+        if (instance := cls(external_id)).need_update or forced:
+            instance.apply(cls._model.prepare_data(external_id))
+        return instance
 
     @classmethod
     def get_cache(cls, reset=None) -> dict:
@@ -664,3 +659,180 @@ class Element:
             sparql = 'SELECT ?c ?i {{ ?i p:{}/ps:{} ?c }}'.format(cls._model.property, cls._model.property)
             cls.__cache = result if (result := Wikidata.query(sparql)) else {}
         return cls.__cache
+
+
+class TAPClient(Model):
+    """Retrieve data from TAP 'endpoint' using 'queries' specified in json-file"""
+    _dataset, _ADQL_WRAPPER = {}, 'SELECT * FROM ({}) a WHERE {}'
+
+    @classmethod
+    def load(cls, condition=None) -> dict:
+        result = {}
+        for lines in cls.config('queries'):
+            query = ''.join(lines)
+            if condition:
+                query = cls._ADQL_WRAPPER.format(query, condition)
+            TAPClient.query(cls.config('endpoint'), query, result)
+        return result
+
+    @classmethod
+    def prepare_data(cls, external_id):
+        model = super().prepare_data(external_id)
+        if external_id in cls._dataset:
+            rows = cls._dataset.pop(external_id)
+        elif external_id in (result := cls.load('main_id = \'{}\''.format(external_id))):
+            rows = result[external_id]
+        else:
+            return None
+
+        for row in rows:
+            for col in row:
+                if row[col] and re.search('\\d+$', col):
+                    model.construct_snak(row, col)
+                    if col.upper() in ['P6257', 'P6258']:  # add J2000 epoch
+                        model.input_snaks.append(cls.create_snak('P6259', 'Q1264450'))
+        return model
+
+    def construct_snak(self, row, col, new_col=None):
+        new_col = (new_col if new_col else col).upper()
+        if Wikidata.type_of(new_col) != 'quantity':
+            result = TAPClient.get_parent_snak(row[col]) if col == 'p397' else TAPClient.create_snak(new_col, row[col])
+        elif col + 'h' not in row or row[col + 'h'] == '':
+            result = TAPClient.create_snak(new_col, TAPClient.format_figure(row, col))
+        else:
+            try:
+                high = TAPClient.format_figure(row, col + 'h')
+                low = TAPClient.format_figure(row, col + 'l')
+                figure = TAPClient.format_figure(row, col)
+                result = TAPClient.create_snak(new_col, figure, low, high)
+            except InvalidOperation:
+                return
+
+        if result is not None:
+            if 'mespos' in row:
+                result['mespos'] = row['mespos']
+            if col + 'u' in row and (unit := self.lut(row[col + 'u'])):
+                result['datavalue']['value']['unit'] = 'http://www.wikidata.org/entity/' + unit
+            reference = row[col + 'r'] if col + 'r' in row and row[col + 'r'] else None
+            reference = row['reference'] if 'reference' in row and row['reference'] else reference
+            if reference and (ref_id := TAPClient.parse_url(re.sub('.*(http\\S+).*', '\\g<1>', reference))):
+                result['source'] = [] if 'source' not in result else (result['source'] + [ref_id])
+
+        if result := self.enrich_qualifier(result, row['qualifier'] if 'qualifier' in row else row[col]):
+            self.input_snaks.append(result)
+
+    @staticmethod
+    def query(url, adql, result=None):
+        if response := Wikidata.request(url + '/sync', data={'request': 'doQuery', 'lang': 'adql', 'format': 'csv',
+                                                             'maxrec': -1, 'query': adql}, stream=True):
+            with closing(response) as r:
+                reader = csv.reader(r.iter_lines(decode_unicode='utf-8'), delimiter=',', quotechar='"')
+                header = next(reader)
+                result = {} if result is None else result
+                for line in reader:
+                    if len(line) > 0:
+                        row = {}
+                        for i in range(1, len(line)):
+                            row[header[i]] = ' '.join(line[i].split()) if isinstance(line[i], str) else line[i]
+                        object_id = ' '.join(line[0].split())
+                        if object_id in result:
+                            result[object_id].append(row)
+                        else:
+                            result[object_id] = [row]
+        return result
+
+    _parents, __PATTERN = None, 'https://www.wikidata.org/wiki/{}#P528\tcatalogue cache miss "{}"'
+
+    @staticmethod
+    def get_parent_snak(name: str):
+        if TAPClient._parents is None:
+            TAPClient._parents = Wikidata.query('SELECT DISTINCT ?c ?i { ?i ^ps:P397 []; wdt:P528 ?c }',
+                                                lambda row, _: (row[0].lower(), row[1]))
+
+        name = name[:-1] if re.search('OGLE.+L$', name) else name  # In SIMBAD OGLE names are w/o trailing 'L'
+        if name.lower() not in TAPClient._parents:
+            import simbad_dap
+            if (simbad_id := simbad_dap.Model.get_id_by_name(name)) is None:
+                return
+            if simbad_id.lower() not in TAPClient._parents:
+                if (instance := simbad_dap.Element.get_by_id(simbad_id)).need_update:
+                    # instance.apply(Model(simbad_id, [Model.create_snak('P528', name)]))
+                    instance.save()
+                if instance.qid is None:
+                    return
+                TAPClient._parents[simbad_id.lower()] = instance.qid
+            TAPClient._parents[name.lower()] = TAPClient._parents[simbad_id.lower()]
+            logging.info(TAPClient.__PATTERN.format(TAPClient._parents[name.lower()], name))
+        if snak := TAPClient.create_snak('P397', TAPClient._parents[name.lower()]):
+            return {**snak, 'decorators': {'P5997': name}}
+
+    @staticmethod
+    def format_figure(row, col):  # SIMBAD-specific way to specify figure precision
+        return TAPClient.format_float(row[col],
+                                      int(row[col + 'p']) if col + 'p' in row and row[col + 'p'] != '' else -1)
+
+    @staticmethod
+    def parse_url(url: str) -> str:
+        """Try to find qid of the reference based on the url provided"""
+        import ads
+        import arxiv
+
+        if url and url.strip() and (url := url.split()[0]):  # get text before first whitespace and strip
+            for pattern, repl in TAPClient.config('transform').items():
+                if (query := unquote(re.sub(pattern, repl, url, flags=re.S))).startswith('P'):
+                    if query.startswith('P818='):
+                        (instance := arxiv.Element.get_by_id(query.replace('P818=', ''))).save()
+                        if instance.qid:
+                            return instance.qid
+                    elif query.startswith('P819='):
+                        (instance := ads.Element.get_by_id(query.replace('P819=', ''))).save()
+                        if instance.qid:
+                            return instance.qid
+                    else:  # fallback
+                        try:
+                            return Wikidata.search('haswbstatement:' + query)
+                        except ValueError as e:
+                            logging.warning('Found {} instances of {}'.format(e.args[0], query))
+
+
+class AstroItem(Element):
+    __const, _model = None, TAPClient
+
+    def obtain_claim(self, snak):
+        snak['decorators'] = snak['decorators'] if 'decorators' in snak else {}
+        snak['decorators']['P12132'] = self._model.db_ref
+        if claim := super().obtain_claim(snak):
+            if 'mespos' in snak and ('mespos' not in claim or int(claim['mespos']) > int(snak['mespos'])):
+                claim['mespos'] = snak['mespos']
+            if snak['property'] == 'P1215':
+                if 'qualifiers' in snak and 'P1227' in snak['qualifiers'] and snak['qualifiers']['P1227'] == 'Q4892529':
+                    claim['rank'] = 'preferred'  # V-magnitude is always preferred
+        return claim
+
+    def remove_all_but_one(self, property_id):
+        if property_id not in ['P528']:
+            super().remove_all_but_one(property_id)
+
+    def post_process(self):
+        from astropy import coordinates
+        super().post_process()
+        try:
+            ra = self.entity['claims']['P6257'][0]['mainsnak']['datavalue']['value']['amount']
+            dec = self.entity['claims']['P6258'][0]['mainsnak']['datavalue']['value']['amount']
+            tla = coordinates.SkyCoord(ra, dec, frame='icrs', unit='deg').get_constellation(short_name=True)
+            if AstroItem.__const is None:
+                AstroItem.__const = Wikidata.query(
+                    'SELECT DISTINCT ?n ?i {?i wdt:P31/wdt:P279* wd:Q8928; wdt:P1813 ?n}')
+            target = None
+            for claim in list(self.entity['claims']['P59'] if 'P59' in self.entity['claims'] else []):
+                if target or (claim['mainsnak']['datavalue']['value']['id'] != AstroItem.__const[tla]):
+                    self.delete_claim(claim)
+                else:
+                    target = claim
+            target = target if target else self.obtain_claim(TAPClient.create_snak('P59', AstroItem.__const[tla]))
+            target['references'] = [{'snaks': {'P887': [TAPClient.create_snak('P887', 'Q123764736')]}}]
+        except KeyError:
+            return
+
+
+Model.initialize(__file__)  # to load wd.json

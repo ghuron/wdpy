@@ -1,12 +1,11 @@
 #!/usr/bin/python3
 import math
 
-import adql
 import wd
 
 
-class Model(adql.Model):
-    property, __offset, __var_types, _ADQL_WRAPPER = 'P3083', 0, None, '{} WHERE {}'
+class Model(wd.TAPClient):
+    property, db_ref, __offset, __var_types, _ADQL_WRAPPER = 'P3083', 'Q654724', 0, None, '{} WHERE {}'
 
     @classmethod
     def next(cls):
@@ -46,16 +45,16 @@ class Model(adql.Model):
     @staticmethod
     def get_id_by_name(name: str):
         q = 'SELECT main_id FROM ident JOIN basic ON oid = oidref WHERE id=\'{}\''.format(name.replace('\'', '\'\''))
-        if (row := Model.tap_query(Model.config('endpoint'), q)) and (len(row) == 1):
+        if (row := Model.query(Model.config('endpoint'), q)) and (len(row) == 1):
             return list(row.keys())[0]
 
 
-class Element(adql.Element):
-    _model, _claim, __cache = Model, type('Claim', (wd.Claim,), {'db_ref': 'Q654724'}), {}
+class Element(wd.AstroItem):
+    _model, __cache = Model, {}
 
 
 if Model.initialize(__file__):  # if not imported
     # Element.get_by_id('* 51 Eri b', forced=True)
     while chunk := Model.next():
         for ex_id in sorted(chunk):
-            Element.get_by_id(ex_id, forced=True)
+            Element.get_by_id(ex_id, forced=True).save()

@@ -6,12 +6,12 @@ from decimal import DecimalException
 import requests
 from bs4 import BeautifulSoup, element
 
-import adql
 import wd
 
 
 class Model(wd.Model):
     property, __session, __properties, __offset, __page, __ids = 'P5653', None, None, 0, None, None
+    db_ref = 'Q1385430'
     articles = {'publication_2540': 'Q54012702', 'publication_4966': 'Q66424531', 'publication_3182': 'Q56032677'}
 
     @classmethod
@@ -59,7 +59,7 @@ class Model(wd.Model):
     @staticmethod
     def parse_publication(publication: element.Tag):
         for a in publication.find_all('a'):
-            if ref_id := adql.Model.parse_url(a.get('href')):
+            if ref_id := wd.TAPClient.parse_url(a.get('href')):
                 return ref_id
         if (raw := publication.find('h5').text) and "Data Validation (DV) Report for Kepler" not in raw:
             if len(title := ' '.join(raw.replace('\n', ' ').strip('.').split())) > 24:
@@ -143,7 +143,7 @@ class Model(wd.Model):
             return result
 
         if property_id == 'P397':
-            return adql.Model.get_parent_snak(value)
+            return wd.TAPClient.get_parent_snak(value)
         value = value[:-2] + value[-1] if (property_id == 'P528') and (value[-2] == ' ') else value
         return Model.enrich_qualifier(Model.create_snak(property_id, value), value)
 
@@ -153,8 +153,8 @@ class Model(wd.Model):
         return Model.__ids[self.label] if self.label in Model.__ids else None
 
 
-class Element(adql.Element):
-    _model, _claim, __cache = Model, type('Claim', (wd.Claim,), {'db_ref': 'Q1385430'}), None
+class Element(wd.AstroItem):
+    _model, __cache = Model, None
 
     def apply(self, parsed_data: Model):
         super().apply(parsed_data)
@@ -173,7 +173,7 @@ class Element(adql.Element):
                             if claim['qualifiers']['P1227'][0]['datavalue']['value']['id'] == 'Q4892529':
                                 return  # if found - skip provided snak
         if claim := super().obtain_claim(snak):
-            if self._claim(claim).find_more_precise_claim(self.entity['claims'][snak['property']]):
+            if wd.Claim(claim).find_more_precise_claim(self.entity['claims'][snak['property']]):
                 if 'hash' not in claim['mainsnak']:  # Do not delete already saved claim
                     self.delete_claim(claim)
                     return
@@ -182,7 +182,7 @@ class Element(adql.Element):
 
 if Model.initialize(__file__):  # if just imported - do nothing
     def process(external_id):
-        item = Element.get_by_id(external_id, forced=True)
+        (item := Element.get_by_id(external_id, forced=True)).save()
         if 'P397' in item.entity['claims'] and len(item.entity['claims']['P397']) == 1:
             if 'datavalue' in (parent := item.entity['claims']['P397'][0]['mainsnak']):  # parent != "novalue"
                 if (host := Element(external_id, parent['datavalue']['value']['id'])).qid not in updated_hosts:

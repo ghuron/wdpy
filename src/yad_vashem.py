@@ -7,7 +7,7 @@ import wd
 
 
 class Model(wd.Model):
-    property, __offset = 'P1979', 0
+    property, db_ref, __offset = 'P1979', 'Q77598447', 0
 
     @classmethod
     def next(cls):
@@ -84,7 +84,7 @@ class Model(wd.Model):
 
 
 class Element(wd.Element):
-    _model, _claim, __cache, _items = Model, type('Claim', (wd.Claim,), {'db_ref': 'Q77598447'}), {}, {}
+    _model, __cache, _items = Model, {}, {}
 
     def __init__(self, named_as, qid=None):
         super().__init__(named_as, qid)
@@ -94,6 +94,7 @@ class Element(wd.Element):
     def load(items: dict):
         Element.get_cache(reset=items)
         Element._items = wd.Wikidata.load(set(filter(lambda x: isinstance(x, str), items.values())))
+        return Element._items
 
     @property
     def entity(self) -> dict:
@@ -149,9 +150,8 @@ if Model.initialize(__file__):  # if not imported
     for _id in groups:
         try:
             # _id = '4022505'  # uncomment to debug specific group of people
-            if wd_items := Model.extract(_id, groups[_id]):
-                Element.load(wd_items)
+            if (wd_items := Model.extract(_id, groups[_id])) and Element.load(wd_items):
                 for name in wd_items:
-                    Element.get_by_id(name, forced=True)
+                    Element.get_by_id(name, forced=True).save()
         except Exception as e:
             logging.critical('while processing {}. {}'.format(_id, traceback.format_exc()))

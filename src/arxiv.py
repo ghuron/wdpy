@@ -10,7 +10,7 @@ import wd
 
 
 class Model(wd.Model):
-    property, chunk, suffix = 'P818', {}, 'metadataPrefix=arXiv'
+    property, db_ref, chunk, suffix = 'P818', 'Q118398', {}, 'metadataPrefix=arXiv'
 
     def __init__(self, external_id: str, snaks: list = None):
         super().__init__(external_id, snaks)
@@ -71,7 +71,7 @@ class Model(wd.Model):
 
 class Element(wd.Element):
     """When called get_by_id() for a new pre-print, fill as many properties as possible via regular ArXiv API"""
-    _model, _claim, __cache = Model, type('Claim', (wd.Claim,), {'db_ref': 'Q118398'}), None
+    _model, __cache = Model, None
 
     def apply(self, parsed_data: Model):
         super().apply(parsed_data)
