@@ -214,15 +214,16 @@ class Model:
                 return value['time'][:5] + value['time'][6:8] + '00'
             elif standard['precision'] == 11:
                 return value['time'][:5] + value['time'][6:8] + value['time'][9:11]
+        elif 'language' in standard:
+            return value['text'] + '@' + value['language']
         return float('nan')  # because NaN != NaN
 
     @classmethod
     def create_snak(cls, property_id: str, value, lower: str = None, upper: str = None):
         """Create snak based on provided id of the property and string value"""
-        if not Wikidata.type_of(property_id) or value is None or value == '' or value == 'NaN':
+        if not (t := Wikidata.type_of(property_id)) or value is None or value == '' or value == 'NaN':
             return None
-        snak = {'datatype': Wikidata.type_of(property_id), 'property': property_id, 'snaktype': 'value',
-                'datavalue': {'value': value, 'type': Wikidata.type_of(property_id)}}
+        snak = {'datatype': t, 'property': property_id, 'snaktype': 'value', 'datavalue': {'value': value, 'type': t}}
         if snak['datatype'] == 'quantity':
             try:
                 snak['datavalue']['value'] = {'amount': Model.format_float(value), 'unit': '1'}
@@ -249,6 +250,8 @@ class Model:
             snak['datavalue']['value'] = value
         elif snak['datatype'] == 'external-id':
             snak['datavalue']['type'] = 'string'
+        elif snak['datatype'] == 'monolingualtext':
+            snak['datavalue']['value'] = {'text': value, 'language': 'en'}
         return snak
 
     @staticmethod
@@ -261,8 +264,8 @@ class Model:
             if 'qualifiers' not in claim or (property_id not in claim['qualifiers']):  # No property_id qualifier
                 return False
             was_found = None
-            for claim in claim['qualifiers'][property_id]:
-                if was_found := Model.equals(claim, {'id': conditions['qualifiers'][property_id]}):
+            for c in claim['qualifiers'][property_id]:
+                if was_found := Model.equals(c, {'id': conditions['qualifiers'][property_id]}):
                     break
             if not was_found:  # Above loop did not find anything
                 return False
@@ -437,15 +440,16 @@ class Claim:
 
 class Element:
     _model, __cache = Model, {}
-    __slots__ = 'qid', 'external_id', '_entity', '_affected', '__original'
+    __slots__ = 'qid', 'external_id', '_entity', '_affected', '__original', '_queue'
 
     def __init__(self, external_id: str, qid: str = None):
         self.external_id, self.qid, self._entity, self._affected, self.__original = external_id, qid, None, set(), None
+        self._queue = []
         if qid or (qid := self.get_qid()):  # There is a chance to find qid down the road
             self.set_qid(qid)
 
     def set_qid(self, qid):
-        type(self).__cache[self.external_id] = self.qid = qid
+        self.get_cache()[self.external_id] = self.qid = qid
         self._entity = self.__original = None
         return qid
 
@@ -467,12 +471,13 @@ class Element:
             self._entity = {'labels': {}, 'claims': {}}
             if self.qid and (result := Wikidata.load({self.qid})):
                 self._entity = result[self.qid]
-            self.__original = json.dumps(self._entity)
+            self.__original = json.dumps(self._entity, sort_keys=True)
         return self._entity
 
     @property
     def need_update(self) -> bool:
-        return ((self.external_id not in self.get_cache()) or (self.get_cache()[self.external_id])) and self.__original
+        if self.__original is None:
+            return (self.external_id not in self.get_cache()) or (self.get_cache()[self.external_id])
 
     def trace(self, message: str, level=20):
         # CRITICAL: 50, ERROR: 40, WARNING: 30, INFO: 20, DEBUG: 10
@@ -536,10 +541,9 @@ class Element:
                     remaining_normal -= 1
 
     def delete_claim(self, claim):
-        if 'hash' in claim['mainsnak']:  # Already saved
-            claim['remove'] = 1  # For already saved claims we have to request server to remove them
-        else:
-            self.entity['claims'][claim['mainsnak']['property']].remove(claim)  # Non-saved claim can be simply removed
+        if 'hash' in claim['mainsnak']:  # already saved
+            self._queue.append({'id': claim['id'], 'remove': ''})  # request server to delete claim
+        self.entity['claims'][claim['mainsnak']['property']].remove(claim)  # Non-saved claim can be simply removed
 
     def remove_all_but_one(self, property_id):
         group_by = self._model.config(property_id, 'id')
@@ -571,18 +575,14 @@ class Element:
                     continue
                 latest[group] = 99999999  # keep this claim and remove all others
 
+    def serialize(self) -> str:
+        result = self._queue
+        for property_id in self._affected:
+            result += self.entity['claims'][property_id]
+        return ('{{"claims":{},"labels":{},"aliases":{}}}'.format(json.dumps(result), json.dumps(self.entity['labels']),
+                                                                  json.dumps(self.entity['aliases'])))
+
     def post_process(self):
-        """Changes in wd element in a way, that does not depend on the input"""
-        if 'en' not in self.entity['labels']:
-            self.entity['labels']['en'] = {'value': self.external_id, 'language': 'en'}
-
-    def get_summary(self):
-        return 'batch import from [[' + self._model.db_ref + ']] for object ' + self.external_id
-
-    def save(self):
-        if (self.__original is None) or (json.dumps(self.entity) == self.__original):
-            return
-
         new_sources = set()
         for property_id in self._affected:
             for c in self.entity['claims'][property_id]:
@@ -596,17 +596,22 @@ class Element:
 
             if self._model.config(property_id):
                 self.remove_all_but_one(property_id)
-            elif Wikidata.type_of(property_id) in ['quantity', 'string'] or property_id == 'P577':
+            elif Wikidata.type_of(property_id) in ['quantity', 'string', 'monolingualtext'] or property_id == 'P577':
                 self.deprecate_all_but_one(property_id)
+
+        if 'en' not in self.entity['labels']:
+            self.entity['labels']['en'] = {'value': self.external_id, 'language': 'en'}
+
+    def get_summary(self):
+        return 'batch import from [[' + self._model.db_ref + ']] for object ' + self.external_id
+
+    def save(self):
+        if (self.__original is None) or (json.dumps(self.entity, sort_keys=True) == self.__original):
+            return
 
         self.post_process()
 
-        if 'labels' in self.entity and 'ak' in self.entity['labels']:
-            self.entity['labels'].pop('ak')
-        if 'aliases' in self.entity and 'ak' in self.entity['aliases']:
-            self.entity['aliases'].pop('ak')
-
-        data = {'data': json.dumps(self.entity), 'summary': self.get_summary()}
+        data = {'data': self.serialize(), 'summary': self.get_summary()}
         if 'id' in self.entity:
             data['id'] = self.entity['id']
             data['baserevid'] = self.entity['lastrevid']
@@ -630,10 +635,16 @@ class Element:
                     self.set_qid(qid)
 
             if self.qid is None:
-                self.set_qid(parsed_data.get_qid())
+                for snak in parsed_data.input_snaks:
+                    if (snak['datatype'] == 'external-id') and (snak['property'] != self._model.property):
+                        if qid := self.haswbstatement(snak['datavalue']['value'], snak['property']):
+                            self.set_qid(qid)
+                            break
+                if self.qid is None:
+                    self.set_qid(parsed_data.get_qid())
 
             for snak in parsed_data.input_snaks:
-                if (claim := self.obtain_claim(snak)) and (claim['mainsnak']['datatype'] != 'external-id'):
+                if self.obtain_claim(snak):
                     self._affected.add(snak['property'])
         else:
             self.trace('no data retrieved for "{}"'.format(self.external_id), 30)
@@ -695,16 +706,17 @@ class TAPClient(Model):
 
     def construct_snak(self, row, col, new_col=None):
         new_col = (new_col if new_col else col).upper()
-        if Wikidata.type_of(new_col) != 'quantity':
-            result = TAPClient.get_parent_snak(row[col]) if col == 'p397' else TAPClient.create_snak(new_col, row[col])
-        elif col + 'h' not in row or row[col + 'h'] == '':
-            result = TAPClient.create_snak(new_col, TAPClient.format_figure(row, col))
+        if col == 'p397':
+            result: dict = TAPClient.get_parent_snak(row[col])
+        elif Wikidata.type_of(new_col) != 'quantity':
+            result: dict = TAPClient.create_snak(new_col, row[col])
+        elif (col + 'h' not in row) or (row[col + 'h'] == ''):
+            result: dict = TAPClient.create_snak(new_col, TAPClient.format_figure(row, col))
         else:
             try:
                 high = TAPClient.format_figure(row, col + 'h')
                 low = TAPClient.format_figure(row, col + 'l')
-                figure = TAPClient.format_figure(row, col)
-                result = TAPClient.create_snak(new_col, figure, low, high)
+                result: dict = TAPClient.create_snak(new_col, TAPClient.format_figure(row, col), low, high)
             except InvalidOperation:
                 return
 
@@ -716,7 +728,7 @@ class TAPClient(Model):
             reference = row[col + 'r'] if col + 'r' in row and row[col + 'r'] else None
             reference = row['reference'] if 'reference' in row and row['reference'] else reference
             if reference and (ref_id := TAPClient.parse_url(re.sub('.*(http\\S+).*', '\\g<1>', reference))):
-                result['source'] = [] if 'source' not in result else (result['source'] + [ref_id])
+                result['source'] = [ref_id]
 
         if result := self.enrich_qualifier(result, row['qualifier'] if 'qualifier' in row else row[col]):
             self.input_snaks.append(result)
@@ -833,6 +845,32 @@ class AstroItem(Element):
             target['references'] = [{'snaks': {'P887': [TAPClient.create_snak('P887', 'Q123764736')]}}]
         except KeyError:
             return
+
+
+class Article(Element):
+    def obtain_claim(self, snak: dict):
+        if snak['property'] == 'P356':
+            session = requests.Session()
+            session.headers.update({'User-Agent': Wikidata.USER_AGENT})
+            if Wikidata.request('https://doi.org/' + snak['datavalue']['value'], session) is None:
+                return
+            snak['datavalue']['value'] = snak['datavalue']['value'].upper()
+        return super().obtain_claim(snak)
+
+    def post_process(self):
+        super().post_process()
+        self.sort_authors('P2093', self.sort_authors('P50', []))
+
+    def sort_authors(self, property_id, already_used):
+        authors = {}
+        if property_id in self.entity['claims']:
+            for claim in list(self.entity['claims'][property_id]):
+                if ('qualifiers' in claim) and ('P1545' in claim['qualifiers']):
+                    if (num := int(claim['qualifiers']['P1545'][0]['datavalue']['value'])) not in already_used:
+                        authors[num] = claim
+                    self.delete_claim(claim)
+            self._queue += list(dict(sorted(authors.items())).values())
+        return list(authors.keys())
 
 
 Model.initialize(__file__)  # to load wd.json

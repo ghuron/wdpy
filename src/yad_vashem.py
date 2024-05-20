@@ -129,6 +129,7 @@ class Element(wd.Element):
             else:
                 label = ' '.join([words[-1]] + words[1:-1] + [words[0]])  # Pol van de John -> John van de Pol
             self.entity['labels']['en'] = {'value': label, 'language': 'en'}
+        super().post_process()
 
     def get_summary(self):
         return 'basic facts about: ' + self.external_id + ' from Yad Vashem database entry ' + Model.group_id
