@@ -576,11 +576,13 @@ class Element:
                 latest[group] = 99999999  # keep this claim and remove all others
 
     def serialize(self) -> str:
-        result = self._queue
+        queue = self._queue
         for property_id in self._affected:
-            result += self.entity['claims'][property_id]
-        return ('{{"claims":{},"labels":{},"aliases":{}}}'.format(json.dumps(result), json.dumps(self.entity['labels']),
-                                                                  json.dumps(self.entity['aliases'])))
+            queue += self.entity['claims'][property_id]
+        result = '"claims":{},"labels":{}'.format(json.dumps(queue), json.dumps(self.entity['labels']))
+        if 'aliases' in self.entity:
+            result += ',"aliases":{}'.format(json.dumps(self.entity['aliases']))
+        return '{' + result + '}'
 
     def post_process(self):
         new_sources = set()
