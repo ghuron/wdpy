@@ -11,7 +11,7 @@ class Model(wd.TAPClient):
     property, db_ref, __offset, __ads = 'P819', 'Q752099', 0, requests.session()
     URL = 'https://api.adsabs.harvard.edu/v1/search/query?q={}&fl={}'
     __ads.headers.update({'Authorization': 'Bearer ' + (
-        __p.read_text() if (__p := Path(__file__.replace('ads.py', '.ads'))).exists() else '')})
+        __p.read_text().strip() if (__p := Path(__file__.replace('ads.py', '.ads'))).exists() else '')})
 
     @classmethod
     def next(cls):
