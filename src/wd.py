@@ -474,10 +474,9 @@ class Element:
             self.__original = json.dumps(self._entity, sort_keys=True)
         return self._entity
 
-    @property
-    def need_update(self) -> bool:
-        if self.__original is None:
-            return (self.external_id not in self.get_cache()) or (self.get_cache()[self.external_id])
+    def has_to_be_created(self) -> bool:
+        """Not blocked in cache, but qid is not known"""
+        return (self.qid is None) and (self.external_id not in self.get_cache() or self.get_cache()[self.external_id])
 
     def trace(self, message: str, level=20):
         # CRITICAL: 50, ERROR: 40, WARNING: 30, INFO: 20, DEBUG: 10
@@ -660,7 +659,7 @@ class Element:
     @classmethod
     def get_by_id(cls, external_id: str, forced: bool = False):
         """Attempt to find qid by external_id or create it"""
-        if (instance := cls(external_id)).need_update or forced:
+        if (instance := cls(external_id)).has_to_be_created() or forced:
             instance.apply(cls._model.prepare_data(external_id))
         return instance
 
@@ -769,9 +768,7 @@ class TAPClient(Model):
             if (simbad_id := simbad_dap.Model.get_id_by_name(name)) is None:
                 return
             if simbad_id.lower() not in TAPClient._parents:
-                if (instance := simbad_dap.Element.get_by_id(simbad_id)).need_update:
-                    # instance.apply(Model(simbad_id, [Model.create_snak('P528', name)]))
-                    instance.save()
+                (instance := simbad_dap.Element.get_by_id(simbad_id)).save()
                 if instance.qid is None:
                     return
                 TAPClient._parents[simbad_id.lower()] = instance.qid
