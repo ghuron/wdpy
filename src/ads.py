@@ -9,6 +9,7 @@ import wd
 
 class Model(wd.TAPClient):
     property, db_ref, __offset, __ads = 'P819', 'Q752099', 0, requests.session()
+    URL = 'https://api.adsabs.harvard.edu/v1/search/query?q={}&fl={}'
     __ads.headers.update({'Authorization': 'Bearer ' + (
         __p.read_text() if (__p := Path(__file__.replace('ads.py', '.ads'))).exists() else '')})
 
@@ -20,13 +21,15 @@ class Model(wd.TAPClient):
 
     @classmethod
     def prepare_data(cls, external_id):
-        params = ','.join(Model.config('properties'))
-        response = wd.Wikidata.request('https://api.adsabs.harvard.edu/v1/search/query?q={}&fl={}'.
-                                       format(quote_plus(external_id), quote_plus(params)), Model.__ads).json()
+        if ((response := wd.Wikidata.request(Model.URL.format(quote_plus(external_id),
+                                                              quote_plus(','.join(Model.config('properties')))),
+                                             Model.__ads)) is None) or (len(response.json()['response']['docs']) == 0):
+            return
+
         result = Model(external_id)
         result.input_snaks.append(Model.create_snak('P31', 'Q13442814'))
 
-        for idx in range(0, len((data := response['response']['docs'][0])['author'])):
+        for idx in range(0, len((data := response.json()['response']['docs'][0])['author'])):
             if author_id := Element.haswbstatement(data['orcid_pub'][idx], 'P496'):
                 (snak := Model.create_snak('P50', author_id))['qualifiers'] = {'P1932': data['author'][idx]}
             else:
