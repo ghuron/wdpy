@@ -490,9 +490,6 @@ class Element:
                     return Claim(c)
             elif Model.qualifier_filter(snak, c) and Model.equals(c['mainsnak'], snak['datavalue']['value']):
                 return Claim(c)
-        if len(claim_list) > 0 and Wikidata.type_of(snak['property']) == 'external-id':  # Force rewrite external id
-            claim_list[0]['mainsnak']['datavalue']['value'] = snak['datavalue']['value']
-            return Claim(claim_list[0])
 
     def obtain_claim(self, snak: dict):
         """Find or create claim, corresponding to the provided snak"""
@@ -591,6 +588,9 @@ class Element:
         Claim.preload(new_sources)
 
         for property_id in self._affected:
+            if Wikidata.type_of(property_id) == 'external-id':
+                continue
+
             for c in list(self.entity['claims'][property_id]):
                 if Claim(c).check_if_no_refs(self._model.db_ref, set(self._model.config('references'))):
                     self.delete_claim(c)
