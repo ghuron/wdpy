@@ -378,26 +378,26 @@ class Claim:
     @staticmethod
     def _remove_duplicates(references: [], ref_properties: set) -> []:
         """ Resolve redirects and merge P248 duplicates"""
-        result, prior = [], {}
+        result = {}
         for ref in references:
-            if set(ref['snaks'].keys()) <= ref_properties:
-                if (_id := ref['snaks']['P248'][0]['datavalue']['value']['id']) in Claim._redirects:
-                    ref['snaks']['P248'][0]['datavalue']['value']['id'] = (_id := Claim._redirects[_id])
-                if _id in prior:
-                    for p12132 in (ref['snaks']['P12132'] if 'P12132' in ref['snaks'] else []):
-                        if p12132['datavalue']['value']['id'] not in Claim.__get_snaks(prior[_id], 'P12132'):
-                            if 'P12132' not in prior[_id]['snaks']:
-                                prior[_id]['snaks']['P12132'] = []
-                            prior[_id]['snaks']['P12132'].append(p12132)
-                    p5997 = sorted(Claim.__get_snaks(prior[_id], 'P5997') + Claim.__get_snaks(ref, 'P5997'))
-                    if len(p5997) > 0:
-                        prior[_id]['snaks']['P5997'] = [Model.create_snak('P5997', p5997[0])]
-                    if 'wdpy' in ref:
-                        prior[_id]['wdpy'] = 1
-                    continue  # do not add into results
-                prior[_id] = ref
-            result.append(ref)
-        return result
+            ref_id = ref['snaks']['P248'][0]['datavalue']['value']['id'] if 'P248' in ref['snaks'] else str(len(result))
+            if ref_id in Claim._redirects:
+                ref['snaks']['P248'][0]['datavalue']['value']['id'] = (ref_id := Claim._redirects[ref_id])
+
+            if (set(ref['snaks'].keys()) <= ref_properties) and (ref_id in result):
+                for p12132 in (ref['snaks']['P12132'] if 'P12132' in ref['snaks'] else []):
+                    if p12132['datavalue']['value']['id'] not in Claim.__get_snaks(result[ref_id], 'P12132'):
+                        if 'P12132' not in result[ref_id]['snaks']:
+                            result[ref_id]['snaks']['P12132'] = []
+                        result[ref_id]['snaks']['P12132'].append(p12132)
+                p5997 = sorted(Claim.__get_snaks(result[ref_id], 'P5997') + Claim.__get_snaks(ref, 'P5997'))
+                if len(p5997) > 0:
+                    result[ref_id]['snaks']['P5997'] = [Model.create_snak('P5997', p5997[0])]
+                if 'wdpy' in ref:
+                    result[ref_id]['wdpy'] = 1
+            else:
+                result[ref_id] = ref
+        return list(result.values())
 
     @staticmethod
     def _confirms(references: [], db_ref: str) -> []:
