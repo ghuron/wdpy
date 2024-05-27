@@ -1,4 +1,6 @@
 #!/usr/bin/python3
+from __future__ import annotations
+
 import logging
 import re
 from decimal import DecimalException
@@ -9,9 +11,36 @@ from bs4 import BeautifulSoup, element
 import wd
 
 
+class Element(wd.AstroItem):
+    __cache = None
+
+    def apply(self, parsed_data: Model):
+        super().apply(parsed_data)
+        if ('en' not in self.entity['labels']) and parsed_data and parsed_data.label:
+            self.entity['labels']['en'] = {'value': parsed_data.label, 'language': 'en'}
+
+    def obtain_claim(self, snak):
+        if snak:
+            snak['mespos'] = 0
+            if snak['property'] == 'P4501':
+                snak['qualifiers'] = {'P1013': 'Q2832068'}  # always geometric albedo
+            if self.entity and 'claims' in self.entity and 'P1215' in self.entity['claims']:
+                if snak['property'] == 'P1215' and self.property_id not in self.entity['claims']:
+                    for claim in self.entity['claims']['P1215']:  # Looking for visual magnitude statement
+                        if 'qualifiers' in claim and 'P1227' in claim['qualifiers']:
+                            if claim['qualifiers']['P1227'][0]['datavalue']['value']['id'] == 'Q4892529':
+                                return  # if found - skip provided snak
+        if claim := super().obtain_claim(snak):
+            if wd.Claim(claim).find_more_precise_claim(self.entity['claims'][snak['property']]):
+                if 'hash' not in claim['mainsnak']:  # Do not delete already saved claim
+                    self.delete_claim(claim)
+                    return
+        return claim
+
+
 class Model(wd.Model):
     property, __session, __properties, __offset, __page, __ids = 'P5653', None, None, 0, None, None
-    db_ref = 'Q1385430'
+    db_ref, item = 'Q1385430', Element
     articles = {'publication_2540': 'Q54012702', 'publication_4966': 'Q66424531', 'publication_3182': 'Q56032677'}
 
     @classmethod
@@ -153,55 +182,28 @@ class Model(wd.Model):
         return Model.__ids[self.label] if self.label in Model.__ids else None
 
 
-class Element(wd.AstroItem):
-    _model, __cache = Model, None
-
-    def apply(self, parsed_data: Model):
-        super().apply(parsed_data)
-        if ('en' not in self.entity['labels']) and parsed_data and parsed_data.label:
-            self.entity['labels']['en'] = {'value': parsed_data.label, 'language': 'en'}
-
-    def obtain_claim(self, snak):
-        if snak:
-            snak['mespos'] = 0
-            if snak['property'] == 'P4501':
-                snak['qualifiers'] = {'P1013': 'Q2832068'}  # always geometric albedo
-            if self.entity and 'claims' in self.entity and 'P1215' in self.entity['claims']:
-                if snak['property'] == 'P1215' and self._model.property not in self.entity['claims']:
-                    for claim in self.entity['claims']['P1215']:  # Looking for visual magnitude statement
-                        if 'qualifiers' in claim and 'P1227' in claim['qualifiers']:
-                            if claim['qualifiers']['P1227'][0]['datavalue']['value']['id'] == 'Q4892529':
-                                return  # if found - skip provided snak
-        if claim := super().obtain_claim(snak):
-            if wd.Claim(claim).find_more_precise_claim(self.entity['claims'][snak['property']]):
-                if 'hash' not in claim['mainsnak']:  # Do not delete already saved claim
-                    self.delete_claim(claim)
-                    return
-        return claim
-
-
 if Model.initialize(__file__):  # if just imported - do nothing
     def process(external_id):
-        (item := Element.get_by_id(external_id, forced=True)).save()
+        (item := Model.get_by_id(external_id, forced=True)).save()
         if 'P397' in item.entity['claims'] and len(item.entity['claims']['P397']) == 1:
             if 'datavalue' in (parent := item.entity['claims']['P397'][0]['mainsnak']):  # parent != "novalue"
-                if (host := Element(external_id, parent['datavalue']['value']['id'])).qid not in updated_hosts:
-                    if Model.property not in host.entity['claims']:  # If initial item was not exo-moon
+                if item.set_qid(parent['datavalue']['value']['id']) not in updated_hosts:
+                    if Model.property not in item.entity['claims']:  # If initial item was not exo-moon
                         Model.set_parse_mode(host_star=True)
-                        host.apply(Model.prepare_data(external_id))
-                        host.save()
-                        updated_hosts.append(host.qid)
+                        item.apply(Model.prepare_data(external_id))
+                        item.save()
+                        updated_hosts.append(item.qid)
         Model.set_parse_mode(host_star=False)
 
 
     Model.set_parse_mode()
-    # Element.get_by_id('2mass_j0249_0557_ab_c--6790', forced=True)  # uncomment to debug specific item only
+    # Model.get_by_id('toi_782_b--9032', forced=True).save()  # uncomment to debug specific item only
     updated_hosts = []
-    logging.info('Start updating {} existing items'.format(len(Element.get_cache())))
-    for ex_id in sorted(Element.get_cache().keys()):
+    logging.info('Start updating {} existing items'.format(len(Model.item.get_cache())))
+    for ex_id in sorted(Model.item.get_cache().keys()):
         process(ex_id)
     logging.info('Finish updating existing items')
     while chunk := Model.next():
         for ex_id in sorted(chunk):
-            if ex_id not in Element.get_cache():
+            if ex_id not in Model.item.get_cache():
                 process(ex_id)

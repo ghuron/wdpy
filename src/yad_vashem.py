@@ -1,13 +1,73 @@
 #!/usr/bin/python3
 import json
 import logging
-import traceback
 
 import wd
 
 
+class Element(wd.Element):
+    __cache, _items = {}, {}
+
+    def __init__(self, named_as, qid=None):
+        super().__init__(named_as, qid)
+        self.award_cleared_qualifiers = []
+
+    @staticmethod
+    def load(items: dict):
+        Element.get_cache(reset=items)
+        Element._items = wd.Wikidata.load(set(filter(lambda x: isinstance(x, str), items.values())))
+        return Element._items
+
+    @property
+    def entity(self) -> dict:
+        if not self._entity:
+            self._entity = Element._items[self.qid] if self.qid in Element._items else {'labels': {}, 'claims': {}}
+            self.__original = json.dumps(self._entity)
+        return self._entity
+
+    def obtain_claim(self, snak):
+        if snak is not None:
+            if snak['property'] in ['P585', 'P27']:  # date and nationality to qualifiers for award
+                award = super().obtain_claim(Model.create_snak('P166', 'Q112197'))
+                award['qualifiers'] = {} if 'qualifiers' not in award else award['qualifiers']
+                if snak['property'] not in award['qualifiers'] or snak['property'] not in self.award_cleared_qualifiers:
+                    self.award_cleared_qualifiers.append(snak['property'])  # clear each qualifier only once
+                    award['qualifiers'][snak['property']] = []
+                award['qualifiers'][snak['property']].append(snak)
+            elif claim := super().obtain_claim(snak):
+                if snak['property'] in ['P569', 'P570']:  # birth/death date statement only
+                    if 'rank' not in claim:  # unspecified rank means it was just created
+                        if snak['datavalue']['value']['precision'] == 11:  # date precision on the day level
+                            if snak['datavalue']['value']['time'].endswith('-01-01T00:00:00Z'):  # January 1
+                                claim['rank'] = 'deprecated'  # db artefact, only year known for sure
+                                claim['qualifiers'] = {'P2241': [Model.create_snak('P2241', 'Q41755623')]}
+                return claim
+
+    def post_process(self):
+        if 'en' not in self.entity['labels']:
+            words = self.external_id.split('(')[0].split()
+            if words[0].lower() in ['dalla', 'de', 'del', 'della', 'di', 'du', 'Im', 'le', 'te', 'van', 'von']:
+                label = ' '.join([words[-1]] + words[:-1])  # van Allen John -> John van Allen
+            else:
+                label = ' '.join([words[-1]] + words[1:-1] + [words[0]])  # Pol van de John -> John van de Pol
+            self.entity['labels']['en'] = {'value': label, 'language': 'en'}
+        super().post_process()
+
+    def get_summary(self):
+        return 'basic facts about: ' + self.external_id + ' from Yad Vashem database entry ' + Model.group_id
+
+    def trace(self, message: str, level=20):
+        if self.entity is not None and 'id' in self.entity:
+            message = 'https://www.wikidata.org/wiki/' + self.entity['id'] + '\t' + message
+        Element.info(Model.group_id, self.external_id, message)
+
+    @staticmethod
+    def info(book_id, named_as, message):
+        logging.info('https://righteous.yadvashem.org/?itemId=' + book_id + '\t"' + named_as + '"\t' + message)
+
+
 class Model(wd.Model):
-    property, db_ref, __offset = 'P1979', 'Q77598447', 0
+    property, db_ref, item, __offset = 'P1979', 'Q77598447', Element, 0
 
     @classmethod
     def next(cls):
@@ -83,76 +143,12 @@ class Model(wd.Model):
         return result
 
 
-class Element(wd.Element):
-    _model, __cache, _items = Model, {}, {}
-
-    def __init__(self, named_as, qid=None):
-        super().__init__(named_as, qid)
-        self.award_cleared_qualifiers = []
-
-    @staticmethod
-    def load(items: dict):
-        Element.get_cache(reset=items)
-        Element._items = wd.Wikidata.load(set(filter(lambda x: isinstance(x, str), items.values())))
-        return Element._items
-
-    @property
-    def entity(self) -> dict:
-        if not self._entity:
-            self._entity = Element._items[self.qid] if self.qid in Element._items else {'labels': {}, 'claims': {}}
-            self.__original = json.dumps(self._entity)
-        return self._entity
-
-    def obtain_claim(self, snak):
-        if snak is not None:
-            if snak['property'] in ['P585', 'P27']:  # date and nationality to qualifiers for award
-                award = super().obtain_claim(Model.create_snak('P166', 'Q112197'))
-                award['qualifiers'] = {} if 'qualifiers' not in award else award['qualifiers']
-                if snak['property'] not in award['qualifiers'] or snak['property'] not in self.award_cleared_qualifiers:
-                    self.award_cleared_qualifiers.append(snak['property'])  # clear each qualifier only once
-                    award['qualifiers'][snak['property']] = []
-                award['qualifiers'][snak['property']].append(snak)
-            elif claim := super().obtain_claim(snak):
-                if snak['property'] in ['P569', 'P570']:  # birth/death date statement only
-                    if 'rank' not in claim:  # unspecified rank means it was just created
-                        if snak['datavalue']['value']['precision'] == 11:  # date precision on the day level
-                            if snak['datavalue']['value']['time'].endswith('-01-01T00:00:00Z'):  # January 1
-                                claim['rank'] = 'deprecated'  # db artefact, only year known for sure
-                                claim['qualifiers'] = {'P2241': [Model.create_snak('P2241', 'Q41755623')]}
-                return claim
-
-    def post_process(self):
-        if 'en' not in self.entity['labels']:
-            words = self.external_id.split('(')[0].split()
-            if words[0].lower() in ['dalla', 'de', 'del', 'della', 'di', 'du', 'Im', 'le', 'te', 'van', 'von']:
-                label = ' '.join([words[-1]] + words[:-1])  # van Allen John -> John van Allen
-            else:
-                label = ' '.join([words[-1]] + words[1:-1] + [words[0]])  # Pol van de John -> John van de Pol
-            self.entity['labels']['en'] = {'value': label, 'language': 'en'}
-        super().post_process()
-
-    def get_summary(self):
-        return 'basic facts about: ' + self.external_id + ' from Yad Vashem database entry ' + Model.group_id
-
-    def trace(self, message: str, level=20):
-        if self.entity is not None and 'id' in self.entity:
-            message = 'https://www.wikidata.org/wiki/' + self.entity['id'] + '\t' + message
-        Element.info(Model.group_id, self.external_id, message)
-
-    @staticmethod
-    def info(book_id, named_as, message):
-        logging.info('https://righteous.yadvashem.org/?itemId=' + book_id + '\t"' + named_as + '"\t' + message)
-
-
 if Model.initialize(__file__):  # if not imported
     QUERY = 'SELECT ?r ?n ?i { ?i wdt:P31 wd:Q5; p:P1979 ?s . ?s ps:P1979 ?r OPTIONAL {?s pq:P1810 ?n}}'
     groups = wd.Wikidata.query(QUERY, Model.process_sparql_row)
 
     for _id in groups:
-        try:
-            # _id = '4022505'  # uncomment to debug specific group of people
-            if (wd_items := Model.extract(_id, groups[_id])) and Element.load(wd_items):
-                for name in wd_items:
-                    Element.get_by_id(name, forced=True).save()
-        except Exception as e:
-            logging.critical('while processing {}. {}'.format(_id, traceback.format_exc()))
+        # _id = '4022505'  # uncomment to debug specific group of people
+        if (wd_items := Model.extract(_id, groups[_id])) and Element.load(wd_items):
+            for name in wd_items:
+                Model.get_by_id(name, forced=True).save()

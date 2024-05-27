@@ -1,4 +1,6 @@
 #!/usr/bin/python3
+from __future__ import annotations
+
 import http.client
 import logging
 import socket
@@ -9,8 +11,31 @@ from xml.etree import ElementTree
 import wd
 
 
+class Element(wd.Element):
+    """When called get_by_id() for a new pre-print, fill as many properties as possible via regular ArXiv API"""
+    __cache = None
+
+    def apply(self, parsed_data: Model):
+        super().apply(parsed_data)
+        if ('en' not in self.entity['labels']) and parsed_data and parsed_data.label:
+            self.entity['labels']['en'] = {'value': parsed_data.label, 'language': 'en'}
+
+    def obtain_claim(self, snak: dict):
+        if snak is not None:
+            if snak['property'] == 'P2093' and 'qualifiers' in snak and 'P1545' in snak['qualifiers']:
+                for property_id in ['P50', 'P2093']:
+                    if property_id in self.entity['claims']:
+                        for claim in self.entity['claims'][property_id]:
+                            if 'qualifiers' in claim and 'P1545' in claim['qualifiers']:
+                                if claim['qualifiers']['P1545'][0]['datavalue']['value'] == snak['qualifiers']['P1545']:
+                                    return
+            elif snak['property'] in self.entity['claims']:
+                return
+            return super().obtain_claim(snak)
+
+
 class Model(wd.Model):
-    property, db_ref, chunk, suffix = 'P818', 'Q118398', {}, 'metadataPrefix=arXiv'
+    property, db_ref, item, chunk, suffix = 'P818', 'Q118398', Element, {}, 'metadataPrefix=arXiv'
 
     def __init__(self, external_id: str, snaks: list = None):
         super().__init__(external_id, snaks)
@@ -37,7 +62,7 @@ class Model(wd.Model):
             model = super().prepare_data(external_id)
             model.input_snaks.append(cls.create_snak('P31', 'Q13442814'))
             model.label = ' '.join(tree.findall('*/w3:title', Model.config('ns'))[0].text.split())
-            model.input_snaks.append(cls.create_snak('P1476', {'text': model.label, 'language': 'en'}))
+            model.input_snaks.append(cls.create_snak('P1476', model.label))
             author_num = 0
             for author in tree.findall('*/*/w3:name', Model.config('ns')):
                 if len(author.text.strip()) > 3:
@@ -69,31 +94,8 @@ class Model(wd.Model):
             return result
 
 
-class Element(wd.Element):
-    """When called get_by_id() for a new pre-print, fill as many properties as possible via regular ArXiv API"""
-    _model, __cache = Model, None
-
-    def apply(self, parsed_data: Model):
-        super().apply(parsed_data)
-        if ('en' not in self.entity['labels']) and parsed_data and parsed_data.label:
-            self.entity['labels']['en'] = {'value': parsed_data.label, 'language': 'en'}
-
-    def obtain_claim(self, snak: dict):
-        if snak is not None:
-            if snak['property'] == 'P2093' and 'qualifiers' in snak and 'P1545' in snak['qualifiers']:
-                for property_id in ['P50', 'P2093']:
-                    if property_id in self.entity['claims']:
-                        for claim in self.entity['claims'][property_id]:
-                            if 'qualifiers' in claim and 'P1545' in claim['qualifiers']:
-                                if claim['qualifiers']['P1545'][0]['datavalue']['value'] == snak['qualifiers']['P1545']:
-                                    return
-            elif snak['property'] in self.entity['claims']:
-                return
-            return super().obtain_claim(snak)
-
-
 if Model.initialize(__file__):  # if not imported
-    # Element.get_by_id('2405.00850')  # Uncomment to debug processing single preprint
+    # Model.get_by_id('2405.00850', forced=True)  # Uncomment to debug processing single preprint
     SUMMARY = 'extracted from [[Q118398]] based on [[Property:{}]]: {}'
     QUERY = 'SELECT ?c ?i {{VALUES ?c {{\'{}\'}} ?i p:P356/ps:P356 ?c MINUS {{?i p:P818 []; p:P356 []}}}}'
     no_doi_items = wd.Wikidata.query('SELECT ?c ?i {?i p:P818/ps:P818 ?c MINUS {?i p:P818 []; p:P356 []}}')

@@ -1,4 +1,6 @@
 #!/usr/bin/python3
+from __future__ import annotations
+
 import logging
 from decimal import Decimal, InvalidOperation
 from urllib.parse import quote_plus
@@ -6,8 +8,30 @@ from urllib.parse import quote_plus
 import wd
 
 
+class Element(wd.AstroItem):
+    __cache = None
+
+    def obtain_claim(self, snak):
+        if snak and snak['property'] == 'P528':  # All catalogue codes for exoplanets should be aliases
+            self.entity['aliases'] = {} if 'aliases' not in self.entity else self.entity['aliases']
+            self.entity['aliases']['en'] = [] if 'en' not in self.entity['aliases'] else self.entity['aliases']['en']
+            self.entity['aliases']['en'].append({'value': snak['datavalue']['value'], 'language': 'en'})
+        return super().obtain_claim(snak)
+
+    @classmethod
+    def get_cache(cls, reset=None) -> dict:
+        def resolve_redirects(new, _):
+            norm_id = new[0].replace('KOI-', 'K0')
+            return (redirect[norm_id][0]['pl_name'] if norm_id in redirect else new[0]), new[1]
+
+        if cls.__cache is None:
+            redirect = Model.query(Model.config('endpoint'), Model.config('redirects'))
+            cls.__cache = wd.Wikidata.query('SELECT ?id ?item {?item p:P5667/ps:P5667 ?id}', resolve_redirects)
+        return super().get_cache(reset)
+
+
 class Model(wd.TAPClient):
-    property, db_ref, __ids = 'P5667', 'Q5420639', None
+    property, db_ref, __ids, item = 'P5667', 'Q5420639', None, Element
 
     @classmethod
     def next(cls):
@@ -52,35 +76,13 @@ class Model(wd.TAPClient):
         return Model.__ids[self.external_id] if self.external_id in Model.__ids else None
 
 
-class Element(wd.AstroItem):
-    _model, __cache = Model, None
-
-    def obtain_claim(self, snak):
-        if snak and snak['property'] == 'P528':  # All catalogue codes for exoplanets should be aliases
-            self.entity['aliases'] = {} if 'aliases' not in self.entity else self.entity['aliases']
-            self.entity['aliases']['en'] = [] if 'en' not in self.entity['aliases'] else self.entity['aliases']['en']
-            self.entity['aliases']['en'].append({'value': snak['datavalue']['value'], 'language': 'en'})
-        return super().obtain_claim(snak)
-
-    @classmethod
-    def get_cache(cls, reset=None) -> dict:
-        def resolve_redirects(new, _):
-            norm_id = new[0].replace('KOI-', 'K0')
-            return (redirect[norm_id][0]['pl_name'] if norm_id in redirect else new[0]), new[1]
-
-        if cls.__cache is None:
-            redirect = Model.query(Model.config('endpoint'), Model.config('redirects'))
-            cls.__cache = wd.Wikidata.query('SELECT ?id ?item {?item p:P5667/ps:P5667 ?id}', resolve_redirects)
-        return super().get_cache(reset)
-
-
 if Model.initialize(__file__):  # if not imported
-    # Element.get_by_id('30 Ari B b', forced=True).save()  # uncomment to debug specific item only
-    wd_items, ex_items = sorted(Element.get_cache().keys()), sorted(Model.next())  # Preload both
+    # Model.get_by_id('30 Ari B b', forced=True).save()  # uncomment to debug specific item only
+    wd_items, ex_items = sorted(Model.item.get_cache().keys()), sorted(Model.next())  # Preload both
     logging.info('Start updating {} existing items'.format(len(wd_items)))
     for ex_id in wd_items:
-        Element.get_by_id(ex_id, forced=True)
+        Model.get_by_id(ex_id, forced=True).save()
     logging.info('Finish updating existing items')
     for ex_id in ex_items:
-        if ex_id not in Element.get_cache():  # not wd_items!
-            Element.get_by_id(ex_id, forced=True).save()
+        if ex_id not in Model.item.get_cache():  # not wd_items!
+            Model.get_by_id(ex_id, forced=True).save()

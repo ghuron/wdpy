@@ -1,4 +1,6 @@
 #!/usr/bin/python3
+from __future__ import annotations
+
 from pathlib import Path
 from urllib.parse import quote_plus
 
@@ -7,8 +9,25 @@ import requests
 import wd
 
 
+class Element(wd.Article):
+    __cache = None
+
+    @classmethod
+    def get_cache(cls, reset=None) -> dict:
+        if (reset is None) and (Element.__cache is None):
+            query, o, Element.__cache = 'SELECT ?c ?i {{ ?i p:P819/ps:P819 ?c }} LIMIT 400000 OFFSET {}', -1, {}
+            while (o < len(Element.__cache)) and (r := wd.Wikidata.query(query.format(o := len(Element.__cache)))):
+                Element.__cache = Element.__cache | r
+        return super().get_cache(reset)
+
+    def apply(self, parsed_data: Model):
+        super().apply(parsed_data)
+        if ('en' not in self.entity['labels']) and parsed_data and parsed_data.label:
+            self.entity['labels']['en'] = {'value': parsed_data.label, 'language': 'en'}
+
+
 class Model(wd.TAPClient):
-    property, db_ref, __offset, __ads = 'P819', 'Q752099', 0, requests.session()
+    property, db_ref, item, __offset, __ads = 'P819', 'Q752099', Element, 0, requests.session()
     URL = 'https://api.adsabs.harvard.edu/v1/search/query?q={}&fl={}'
     __ads.headers.update({'Authorization': 'Bearer ' + (
         __p.read_text().strip() if (__p := Path(__file__.replace('ads.py', '.ads'))).exists() else '')})
@@ -62,37 +81,18 @@ class Model(wd.TAPClient):
         self.label = ''
 
 
-class Element(wd.Article):
-    _model, __cache = Model, None
-
-    @classmethod
-    def get_cache(cls, reset=None) -> dict:
-        if (reset is None) and (Element.__cache is None):
-            query, o, Element.__cache = 'SELECT ?c ?i {{ ?i p:P819/ps:P819 ?c }} LIMIT 400000 OFFSET {}', -1, {}
-            while (o < len(Element.__cache)) and (r := wd.Wikidata.query(query.format(o := len(Element.__cache)))):
-                Element.__cache = Element.__cache | r
-        return super().get_cache(reset)
-
-    def apply(self, parsed_data: Model):
-        super().apply(parsed_data)
-        if ('en' not in self.entity['labels']) and parsed_data and parsed_data.label:
-            self.entity['labels']['en'] = {'value': parsed_data.label, 'language': 'en'}
-
-
 if Model.initialize(__file__):  # if not imported
-    # Element.get_by_id('2018MNRAS.474.3557B', forced=True).save()
+    # Model.get_by_id('2024AJ....167..238O', forced=True).save()
     NO_DOI = 'SELECT ?c ?i {{VALUES ?c {{\'{}\'}} ?i p:P819/ps:P819 ?c FILTER NOT EXISTS {{?i p:P356 []}}}}'
     NO_ADS = 'SELECT ?c ?i {{VALUES ?c {{\'{}\'}} ?i p:P356/ps:P356 ?c FILTER NOT EXISTS {{?i p:P819 []}}}}'
     while bibcodes := Model.next():
         if wd_items := wd.Wikidata.query(NO_DOI.format('\' \''.join(bibcodes))):
             for ex_id, qid in wd_items.items():
-                (item := Element(ex_id, qid)).apply(Model.prepare_data(ex_id))
-                item.save()
+                Model.get_by_id(ex_id, forced=True).save()
 
         doi = {}
         for ex_id in bibcodes:
             doi[Model._dataset[ex_id][0]['p356'].upper()] = ex_id
         if wd_items := wd.Wikidata.query(NO_ADS.format('\' \''.join(doi.keys()))):
             for ex_id, qid in wd_items.items():
-                (item := Element(doi[ex_id], qid)).apply(Model.prepare_data(doi[ex_id]))
-                item.save()
+                Model.get_by_id(doi[ex_id], forced=True).save()

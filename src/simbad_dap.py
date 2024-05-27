@@ -4,8 +4,12 @@ import math
 import wd
 
 
+class Element(wd.AstroItem):
+    __cache = {}
+
+
 class Model(wd.TAPClient):
-    property, db_ref, __offset, __var_types, _ADQL_WRAPPER = 'P3083', 'Q654724', 0, None, '{} WHERE {}'
+    property, db_ref, item, __offset, __var_types, _ADQL_WRAPPER = 'P3083', 'Q654724', Element, 0, None, '{} WHERE {}'
 
     @classmethod
     def next(cls):
@@ -49,12 +53,8 @@ class Model(wd.TAPClient):
             return list(row.keys())[0]
 
 
-class Element(wd.AstroItem):
-    _model, __cache = Model, {}
-
-
 if Model.initialize(__file__):  # if not imported
-    # Element.get_by_id('* 51 Eri b', forced=True)
+    # Model.get_by_id('* 51 Eri b', forced=True)
     while chunk := Model.next():
         for ex_id in sorted(chunk):
-            Element.get_by_id(ex_id, forced=True).save()
+            Model.get_by_id(ex_id, forced=True).save()

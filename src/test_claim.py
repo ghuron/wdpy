@@ -14,32 +14,52 @@ class TestPreload(TestCase):
     @mock.patch('wd.Wikidata.load')
     def test_simple_load(self, mock_load: MagicMock, _):
         mock_load.return_value = {'Q1111': self.q1.entity}
-        Claim.preload({'Q1111'})
+        self.assertTrue(Claim.preload({'Q1111'}))
         self.assertEqual(20220202, Claim._pub_dates['Q1111'])
-        # Subsequent preload should be skipped
-        self.assertEqual(0, len(Claim.extract_references({'references': [Claim._create_ref('Q1111', {})]})))
+
+        mock_load.reset_mock()  # Subsequent preload should be skipped
+        self.assertTrue(Claim.preload({'Q1111'}))
+        mock_load.assert_not_called()
 
     @mock.patch('wd.Wikidata.type_of', return_value='wikibase-item')
     @mock.patch('wd.Wikidata.load')
     def test_redirect_load(self, mock_load, _):
         mock_load.return_value = {'Q2222': {'redirects': {'to': 'Q1111'}}}
-        Claim.preload({'Q2222'})
+        self.assertTrue(Claim.preload({'Q2222'}))
         self.assertEqual('Q1111', Claim._redirects['Q2222'])
-        # Subsequent preload should be skipped
-        self.assertEqual(0, len(Claim.extract_references({'references': [Claim._create_ref('Q2222', {})]})))
 
 
 @mock.patch('wd.Wikidata.type_of', return_value='wikibase-item')
-class TestRemoveDuplicates(TestCase):
+class TestDeduplicates(TestCase):
     def test_simple_duplicate_no_wdpy(self, _):
         ref = Claim._create_ref('Q1111', {})
-        self.assertEqual(1, len(result := Claim._remove_duplicates([ref, ref], {'P248'})))
+        self.assertEqual(1, len(result := Claim._deduplicate([ref, ref], set())))
         self.assertNotIn('wdpy', result[0])
 
     def test_simple_duplicate_combined_wdpy(self, _):
         ref = Claim._create_ref('Q1111', {})
-        self.assertEqual(1, len(result := Claim._remove_duplicates([ref, {**ref, 'wdpy': 1}], {'P248'})))
+        self.assertEqual(1, len(result := Claim._deduplicate([ref, {**ref, 'wdpy': 1}], set())))
         self.assertIn('wdpy', result[0])
+
+    def test_no_P248(self, _):
+        ref = {'snaks': {'P143': [Model.create_snak('P143', 'Q328')]}}
+        self.assertListEqual([ref, ref], Claim._deduplicate([ref, ref], {'P143'}))
+
+    def test_resolve_redirect(self, _):
+        ref1 = {'snaks': {'P248': [Model.create_snak('P248', 'Q1111')]}}
+        ref2 = {'snaks': {'P248': [Model.create_snak('P248', 'Q2222')]}}
+        Claim._redirects['Q2222'] = 'Q1111'
+        self.assertListEqual([ref1], Claim._deduplicate([ref1, ref2], set()))
+
+    def test_non_mergeable_duplicates(self, _):
+        ref1 = {'snaks': {'P248': [Model.create_snak('P248', 'Q111')], 'P123': [Model.create_snak('P123', 'Q222')]}}
+        ref2 = {'snaks': {'P248': [Model.create_snak('P248', 'Q111')], 'P123': [Model.create_snak('P123', 'Q333')]}}
+        self.assertListEqual([ref1, ref2], Claim._deduplicate([ref1, ref2], set()))
+
+    def test_copy_other_snak(self, _):
+        ref1 = {'snaks': {'P248': [Model.create_snak('P248', 'Q333')], 'P123': [Model.create_snak('P123', 'Q444')]}}
+        ref2 = {'snaks': {'P248': [Model.create_snak('P248', 'Q333')]}}
+        self.assertListEqual([ref1], Claim._deduplicate([ref2, ref1], {'P123'}))
 
 
 @mock.patch('wd.Wikidata.type_of', return_value='wikibase-item')
