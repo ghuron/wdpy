@@ -1,6 +1,6 @@
 from unittest import TestCase, mock
 
-from wd import Article, Model
+from wd import Article, Wikidata
 
 
 class TestPostProcess(TestCase):
@@ -8,8 +8,8 @@ class TestPostProcess(TestCase):
     @mock.patch('wd.Wikidata.type_of', return_value='wikibase-item')
     def test_rearrange(self, mock_type, __):
         item = Article('test_id', 'Q1')
-        (author1 := Model.create_snak('P50', 'Q23'))['qualifiers'] = {'P1545': '1'}
-        (author2 := Model.create_snak('P50', 'Q42'))['qualifiers'] = {'P1545': '2'}
+        (author1 := Wikidata.create_snak('P50', 'Q23'))['qualifiers'] = {'P1545': '1'}
+        (author2 := Wikidata.create_snak('P50', 'Q42'))['qualifiers'] = {'P1545': '2'}
         mock_type.return_value = 'string'
         (claim2 := item.obtain_claim(author2))['mainsnak']['hash'] = ''
         (claim1 := item.obtain_claim(author1))['mainsnak']['hash'] = ''

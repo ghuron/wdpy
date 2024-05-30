@@ -1,5 +1,6 @@
 from unittest import TestCase
 
+from wd import Wikidata
 from yad_vashem import Model, Element
 
 
@@ -9,8 +10,8 @@ class TestYadVashem(TestCase):
         cls.yv = Element('Succi Luigi (1882 - 1945 )', None)
 
     def test_obtain_claim_no_qualifiers_for_award(self):
-        self.yv.obtain_claim(Model.create_snak('P166', 'Q112197'))
-        self.yv.obtain_claim(Model.create_snak('P27', 'Q36'))
+        self.yv.obtain_claim(Wikidata.create_snak('P166', 'Q112197'))
+        self.yv.obtain_claim(Wikidata.create_snak('P27', 'Q36'))
 
     def test_process_sparql_row(self):
         def get_value(new, result):

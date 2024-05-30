@@ -8,7 +8,7 @@ class Element(wd.AstroItem):
     __cache = {}
 
 
-class Model(wd.TAPClient):
+class Model(wd.AstroModel):
     property, db_ref, item, __offset, __var_types, _ADQL_WRAPPER = 'P3083', 'Q654724', Element, 0, None, '{} WHERE {}'
 
     @classmethod
@@ -17,7 +17,7 @@ class Model(wd.TAPClient):
         cls.__offset = cls.__offset + 10000
         return cls._dataset.keys()
 
-    def construct_snak(self, row, col, new_col=None):
+    def process_column(self, row, col, new_col=None):
         if (new_col := col) == 'p397':
             new_col = 'p361' if row['parent_type'] in Model.config("groups") else new_col
         elif col == 'p215':
@@ -38,7 +38,7 @@ class Model(wd.TAPClient):
                 return
         elif col == 'p2216' and row['p2216t'] != 'v':
             return
-        return super().construct_snak(row, col, new_col)
+        return super().process_column(row, col, new_col)
 
     @classmethod
     def enrich_qualifier(cls, snak, value):

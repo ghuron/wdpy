@@ -28,7 +28,7 @@ class Element(wd.Element):
     def obtain_claim(self, snak):
         if snak is not None:
             if snak['property'] in ['P585', 'P27']:  # date and nationality to qualifiers for award
-                award = super().obtain_claim(Model.create_snak('P166', 'Q112197'))
+                award = super().obtain_claim(Model.transform('P166', 'Q112197'))
                 award['qualifiers'] = {} if 'qualifiers' not in award else award['qualifiers']
                 if snak['property'] not in award['qualifiers'] or snak['property'] not in self.award_cleared_qualifiers:
                     self.award_cleared_qualifiers.append(snak['property'])  # clear each qualifier only once
@@ -40,7 +40,7 @@ class Element(wd.Element):
                         if snak['datavalue']['value']['precision'] == 11:  # date precision on the day level
                             if snak['datavalue']['value']['time'].endswith('-01-01T00:00:00Z'):  # January 1
                                 claim['rank'] = 'deprecated'  # db artefact, only year known for sure
-                                claim['qualifiers'] = {'P2241': [Model.create_snak('P2241', 'Q41755623')]}
+                                claim['qualifiers'] = {'P2241': [wd.Wikidata.create_snak('P2241', 'Q41755623')]}
                 return claim
 
     def post_process(self):
@@ -132,14 +132,14 @@ class Model(wd.Model):
 
     @classmethod
     def prepare_data(cls, external_id: str):
-        (snak := Model.create_snak(Model.property, Model.group_id))['qualifiers'] = {'P1810': external_id}
+        (snak := Model.transform(Model.property, Model.group_id))['qualifiers'] = {'P1810': external_id}
         result = Model(external_id, [snak])
-        result.input_snaks.append(cls.create_snak('P31', 'Q5'))
-        result.input_snaks.append(cls.create_snak('P166', 'Q112197'))
+        result.input_snaks.append(cls.transform('P31', 'Q5'))
+        result.input_snaks.append(cls.transform('P166', 'Q112197'))
         for element in Model._rows[external_id]:
             if property_id := Model.config('properties', element['title']):
                 for val in element['value']:
-                    result.input_snaks.append(cls.create_snak(property_id, val['value']))
+                    result.input_snaks.append(cls.transform(property_id, val['value']))
         return result
 
 

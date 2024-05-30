@@ -1,14 +1,14 @@
 from unittest import mock, TestCase
 from unittest.mock import MagicMock
 
-from wd import Claim, Model, Element
+from wd import Claim, Wikidata, Element
 
 
 class TestPreload(TestCase):
     @mock.patch('wd.Wikidata.type_of', return_value='time')
     def setUp(self, _):
         self.q1 = Element('')
-        self.q1.obtain_claim(Model.create_snak('P577', '2022-02-02'))
+        self.q1.obtain_claim(Wikidata.create_snak('P577', '2022-02-02'))
 
     @mock.patch('wd.Wikidata.type_of', return_value='wikibase-item')
     @mock.patch('wd.Wikidata.load')
@@ -42,23 +42,26 @@ class TestDeduplicates(TestCase):
         self.assertIn('wdpy', result[0])
 
     def test_no_P248(self, _):
-        ref = {'snaks': {'P143': [Model.create_snak('P143', 'Q328')]}}
+        ref = {'snaks': {'P143': [Wikidata.create_snak('P143', 'Q328')]}}
         self.assertListEqual([ref, ref], Claim._deduplicate([ref, ref], {'P143'}))
 
     def test_resolve_redirect(self, _):
-        ref1 = {'snaks': {'P248': [Model.create_snak('P248', 'Q1111')]}}
-        ref2 = {'snaks': {'P248': [Model.create_snak('P248', 'Q2222')]}}
+        ref1 = {'snaks': {'P248': [Wikidata.create_snak('P248', 'Q1111')]}}
+        ref2 = {'snaks': {'P248': [Wikidata.create_snak('P248', 'Q2222')]}}
         Claim._redirects['Q2222'] = 'Q1111'
         self.assertListEqual([ref1], Claim._deduplicate([ref1, ref2], set()))
 
     def test_non_mergeable_duplicates(self, _):
-        ref1 = {'snaks': {'P248': [Model.create_snak('P248', 'Q111')], 'P123': [Model.create_snak('P123', 'Q222')]}}
-        ref2 = {'snaks': {'P248': [Model.create_snak('P248', 'Q111')], 'P123': [Model.create_snak('P123', 'Q333')]}}
+        ref1 = {'snaks': {'P248': [Wikidata.create_snak('P248', 'Q111')],
+                          'P123': [Wikidata.create_snak('P123', 'Q222')]}}
+        ref2 = {'snaks': {'P248': [Wikidata.create_snak('P248', 'Q111')],
+                          'P123': [Wikidata.create_snak('P123', 'Q333')]}}
         self.assertListEqual([ref1, ref2], Claim._deduplicate([ref1, ref2], set()))
 
     def test_copy_other_snak(self, _):
-        ref1 = {'snaks': {'P248': [Model.create_snak('P248', 'Q333')], 'P123': [Model.create_snak('P123', 'Q444')]}}
-        ref2 = {'snaks': {'P248': [Model.create_snak('P248', 'Q333')]}}
+        ref1 = {'snaks': {'P248': [Wikidata.create_snak('P248', 'Q333')],
+                          'P123': [Wikidata.create_snak('P123', 'Q444')]}}
+        ref2 = {'snaks': {'P248': [Wikidata.create_snak('P248', 'Q333')]}}
         self.assertListEqual([ref1], Claim._deduplicate([ref2, ref1], {'P123'}))
 
 
@@ -69,7 +72,7 @@ class TestConfirms(TestCase):
         self.assertEqual(0, len(Claim._confirms([p248], 'Q654724')))
         self.assertCountEqual([p248], Claim._confirms([{**p248, 'wdpy': 1}], 'Q654724'))
 
-        p12132 = {'snaks': {'P12132': [Model.create_snak('P12132', 'Q654724')]}}
+        p12132 = {'snaks': {'P12132': [Wikidata.create_snak('P12132', 'Q654724')]}}
         self.assertCountEqual([p12132], Claim._confirms([{**p248, 'wdpy': 1}, {**p12132, 'wdpy': 1}], 'Q654724'))
         self.assertCountEqual([p12132], Claim._confirms([{**p12132, 'wdpy': 1}, {**p248, 'wdpy': 1}], 'Q654724'))
 
@@ -77,15 +80,15 @@ class TestConfirms(TestCase):
         p248 = Claim._create_ref('Q654724' + '1', {})
         self.assertCountEqual([p248], Claim._confirms([p248], 'Q654724'))
 
-        p12132 = {'snaks': {'P12132': [Model.create_snak('P12132', 'Q654724' + '1')]}}
+        p12132 = {'snaks': {'P12132': [Wikidata.create_snak('P12132', 'Q654724' + '1')]}}
         self.assertCountEqual([p248, p12132], Claim._confirms([{**p248, 'wdpy': 1}, {**p12132, 'wdpy': 1}], 'Q654724'))
         self.assertCountEqual([p248, p12132], Claim._confirms([{**p12132, 'wdpy': 1}, {**p248, 'wdpy': 1}], 'Q654724'))
 
     def test_non_confirmed_P12132(self, _):
-        own = Model.create_snak('P12132', 'Q654724')
+        own = Wikidata.create_snak('P12132', 'Q654724')
         self.assertEqual(0, len(Claim._confirms([{'snaks': {'P12132': [own]}}], 'Q654724')))
 
-        foreign = Model.create_snak('P12132', 'Q654724' + '1')
+        foreign = Wikidata.create_snak('P12132', 'Q654724' + '1')
         self.assertEqual({'snaks': {'P12132': [foreign]}},
                          Claim._confirms([{'snaks': {'P12132': [own, foreign]}}], 'Q654724')[0])
 
@@ -102,8 +105,8 @@ class TestProcessDecorators(TestCase):
 class TestFindMorePreciseClaim(TestCase):
     def test_year_and_month(self, mock_type: MagicMock):
         mock_type.return_value = 'time'
-        year = Claim.construct(Model.create_snak('P575', '2000'))
-        month = Claim.construct(Model.create_snak('P575', '2000-04'))
+        year = Claim.construct(Wikidata.create_snak('P575', '2000'))
+        month = Claim.construct(Wikidata.create_snak('P575', '2000-04'))
         mock_type.return_value = 'wikibase-item'
 
         self.assertEqual(month.claim, year.find_more_precise_claim([year.claim, month.claim]))
@@ -112,8 +115,8 @@ class TestFindMorePreciseClaim(TestCase):
 
     def test_month_different_year(self, mock_type: MagicMock):
         mock_type.return_value = 'time'
-        year = Claim.construct(Model.create_snak('P575', '2000'))
-        month = Claim.construct(Model.create_snak('P575', '1999-04'))
+        year = Claim.construct(Wikidata.create_snak('P575', '2000'))
+        month = Claim.construct(Wikidata.create_snak('P575', '1999-04'))
         mock_type.return_value = 'wikibase-item'
 
         self.assertEqual(None, year.find_more_precise_claim([month.claim, year.claim]))
@@ -121,8 +124,8 @@ class TestFindMorePreciseClaim(TestCase):
 
     def test_same_value_diff_precisions(self, mock_type: MagicMock):
         mock_type.return_value = 'time'
-        month = Claim.construct(Model.create_snak('P575', '1976-12'))
-        year = Claim.construct(Model.create_snak('P575', '1976'))
+        month = Claim.construct(Wikidata.create_snak('P575', '1976-12'))
+        year = Claim.construct(Wikidata.create_snak('P575', '1976'))
         year.claim['mainsnak']['datavalue']['value']['time'] = month.claim['mainsnak']['datavalue']['value']['time']
         mock_type.return_value = 'wikibase-item'
 
@@ -130,8 +133,8 @@ class TestFindMorePreciseClaim(TestCase):
 
     def test_2_amounts_without_units(self, mock_type: MagicMock):
         mock_type.return_value = 'quantity'
-        rough = Claim.construct(Model.create_snak('P1096', '0.56'))
-        precise = Claim.construct(Model.create_snak('P1096', '0.555'))
+        rough = Claim.construct(Wikidata.create_snak('P1096', '0.56'))
+        precise = Claim.construct(Wikidata.create_snak('P1096', '0.555'))
         mock_type.return_value = 'wikibase-item'
 
         self.assertEqual(precise.claim, rough.find_more_precise_claim([rough.claim, precise.claim]))
@@ -139,9 +142,9 @@ class TestFindMorePreciseClaim(TestCase):
 
     def test_different_units(self, mock_type: MagicMock):
         mock_type.return_value = 'quantity'
-        rough = Claim.construct(Model.create_snak('P2051', '0.56'))
+        rough = Claim.construct(Wikidata.create_snak('P2051', '0.56'))
         rough.claim['mainsnak']['datavalue']['value']['unit'] = 'http://www.wikidata.org/entity/Q681996'
-        precise = Claim.construct(Model.create_snak('P2051', '0.555'))
+        precise = Claim.construct(Wikidata.create_snak('P2051', '0.555'))
         precise.claim['mainsnak']['datavalue']['value']['unit'] = 'http://www.wikidata.org/entity/Q651336'
         mock_type.return_value = 'wikibase-item'
 
@@ -149,8 +152,8 @@ class TestFindMorePreciseClaim(TestCase):
 
     def test_upper_lower_bound(self, mock_type: MagicMock):
         mock_type.return_value = 'quantity'
-        precise = Claim.construct(Model.create_snak('P2583', '113.4314', '0.5211', '0.5211'))
-        rough = Claim.construct(Model.create_snak('P2583', '113.43', '0.52', '0.52'))
+        precise = Claim.construct(Wikidata.create_snak('P2583', '113.4314', '0.5211', '0.5211'))
+        rough = Claim.construct(Wikidata.create_snak('P2583', '113.43', '0.52', '0.52'))
         mock_type.return_value = 'wikibase-item'
 
         self.assertEqual(precise.claim, rough.find_more_precise_claim([rough.claim, precise.claim]))

@@ -26,7 +26,7 @@ class Element(wd.Article):
             self.entity['labels']['en'] = {'value': parsed_data.label, 'language': 'en'}
 
 
-class Model(wd.TAPClient):
+class Model(wd.AstroModel):
     property, db_ref, item, __offset, __ads = 'P819', 'Q752099', Element, 0, requests.session()
     URL = 'https://api.adsabs.harvard.edu/v1/search/query?q={}&fl={}'
     __ads.headers.update({'Authorization': 'Bearer ' + (
@@ -46,25 +46,25 @@ class Model(wd.TAPClient):
             return
 
         result = Model(external_id)
-        result.input_snaks.append(Model.create_snak('P31', 'Q13442814'))
+        result.input_snaks.append(result.transform('P31', 'Q13442814'))
 
         for idx in range(0, len((data := response.json()['response']['docs'][0])['author'])):
             if author_id := Element.haswbstatement(data['orcid_pub'][idx], 'P496'):
-                (snak := Model.create_snak('P50', author_id))['qualifiers'] = {'P1932': data['author'][idx]}
+                (snak := result.transform('P50', author_id))['qualifiers'] = {'P1932': data['author'][idx]}
             else:
-                (snak := Model.create_snak('P2093', data['author'][idx]))['qualifiers'] = {}
+                (snak := result.transform('P2093', data['author'][idx]))['qualifiers'] = {}
             snak['qualifiers']['P1545'] = str(idx + 1)
             result.input_snaks.append(snak)
 
         for ident in data['identifier']:
             if ident.startswith('arXiv:'):
-                result.input_snaks.append(Model.create_snak('P818', ident.replace('arXiv:', '')))
+                result.transform('P818', ident.replace('arXiv:', ''))
             elif ident.startswith('10.') and not ('ARXIV' in ident.upper()):
-                result.input_snaks.append(Model.create_snak('P356', ident.upper()))
+                result.transform('P356', ident.upper())
 
         for field in Model.config('properties'):
             if (p := Model.config('properties')[field]) and (field in data):
-                if s := Model.create_snak(p, data[field][0] if isinstance(data[field], list) else data[field]):
+                if s := result.transform(p, data[field][0] if isinstance(data[field], list) else data[field]):
                     result.input_snaks.append(s)
                     if p == 'P304' and 'page_count' in data:
                         try:

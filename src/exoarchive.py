@@ -30,7 +30,7 @@ class Element(wd.AstroItem):
         return super().get_cache(reset)
 
 
-class Model(wd.TAPClient):
+class Model(wd.AstroModel):
     property, db_ref, __ids, item = 'P5667', 'Q5420639', None, Element
 
     @classmethod
@@ -38,7 +38,7 @@ class Model(wd.TAPClient):
         cls._dataset = cls.load('P31 = \'CONFIRMED0\'') if not cls._dataset else {}
         return cls._dataset.keys()
 
-    def construct_snak(self, row, col, new_col=None):
+    def process_column(self, row, col, new_col=None):
         def count_digits(idx):
             return len(str(Decimal(row[idx]).normalize()))
 
@@ -51,7 +51,7 @@ class Model(wd.TAPClient):
                     return
             except InvalidOperation:
                 return
-        super().construct_snak(row, col, 'p' + col[1:])
+        super().process_column(row, col, 'p' + col[1:])
 
     @classmethod
     def prepare_data(cls, external_id):
@@ -64,7 +64,7 @@ class Model(wd.TAPClient):
         if (model := super().prepare_data(external_id)) and response:
             try:  # ToDo: code below works for planets only, we need to add stars as well
                 for code in response['system']['objects']['planet_set']['planets'][external_id]['alias_set']['aliases']:
-                    model.construct_snak({'p528': code[:-2] + code[-1] if code[-2] == ' ' else code}, 'p528')
+                    model.process_column({'p528': code[:-2] + code[-1] if code[-2] == ' ' else code}, 'p528')
             except KeyError:
                 pass
         return model

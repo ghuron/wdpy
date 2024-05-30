@@ -60,18 +60,18 @@ class Model(wd.Model):
     def prepare_data(cls, external_id: str) -> []:
         if tree := Model.arxiv_xml('api/query?id_list=' + external_id):
             model = super().prepare_data(external_id)
-            model.input_snaks.append(cls.create_snak('P31', 'Q13442814'))
+            model.input_snaks.append(model.transform('P31', 'Q13442814'))
             model.label = ' '.join(tree.findall('*/w3:title', Model.config('ns'))[0].text.split())
-            model.input_snaks.append(cls.create_snak('P1476', model.label))
+            model.input_snaks.append(model.transform('P1476', model.label))
             author_num = 0
             for author in tree.findall('*/*/w3:name', Model.config('ns')):
                 if len(author.text.strip()) > 3:
-                    snak = cls.create_snak('P2093', author.text.strip())
+                    snak = model.transform('P2093', author.text.strip())
                     snak['qualifiers'] = {'P1545': str(author_num := author_num + 1)}
                     model.input_snaks.append(snak)
             if len(doi_list := tree.findall('*/arxiv:doi', Model.config('ns'))) == 1:
                 model.__doi = doi_list[0].text.upper()
-                model.input_snaks.append(cls.create_snak('P356', model.__doi))
+                model.input_snaks.append(model.transform('P356', model.__doi))
             return model
 
     @classmethod  # -------------------- Arxiv Bulk Data Access part --------------------
@@ -90,12 +90,12 @@ class Model(wd.Model):
 
     def get_qid(self):
         if self.__doi and (result := Element.haswbstatement(self.__doi, 'P356')):  # Found by DOI
-            self.input_snaks = [self.create_snak(self.property, self.external_id)]  # only ArXiv-ID need to be set
+            self.input_snaks = [wd.Wikidata.create_snak(self.property, self.external_id)]  # only ArXiv-ID needed
             return result
 
 
 if Model.initialize(__file__):  # if not imported
-    # Model.get_by_id('2405.00850', forced=True)  # Uncomment to debug processing single preprint
+    # Model.get_by_id('2110.15392', forced=True).save()  # Uncomment to debug processing single preprint
     SUMMARY = 'extracted from [[Q118398]] based on [[Property:{}]]: {}'
     QUERY = 'SELECT ?c ?i {{VALUES ?c {{\'{}\'}} ?i p:P356/ps:P356 ?c MINUS {{?i p:P818 []; p:P356 []}}}}'
     no_doi_items = wd.Wikidata.query('SELECT ?c ?i {?i p:P818/ps:P818 ?c MINUS {?i p:P818 []; p:P356 []}}')
@@ -105,6 +105,6 @@ if Model.initialize(__file__):  # if not imported
         for p818 in Model.chunk:
             if p356 := Model.chunk[p818]:
                 if no_doi_items and (qid := no_doi_items.pop(p818, 0)):  # DOI is absent
-                    wd.Claim.construct(Model.create_snak('P356', p356), qid).save(SUMMARY.format('P818', p818))
+                    wd.Claim.construct(wd.Wikidata.create_snak('P356', p356), qid).save(SUMMARY.format('P818', p818))
                 elif no_arxiv_items and (qid := no_arxiv_items.pop(p356, 0)):  # Arxiv is absent
-                    wd.Claim.construct(Model.create_snak('P818', p818), qid).save(SUMMARY.format('P356', p356))
+                    wd.Claim.construct(wd.Wikidata.create_snak('P818', p818), qid).save(SUMMARY.format('P356', p356))

@@ -38,17 +38,10 @@ class Element(wd.AstroItem):
         return claim
 
 
-class Model(wd.Model):
-    property, __session, __properties, __offset, __page, __ids = 'P5653', None, None, 0, None, None
+class Model(wd.AstroModel):
+    property, __session, __offset, __page, __ids = 'P5653', None, 0, None, None
     db_ref, item = 'Q1385430', Element
     articles = {'publication_2540': 'Q54012702', 'publication_4966': 'Q66424531', 'publication_3182': 'Q56032677'}
-
-    @classmethod
-    def set_parse_mode(cls, host_star: bool = False):
-        cls.__properties = cls.config('star') if host_star else cls.config('planet')
-        if not host_star and Model.__page:
-            cls.__page.decompose()
-            cls.__page = None
 
     def __init__(self, external_id: str, snaks: list = None):
         super().__init__(external_id, snaks)
@@ -74,7 +67,7 @@ class Model(wd.Model):
     @staticmethod
     def retrieve(exoplanet_id):
         """Load page corresponding to self.external_id and update Exoplanet.articles with parsed sources"""
-        if response := wd.Wikidata.request(url := "https://exoplanet.eu/catalog/" + exoplanet_id):
+        if response := wd.Wikidata.request(url := 'https://exoplanet.eu/catalog/' + exoplanet_id):
             Model.__page = BeautifulSoup(response.content, 'html.parser')
             for p in Model.__page.find_all('li', {'class': 'publication'}):
                 try:
@@ -83,60 +76,61 @@ class Model(wd.Model):
                 except ValueError as e:
                     logging.info('{}\tFound {} results while looking for source {} by title'.
                                  format(url, e.args[0], p.get('id')))
-            return Model.__page
+            return Model(response.url.removeprefix('https://exoplanet.eu/catalog/').removesuffix('/'))
 
     @staticmethod
     def parse_publication(publication: element.Tag):
         for a in publication.find_all('a'):
-            if ref_id := wd.TAPClient.parse_url(a.get('href')):
+            if ref_id := wd.AstroModel.parse_url(a.get('href')):
                 return ref_id
         if (raw := publication.find('h5').text) and "Data Validation (DV) Report for Kepler" not in raw:
             if len(title := ' '.join(raw.replace('\n', ' ').strip('.').split())) > 24:
                 return wd.Wikidata.search('"{}" -haswbstatement:P31=Q1348305'.format(title))
 
     @classmethod
-    def prepare_data(cls, external_id) -> []:
-        cls.__page = cls.__page if cls.__page else cls.retrieve(external_id)
+    def prepare_data(cls, external_id, host_star: bool = False) -> []:
+        result = Model(external_id, []) if host_star else Model.retrieve(external_id)
         if cls.__page:
-            result = super().prepare_data(external_id)
-            if 'P215' in cls.__properties.values():  # parsing hosting star, not exoplanet
-                result.input_snaks = []
+            template = {'decorators': {'P12132': cls.db_ref}, 'source': [cls.db_ref]}
+            if host_star:
+                template['decorators'][cls.property] = result.external_id
                 if star := cls.__page.select_one('[id^=star-detail] dd'):
                     result.label = star.text.strip()
             else:
                 result.label = cls.__page.select_one('#planet-detail-basic-info dd').text.strip()
                 if star := cls.__page.select_one('[id^=star-detail] dd'):
-                    result.append_snaks('P397', [star.text.strip()])
+                    result.append_multiple('P397', [star.text.strip()], template)
                 elif cls.__page.select_one('[id=system-detail-basic-header]'):
                     result.input_snaks.append({'property': 'P397', 'datatype': 'wikibase-item', 'snaktype': 'novalue'})
 
             if result.label:
-                result.append_snaks('P528', [result.label])
+                result.append_multiple('P528', [result.label], template)
 
-            for div_id in cls.__properties:
+            for div_id, property_id in cls.config('star' if host_star else 'planet').items():
                 if (ref := Model.__page.find(id=div_id)) and (text := ref.parent.findChild('span').text):
-                    if (property_id := cls.__properties[div_id]) in ['P397', 'P528']:
-                        result.append_snaks(property_id, text.split(','), ref)
+                    template['source'] = cls.parse_ref(ref)
+                    if property_id in ['P397', 'P528']:
+                        result.append_multiple(property_id, text.split(','), template)
                     else:
-                        result.append_snaks(property_id, [text], ref)
+                        result.append_multiple(property_id, [text], template)
                         if property_id in ['P6257', 'P6258']:  # add J2000 epoch
-                            result.input_snaks.append(Model.create_snak('P6259', 'Q1264450'))
+                            result.input_snaks.append(result.transform('P6259', 'Q1264450'))
             return result
 
-    def append_snaks(self, property_id: str, values: [], ref_div=None):
-        for value in values:
-            if snak := Model.parse_value(property_id, value.strip()):
-                if 'P215' in Model.__properties.values():  # it is the host star
-                    snak['decorators'] = snak['decorators'] if 'decorators' in snak else {}
-                    snak['decorators'][Model.property] = self.external_id  # Ugly hack
-                for a in (ref_div.find_all('a') if ref_div else []):
-                    if (anchor := a.get('href').strip('#')) in Model.articles:
-                        snak['source'] = (snak['source'] if 'source' in snak else []) + [Model.articles[anchor]]
-                        break  # 2nd and subsequent sources are usually specified incorrectly
-                self.input_snaks.append(snak)
+    @classmethod
+    def parse_ref(cls, ref_div) -> list[str]:
+        for a in ref_div.find_all('a'):
+            if (anchor := a.get('href').strip('#')) in Model.articles:
+                return [Model.articles[anchor]]
+        return [cls.db_ref]
 
-    @staticmethod
-    def parse_value(property_id: str, value: str):
+    def append_multiple(self, property_id: str, values: list[str], template: dict):
+        for value in values:
+            if snak := self.transform(property_id, value.strip()):
+                self.input_snaks.append({**snak, **template})
+
+    @classmethod
+    def transform(cls, property_id: str, value, **kwargs):
         if not value or (value := value.strip()) == '—':
             return
 
@@ -146,35 +140,33 @@ class Model(wd.Model):
             if reg := re.search(
                     '(?P<value>{})\\s*\\(\\s*-+(?P<min>{})\\s+(?P<max>\\+{})\\s*\\){}'.format(num, num, num, unit),
                     value):
-                result = Model.create_snak(property_id, reg.group('value'), reg.group('min'), reg.group('max'))
+                result = super().transform(property_id, reg.group('value'), reg.group('min'), reg.group('max'))
             elif reg := re.search(  # ToDo: Add source circumstance qualifier if > or < found
                     '^[<>]?\\s*(?P<value>' + num + ')\\s*(\\(\\s*±\\s*(?P<bound>' + num + ')\\s*\\))?' + unit + '$',
                     value):
                 if bound := reg.group('bound'):
-                    result = Model.create_snak(property_id, reg.group('value'), bound, bound)
+                    result = super().transform(property_id, reg.group('value'), bound, bound)
                 else:
-                    result = Model.create_snak(property_id, reg.group('value'))
+                    result = super().transform(property_id, reg.group('value'))
             elif len(deg := value.split(':')) == 3:  # coordinates
                 try:
                     deg[1], deg[2] = ('-' + deg[1], '-' + deg[2]) if deg[0].startswith('-') else (deg[1], deg[2])
                     angle = (float(deg[2]) / 60 + float(deg[1])) / 60 + float(deg[0])
                     digits = 3 + (len(value) - value.find('.') - 1 if value.find('.') > 0 else 0)
-                    value = Model.format_float(15 * angle if property_id == 'P6257' else angle, digits)
-                    if result := Model.create_snak(property_id, value):
+                    value = wd.Wikidata.format_float(15 * angle if property_id == 'P6257' else angle, digits)
+                    if result := super().transform(property_id, value):
                         result['datavalue']['value']['unit'] = 'http://www.wikidata.org/entity/Q28390'
                 except (ValueError, DecimalException):
-                    return Model.create_snak(property_id, value)
+                    return super().transform(property_id, value)
             else:
-                return Model.create_snak(property_id, value)
+                return super().transform(property_id, value)
 
-            if result and reg and (unit := Model.lut(reg.group('unit'))):
+            if result and reg and (unit := cls.lut(reg.group('unit'))):
                 result['datavalue']['value']['unit'] = 'http://www.wikidata.org/entity/' + unit
-            return result
+            return cls.enrich_qualifier(result, value)
 
-        if property_id == 'P397':
-            return wd.TAPClient.get_parent_snak(value)
         value = value[:-2] + value[-1] if (property_id == 'P528') and (value[-2] == ' ') else value
-        return Model.enrich_qualifier(Model.create_snak(property_id, value), value)
+        return cls.enrich_qualifier(super().transform(property_id, value), value)
 
     def get_qid(self):
         if not Model.__ids:
@@ -189,16 +181,13 @@ if Model.initialize(__file__):  # if just imported - do nothing
             if 'datavalue' in (parent := item.entity['claims']['P397'][0]['mainsnak']):  # parent != "novalue"
                 if item.set_qid(parent['datavalue']['value']['id']) not in updated_hosts:
                     if Model.property not in item.entity['claims']:  # If initial item was not exo-moon
-                        Model.set_parse_mode(host_star=True)
-                        item.apply(Model.prepare_data(external_id))
+                        item.apply(Model.prepare_data(external_id, host_star=True))
                         item.save()
                         updated_hosts.append(item.qid)
-        Model.set_parse_mode(host_star=False)
 
 
-    Model.set_parse_mode()
-    # Model.get_by_id('toi_782_b--9032', forced=True).save()  # uncomment to debug specific item only
     updated_hosts = []
+    # process('51_peg_b--12')  # uncomment to debug specific item only
     logging.info('Start updating {} existing items'.format(len(Model.item.get_cache())))
     for ex_id in sorted(Model.item.get_cache().keys()):
         process(ex_id)

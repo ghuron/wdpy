@@ -7,6 +7,7 @@
     "(http[s]?://)?(dx\\.)?doi\\.org/": "P356=",
     ".*arxiv\\.org/(abs|pdf)/(\\d{4}.\\d+|[a-z\\-]+(\\.[A-Z]{2})?\\/\\d{7}).*": "P818=\\g<2>",
     "http[s]?://www\\.journals\\.uchicago\\.edu/doi/abs/": "P356=",
+    ".*iopscience.iop.org/article/(10\\..+)$": "P356=\\g<1>",
     ".*iopscience.iop.org/(.+\\d)/?$": "P356=10.1088/\\g<1>",
     ".*iop.org/EJ/abstract/1402-4896/(.+\\d)/?$": "P356=10.1088/0031-8949/\\g<1>",
     ".*iop.org/EJ/abstract/1538-4357/(.+\\d)/?$": "P356=10.1088/0004-637X/\\g<1>",

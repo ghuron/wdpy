@@ -118,6 +118,119 @@ class Wikidata:
                     replace('WikibaseItem', 'wikibase-item').replace('ExternalId', 'external-id').lower()
         return Wikidata.__types[property_id] if property_id in Wikidata.__types else None
 
+    @staticmethod
+    def format_float(figure, digits: int = -1):
+        """Raises: DecimalException"""
+        formatter = '{:f}'
+        if 0 <= digits < 24:
+            if math.fabs(Decimal(figure)) >= 1:  # adding number of digits before .
+                digits += 1 + int(math.log10(math.fabs(Decimal(figure))))
+            formatter = '{:.' + str(digits) + '}'
+        return formatter.format(Decimal(figure).normalize())
+
+    @staticmethod
+    def fix_error(figure: str) -> str:
+        if re.search('999+\\d$', figure):
+            n = Decimal(999999999999999999999999)
+            return Wikidata.format_float(n - Decimal(Wikidata.fix_error(Wikidata.format_float(n - Decimal(figure)))))
+        else:
+            return Wikidata.format_float(re.sub('^000+\\d$', '', figure))
+
+    @staticmethod
+    def parse_date(i: str):
+        for p in ['(?P<d>\\d\\d?)?/?(?P<m>\\d\\d?)/(?P<y>\\d{4})',
+                  '(?P<y>\\d{4})-?(?P<m>\\d\\d?)?-?(?P<d>\\d\\d?)?']:
+            if (m := re.search(p, i)) and (g := m.groupdict('0')):
+                try:  # validate parsed month and day
+                    datetime(int(g['y']), int(g['m']) if int(g['m']) else 1, int(g['d']) if int(g['d']) else 1)
+                except ValueError:
+                    return
+                return {'before': 0, 'after': 0, 'calendarmodel': 'http://www.wikidata.org/entity/Q1985727',
+                        'time': '+{}-{:02d}-{:02d}T00:00:00Z'.format(int(g['y']), int(g['m']), int(g['d'])),
+                        'precision': 11 if int(g['d']) else 10 if int(g['m']) else 9, 'timezone': 0}
+
+    @staticmethod
+    def serialize(value: dict, standard: dict = None):
+        if isinstance(value, str):
+            return value
+        elif 'id' in (standard := standard if standard else value):
+            return value['id']  # TODO: implement P279*
+        elif 'amount' in standard:
+            digits = -Decimal(standard['amount']).normalize().as_tuple().exponent
+            result = value['unit']
+            if 'lowerBound' in value and 'lowerBound' in standard:
+                if digits < (bound := -Decimal(standard['lowerBound']).normalize().as_tuple().exponent):
+                    digits = bound
+                if digits < (bound := -Decimal(standard['upperBound']).normalize().as_tuple().exponent):
+                    digits = bound
+                result += '|' + str(round(Decimal(value['amount']) - Decimal(value['lowerBound']), digits))
+                result += '|' + str(round(Decimal(value['upperBound']) - Decimal(value['amount']), digits))
+            return result + '|' + str(round(Decimal(value['amount']), digits))
+        elif 'precision' in standard and int(value['precision']) >= int(standard['precision']):
+            if standard['precision'] == 9:
+                return value['time'][:5] + '0000'
+            elif standard['precision'] == 10:
+                return value['time'][:5] + value['time'][6:8] + '00'
+            elif standard['precision'] == 11:
+                return value['time'][:5] + value['time'][6:8] + value['time'][9:11]
+        elif 'language' in standard:
+            return value['text'] + '@' + value['language']
+        return float('nan')  # because NaN != NaN
+
+    @staticmethod
+    def equals(snak: dict, value: dict) -> bool:
+        return 'datavalue' in snak and Wikidata.serialize(snak['datavalue']['value']) == Wikidata.serialize(value)
+
+    @staticmethod
+    def qualifier_filter(conditions: dict, claim: dict) -> bool:
+        for property_id in (conditions['qualifiers'] if 'qualifiers' in conditions else {}):
+            if 'qualifiers' not in claim or (property_id not in claim['qualifiers']):  # No property_id qualifier
+                return False
+            was_found = None
+            for c in claim['qualifiers'][property_id]:
+                if was_found := Wikidata.equals(c, {'id': conditions['qualifiers'][property_id]}):
+                    break
+            if not was_found:  # Above loop did not find anything
+                return False
+        return True  # All conditions are met
+
+    @staticmethod
+    def create_snak(property_id: str, value, lower: str = None, upper: str = None):
+        """Create snak based on provided id of the property and string value"""
+        if not (t := Wikidata.type_of(property_id)) or value is None or value == '' or value == 'NaN':
+            return None
+        snak = {'datatype': t, 'property': property_id, 'snaktype': 'value',
+                'datavalue': {'value': value, 'type': t}}
+        if snak['datatype'] == 'quantity':
+            try:
+                snak['datavalue']['value'] = {'amount': Wikidata.format_float(value), 'unit': '1'}
+                if upper is not None and lower is not None:
+                    min_bound = Decimal(Wikidata.fix_error(lower))
+                    if min_bound < 0:
+                        min_bound = -min_bound
+                    amount = Decimal(value)
+                    max_bound = Decimal(Wikidata.fix_error(upper))
+
+                    if min_bound > 0 or max_bound > 0:  # +/- 0 can be skipped
+                        if max_bound != Decimal('Infinity'):
+                            snak['datavalue']['value']['lowerBound'] = Wikidata.format_float(amount - min_bound)
+                            snak['datavalue']['value']['upperBound'] = Wikidata.format_float(amount + max_bound)
+            except (ValueError, DecimalException, KeyError):
+                return None
+        elif snak['datatype'] == 'wikibase-item':
+            if not re.search('Q\\d+$', value):
+                return None
+            snak['datavalue'] = {'type': 'wikibase-entityid', 'value': {'entity-type': 'item', 'id': value}}
+        elif snak['datatype'] == 'time':
+            if not (value := Wikidata.parse_date(snak['datavalue']['value'])):
+                return
+            snak['datavalue']['value'] = value
+        elif snak['datatype'] == 'external-id':
+            snak['datavalue']['type'] = 'string'
+        elif snak['datatype'] == 'monolingualtext':
+            snak['datavalue']['value'] = {'text': value, 'language': 'en'}
+        return snak
+
 
 class Claim:
     def __init__(self, claim: dict):
@@ -138,10 +251,10 @@ class Claim:
     def process_decorators(self, snak: dict, db_ref: str):
         if 'qualifiers' in snak:
             for p_id in snak['qualifiers']:
-                if new_qualifier := Model.create_snak(p_id, snak['qualifiers'][p_id]):
+                if new_qualifier := Wikidata.create_snak(p_id, snak['qualifiers'][p_id]):
                     self.claim['qualifiers'] = self.claim['qualifiers'] if 'qualifiers' in self.claim else {}
                     if p_id in self.claim['qualifiers']:
-                        if Model.equals(self.claim['qualifiers'][p_id][0], new_qualifier['datavalue']['value']):
+                        if Wikidata.equals(self.claim['qualifiers'][p_id][0], new_qualifier['datavalue']['value']):
                             continue
                     self.claim['qualifiers'][p_id] = [new_qualifier]
 
@@ -155,10 +268,10 @@ class Claim:
 
     @staticmethod
     def _create_ref(src_id: str, decorators: dict):
-        snaks = {'P248': [Model.create_snak('P248', src_id)]}
+        snaks = {'P248': [Wikidata.create_snak('P248', src_id)]}
         for p_id in decorators:
             if src_id != decorators[p_id]:
-                snaks[p_id] = [Model.create_snak(p_id, decorators[p_id])]
+                snaks[p_id] = [Wikidata.create_snak(p_id, decorators[p_id])]
         return {'snaks': snaks}
 
     _pub_dates, _redirects = {'Q66617668': 19240101, 'Q4026990': 99999999, 'Q654724': 19240101}, {}
@@ -211,7 +324,7 @@ class Claim:
                 if ('claims' in item) and ('P577' in item['claims']):
                     if 'datavalue' in (item['claims']['P577'][0]['mainsnak']):
                         p577 = item['claims']['P577'][0]['mainsnak']['datavalue']['value']
-                Claim._pub_dates[ref_id] = int(Model.serialize(p577)) if p577 else None
+                Claim._pub_dates[ref_id] = int(Wikidata.serialize(p577)) if p577 else None
         return True
 
     @staticmethod
@@ -268,10 +381,10 @@ class Claim:
             value = self.claim['mainsnak']['datavalue']['value']
             for claim in statements:
                 if self.claim != claim and 'datavalue' in claim['mainsnak']:
-                    if Model.serialize(claim['mainsnak']['datavalue']['value'], value) == Model.serialize(value):
+                    if Wikidata.serialize(claim['mainsnak']['datavalue']['value'], value) == Wikidata.serialize(value):
                         self.claim['rank'] = 'deprecated'
                         self.claim['qualifiers'] = {} if 'qualifiers' not in self.claim else self.claim['qualifiers']
-                        self.claim['qualifiers']['P2241'] = [Model.create_snak('P2241', 'Q42727519')]
+                        self.claim['qualifiers']['P2241'] = [Wikidata.create_snak('P2241', 'Q42727519')]
                         return claim
             if 'qualifiers' in self.claim and 'P2241' in self.claim['qualifiers']:
                 if 'Q42727519' == self.claim['qualifiers']['P2241'][0]['datavalue']['value']['id']:
@@ -332,7 +445,7 @@ class Element:
             if snak['snaktype'] == 'novalue':
                 if c['mainsnak']['snaktype'] == 'novalue':
                     return Claim(c)
-            elif Model.qualifier_filter(snak, c) and Model.equals(c['mainsnak'], snak['datavalue']['value']):
+            elif Wikidata.qualifier_filter(snak, c) and Wikidata.equals(c['mainsnak'], snak['datavalue']['value']):
                 return Claim(c)
 
     def obtain_claim(self, snak: dict):
@@ -395,7 +508,7 @@ class Element:
                     if 'qualifiers' not in claim or group_by not in claim['qualifiers']:
                         self.delete_claim(claim)
                         continue
-                    group = Model.serialize(claim['qualifiers'][group_by][0]['datavalue']['value'])
+                    group = Wikidata.serialize(claim['qualifiers'][group_by][0]['datavalue']['value'])
 
                 latest[group] = 0 if group not in latest else latest[group]
                 if 'datavalue' not in claim['mainsnak']:
@@ -406,7 +519,7 @@ class Element:
 
         for claim in list(self.entity['claims'][property_id]):
             if 'remove' not in claim:
-                group = Model.serialize(claim['qualifiers'][group_by][0]['datavalue']['value']) if group_by else None
+                group = Wikidata.serialize(claim['qualifiers'][group_by][0]['datavalue']['value']) if group_by else None
                 if (latest[group] is None) and ('datavalue' in claim['mainsnak']):
                     self.delete_claim(claim)
                     continue
@@ -546,8 +659,23 @@ class Model:
         return qid if (qid := cls.config('translate', text)) else text
 
     def __init__(self, external_id: str, snaks: list = None):
-        self.input_snaks = snaks if snaks is not None else [self.create_snak(self.property, external_id)]
+        self.input_snaks = snaks if snaks is not None else [Wikidata.create_snak(self.property, external_id)]
         self.external_id = external_id
+
+    @classmethod
+    def transform(cls, property_id: str, value, lower: str = None, upper: str = None):
+        if Wikidata.type_of(property_id) == 'wikibase-item':
+            if not (value := cls.lut(value)) or not re.search('Q\\d+$', value):
+                return
+        return Wikidata.create_snak(property_id, value, lower, upper)
+
+    @classmethod
+    def enrich_qualifier(cls, snak, value):
+        if (not snak) or (not cls.config(snak['property'].upper(), 'id')):
+            return snak
+        for pattern in (config := cls.config(snak['property'].upper()))['translate']:
+            if value.startswith(pattern):
+                return {**snak, 'qualifiers': {config['id']: config['translate'][pattern]}}
 
     @classmethod
     def prepare_data(cls, external_id: str):
@@ -559,127 +687,6 @@ class Model:
         if (instance := cls.item(external_id)).has_to_be_created() or forced:
             instance.apply(cls.prepare_data(external_id))
         return instance
-
-    @staticmethod
-    def format_float(figure, digits: int = -1):
-        """Raises: DecimalException"""
-        formatter = '{:f}'
-        if 0 <= digits < 24:
-            if math.fabs(Decimal(figure)) >= 1:  # adding number of digits before .
-                digits += 1 + int(math.log10(math.fabs(Decimal(figure))))
-            formatter = '{:.' + str(digits) + '}'
-        return formatter.format(Decimal(figure).normalize())
-
-    @staticmethod
-    def fix_error(figure: str) -> str:
-        if re.search('999+\\d$', figure):
-            n = Decimal(999999999999999999999999)
-            return Model.format_float(n - Decimal(Model.fix_error(Model.format_float(n - Decimal(figure)))))
-        else:
-            return Model.format_float(re.sub('^000+\\d$', '', figure))
-
-    @staticmethod
-    def parse_date(i: str):
-        for p in ['(?P<d>\\d\\d?)?/?(?P<m>\\d\\d?)/(?P<y>\\d{4})',
-                  '(?P<y>\\d{4})-?(?P<m>\\d\\d?)?-?(?P<d>\\d\\d?)?']:
-            if (m := re.search(p, i)) and (g := m.groupdict('0')):
-                try:  # validate parsed month and day
-                    datetime(int(g['y']), int(g['m']) if int(g['m']) else 1, int(g['d']) if int(g['d']) else 1)
-                except ValueError:
-                    return
-                return {'before': 0, 'after': 0, 'calendarmodel': 'http://www.wikidata.org/entity/Q1985727',
-                        'time': '+{}-{:02d}-{:02d}T00:00:00Z'.format(int(g['y']), int(g['m']), int(g['d'])),
-                        'precision': 11 if int(g['d']) else 10 if int(g['m']) else 9, 'timezone': 0}
-
-    @staticmethod
-    def serialize(value: dict, standard: dict = None):
-        if isinstance(value, str):
-            return value
-        elif 'id' in (standard := standard if standard else value):
-            return value['id']  # TODO: implement P279*
-        elif 'amount' in standard:
-            digits = -Decimal(standard['amount']).normalize().as_tuple().exponent
-            result = value['unit']
-            if 'lowerBound' in value and 'lowerBound' in standard:
-                if digits < (bound := -Decimal(standard['lowerBound']).normalize().as_tuple().exponent):
-                    digits = bound
-                if digits < (bound := -Decimal(standard['upperBound']).normalize().as_tuple().exponent):
-                    digits = bound
-                result += '|' + str(round(Decimal(value['amount']) - Decimal(value['lowerBound']), digits))
-                result += '|' + str(round(Decimal(value['upperBound']) - Decimal(value['amount']), digits))
-            return result + '|' + str(round(Decimal(value['amount']), digits))
-        elif 'precision' in standard and int(value['precision']) >= int(standard['precision']):
-            if standard['precision'] == 9:
-                return value['time'][:5] + '0000'
-            elif standard['precision'] == 10:
-                return value['time'][:5] + value['time'][6:8] + '00'
-            elif standard['precision'] == 11:
-                return value['time'][:5] + value['time'][6:8] + value['time'][9:11]
-        elif 'language' in standard:
-            return value['text'] + '@' + value['language']
-        return float('nan')  # because NaN != NaN
-
-    @classmethod
-    def create_snak(cls, property_id: str, value, lower: str = None, upper: str = None):
-        """Create snak based on provided id of the property and string value"""
-        if not (t := Wikidata.type_of(property_id)) or value is None or value == '' or value == 'NaN':
-            return None
-        snak = {'datatype': t, 'property': property_id, 'snaktype': 'value',
-                'datavalue': {'value': value, 'type': t}}
-        if snak['datatype'] == 'quantity':
-            try:
-                snak['datavalue']['value'] = {'amount': Model.format_float(value), 'unit': '1'}
-                if upper is not None and lower is not None:
-                    min_bound = Decimal(Model.fix_error(lower))
-                    if min_bound < 0:
-                        min_bound = -min_bound
-                    amount = Decimal(value)
-                    max_bound = Decimal(Model.fix_error(upper))
-
-                    if min_bound > 0 or max_bound > 0:  # +/- 0 can be skipped
-                        if max_bound != Decimal('Infinity'):
-                            snak['datavalue']['value']['lowerBound'] = Model.format_float(amount - min_bound)
-                            snak['datavalue']['value']['upperBound'] = Model.format_float(amount + max_bound)
-            except (ValueError, DecimalException, KeyError):
-                return None
-        elif snak['datatype'] == 'wikibase-item':
-            if not (value := cls.lut(value)) or not re.search('Q\\d+$', value):
-                return None
-            snak['datavalue'] = {'type': 'wikibase-entityid', 'value': {'entity-type': 'item', 'id': value}}
-        elif snak['datatype'] == 'time':
-            if not (value := Model.parse_date(snak['datavalue']['value'])):
-                return
-            snak['datavalue']['value'] = value
-        elif snak['datatype'] == 'external-id':
-            snak['datavalue']['type'] = 'string'
-        elif snak['datatype'] == 'monolingualtext':
-            snak['datavalue']['value'] = {'text': value, 'language': 'en'}
-        return snak
-
-    @staticmethod
-    def equals(snak: dict, value: dict) -> bool:
-        return 'datavalue' in snak and Model.serialize(snak['datavalue']['value']) == Model.serialize(value)
-
-    @staticmethod
-    def qualifier_filter(conditions: dict, claim: dict) -> bool:
-        for property_id in (conditions['qualifiers'] if 'qualifiers' in conditions else {}):
-            if 'qualifiers' not in claim or (property_id not in claim['qualifiers']):  # No property_id qualifier
-                return False
-            was_found = None
-            for c in claim['qualifiers'][property_id]:
-                if was_found := Model.equals(c, {'id': conditions['qualifiers'][property_id]}):
-                    break
-            if not was_found:  # Above loop did not find anything
-                return False
-        return True  # All conditions are met
-
-    @classmethod
-    def enrich_qualifier(cls, snak, value):
-        if (not snak) or (not cls.config(snak['property'].upper(), 'id')):
-            return snak
-        for pattern in (config := cls.config(snak['property'].upper()))['translate']:
-            if value.startswith(pattern):
-                return {**snak, 'qualifiers': {config['id']: config['translate'][pattern]}}
 
     def get_qid(self):
         return None if self else None  # To disable "can be made static" warning
@@ -715,8 +722,8 @@ class AstroItem(Element):
                     self.delete_claim(claim)
                 else:
                     target = claim
-            target = target if target else self.obtain_claim(Model.create_snak('P59', AstroItem.__const[tla]))
-            target['references'] = [{'snaks': {'P887': [Model.create_snak('P887', 'Q123764736')]}}]
+            target = target if target else self.obtain_claim(Wikidata.create_snak('P59', AstroItem.__const[tla]))
+            target['references'] = [{'snaks': {'P887': [Wikidata.create_snak('P887', 'Q123764736')]}}]
         except KeyError:
             return
 
@@ -747,7 +754,7 @@ class Article(Element):
         return list(authors.keys())
 
 
-class TAPClient(Model):
+class AstroModel(Model):
     """Retrieve data from TAP 'endpoint' using 'queries' specified in json-file"""
     _dataset, item, _ADQL_WRAPPER = {}, AstroItem, 'SELECT * FROM ({}) a WHERE {}'
 
@@ -763,35 +770,32 @@ class TAPClient(Model):
 
     @classmethod
     def prepare_data(cls, external_id):
-        model = super().prepare_data(external_id)
         if external_id in cls._dataset:
             rows = cls._dataset.pop(external_id)
         elif external_id in (result := cls.load('main_id = \'{}\''.format(external_id))):
             rows = result[external_id]
         else:
-            return None
+            return
 
+        model = cls(external_id)
         for row in rows:
             for col in row:
                 if row[col] and re.search('\\d+$', col):
-                    model.construct_snak(row, col)
+                    model.process_column(row, col)
                     if col.upper() in ['P6257', 'P6258']:  # add J2000 epoch
-                        model.input_snaks.append(cls.create_snak('P6259', 'Q1264450'))
+                        model.input_snaks.append(model.transform('P6259', 'Q1264450'))
         return model
 
-    def construct_snak(self, row, col, new_col=None):
-        new_col = (new_col if new_col else col).upper()
-        if col == 'p397':
-            result: dict = self.get_parent_snak(row[col])
-        elif Wikidata.type_of(new_col) != 'quantity':
-            result: dict = self.create_snak(new_col, row[col])
+    def process_column(self, row, col, new_col=None):
+        if Wikidata.type_of(new_col := (new_col if new_col else col).upper()) != 'quantity':
+            result: dict = self.transform(new_col, row[col])
         elif (col + 'h' not in row) or (row[col + 'h'] == ''):
-            result: dict = self.create_snak(new_col, self.format_figure(row, col))
+            result: dict = self.transform(new_col, self.format_figure(row, col))
         else:
             try:
                 high = self.format_figure(row, col + 'h')
                 low = self.format_figure(row, col + 'l')
-                result: dict = self.create_snak(new_col, self.format_figure(row, col), low, high)
+                result: dict = self.transform(new_col, self.format_figure(row, col), low, high)
             except InvalidOperation:
                 return
 
@@ -807,6 +811,13 @@ class TAPClient(Model):
 
         if result := self.enrich_qualifier(result, row['qualifier'] if 'qualifier' in row else row[col]):
             self.input_snaks.append(result)
+
+    @classmethod
+    def transform(cls, property_id: str, value, lower: str = None, upper: str = None):
+        if property_id == 'P397':
+            return cls.get_parent_snak(value)
+        else:
+            return super().transform(property_id, value, lower, upper)
 
     @staticmethod
     def query(url, adql, result=None):
@@ -832,29 +843,28 @@ class TAPClient(Model):
 
     @staticmethod
     def get_parent_snak(name: str):
-        if TAPClient._parents is None:
-            TAPClient._parents = Wikidata.query('SELECT DISTINCT ?c ?i { ?i ^ps:P397 []; wdt:P528 ?c }',
-                                                lambda row, _: (row[0].lower(), row[1]))
+        if AstroModel._parents is None:
+            AstroModel._parents = Wikidata.query('SELECT DISTINCT ?c ?i { ?i ^ps:P397 []; wdt:P528 ?c }',
+                                                 lambda row, _: (row[0].lower(), row[1]))
 
         name = name[:-1] if re.search('OGLE.+L$', name) else name  # In SIMBAD OGLE names are w/o trailing 'L'
-        if name.lower() not in TAPClient._parents:
+        if name.lower() not in AstroModel._parents:
             import simbad_dap
             if (simbad_id := simbad_dap.Model.get_id_by_name(name)) is None:
                 return
-            if simbad_id.lower() not in TAPClient._parents:
+            if simbad_id.lower() not in AstroModel._parents:
                 (instance := simbad_dap.Model.get_by_id(simbad_id)).save()
                 if instance.qid is None:
                     return
-                TAPClient._parents[simbad_id.lower()] = instance.qid
-            TAPClient._parents[name.lower()] = TAPClient._parents[simbad_id.lower()]
-            logging.info(TAPClient.__PATTERN.format(TAPClient._parents[name.lower()], name))
-        if snak := TAPClient.create_snak('P397', TAPClient._parents[name.lower()]):
+                AstroModel._parents[simbad_id.lower()] = instance.qid
+            AstroModel._parents[name.lower()] = AstroModel._parents[simbad_id.lower()]
+            logging.info(AstroModel.__PATTERN.format(AstroModel._parents[name.lower()], name))
+        if snak := Wikidata.create_snak('P397', AstroModel._parents[name.lower()]):
             return {**snak, 'decorators': {'P5997': name}}
 
     @staticmethod
     def format_figure(row, col):  # SIMBAD-specific way to specify figure precision
-        return TAPClient.format_float(row[col],
-                                      int(row[col + 'p']) if col + 'p' in row and row[col + 'p'] != '' else -1)
+        return Wikidata.format_float(row[col], int(row[col + 'p']) if col + 'p' in row and row[col + 'p'] != '' else -1)
 
     @staticmethod
     def parse_url(url: str) -> str:
@@ -863,7 +873,7 @@ class TAPClient(Model):
         import arxiv
 
         if url and url.strip() and (url := url.split()[0]):  # get text before first whitespace and strip
-            for pattern, repl in TAPClient.config('transform').items():
+            for pattern, repl in AstroModel.config('transform').items():
                 if (query := unquote(re.sub(pattern, repl, url, flags=re.S))).startswith('P'):
                     if query.startswith('P818='):
                         (instance := arxiv.Model.get_by_id(query.replace('P818=', ''))).save()
