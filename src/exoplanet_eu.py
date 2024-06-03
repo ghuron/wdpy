@@ -138,7 +138,7 @@ class Model(wd.AstroModel):
             num = '\\d[-\\+.eE\\d]+'
             unit = '\\s*(?P<unit>[A-Za-z]\\S*)?'
             if reg := re.search(
-                    '(?P<value>{})\\s*\\(\\s*-+(?P<min>{})\\s+(?P<max>\\+{})\\s*\\){}'.format(num, num, num, unit),
+                    '(?P<value>{})\\s*\\(\\s*(?P<max>\\+{})\\s+-+(?P<min>{})\\s*\\){}'.format(num, num, num, unit),
                     value):
                 result = super().transform(property_id, reg.group('value'), reg.group('min'), reg.group('max'))
             elif reg := re.search(  # ToDo: Add source circumstance qualifier if > or < found
