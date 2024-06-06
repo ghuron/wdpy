@@ -46,7 +46,7 @@ class TestModel(TestCase):
         self.assertDictEqual({'unit': '1', 'amount': '1.30618608',
                               'lowerBound': '1.3061857', 'upperBound': '1.30618646'}, value)
 
-        value = Model.transform('P2216', '353.0(-88.0 +73.0) m/s')['datavalue']['value']
+        value = Model.transform('P2216', '353.0(+73.0 -88.0 ) m/s')['datavalue']['value']
         self.assertDictEqual({'unit': 'http://www.wikidata.org/entity/Q182429', 'amount': '353',
                               'lowerBound': '265', 'upperBound': '426'}, value)
 
