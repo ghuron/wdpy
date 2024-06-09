@@ -72,3 +72,33 @@ class TestRemoveAllButOne(TestCase):
         self.wd.remove_all_but_one('P31', 'P2241')
         self.assertNotIn('remove', claim1)
         self.assertNotIn('remove', claim2)
+
+
+class TestDiff(TestCase):
+    @mock.patch('wd.Wikidata.type_of', return_value='wikibase-item')
+    def test_empty(self, _):
+        self.assertFalse(Element('', 'Q42').was_modified_since_checkpoint(), 'empty item')
+
+    @mock.patch('wd.Wikidata.type_of', return_value='wikibase-item')
+    @mock.patch('wd.Wikidata.load', return_value=None)
+    def test_diff(self, _, __):
+        item = Element('', 'Q42')
+
+        item.obtain_claim(Wikidata.create_snak('P31', 'Q5'))
+        item.save_checkpoint()
+        self.assertFalse(item.was_modified_since_checkpoint(), 'item with 1 statements against 1')
+
+        statement = item.obtain_claim(Wikidata.create_snak('P21', 'Q6581097'))
+        self.assertTrue(item.was_modified_since_checkpoint(), 'item with 2 statements against 1')
+
+        item.save_checkpoint()
+        self.assertFalse(item.was_modified_since_checkpoint(), 'item with 2 statements against 2')
+
+        statement['mainsnak']['hash'] = ''
+        self.assertTrue(item.was_modified_since_checkpoint(), 'item with other fields')
+
+        item.delete_claim(statement)
+        self.assertTrue(item.was_modified_since_checkpoint(), 'deleted into queue')
+
+        item._queue = []
+        self.assertTrue(item.was_modified_since_checkpoint(), 'item with 1 statements against 2')

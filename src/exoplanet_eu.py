@@ -21,7 +21,6 @@ class Element(wd.AstroItem):
 
     def obtain_claim(self, snak):
         if snak:
-            snak['mespos'] = 0
             if snak['property'] == 'P4501':
                 snak['qualifiers'] = {'P1013': 'Q2832068'}  # always geometric albedo
             if self.entity and 'claims' in self.entity and 'P1215' in self.entity['claims']:

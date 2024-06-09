@@ -297,10 +297,10 @@ class Claim:
     def save(self, summary):
         Wikidata.edit(data={'summary': summary, 'claim': json.dumps(self.claim)}, method='wbsetclaim')
 
-    def check_if_no_refs(self, db_ref: str) -> set[str]:
+    def check_if_no_refs(self, property_id: str, db_ref: str) -> set[str]:
         result = set()
         if 'references' in self.claim:
-            self.claim['references'] = self._deduplicate(self.claim['references'], set(db_ref))
+            self.claim['references'] = self._deduplicate(self.claim['references'], property_id)
             self.claim['references'] = self._confirms(self.claim['references'], db_ref)
             for ref in self.claim['references']:
                 for p248 in ref['snaks']['P248'] if 'P248' in ref['snaks'] else []:
@@ -328,7 +328,7 @@ class Claim:
         return True
 
     @staticmethod
-    def _deduplicate(references: [], ref_properties: set) -> []:
+    def _deduplicate(references: [], property_id: str) -> []:
         """ Resolve redirects and merge P248 duplicates"""
         result = {}
         for ref in references:
@@ -337,17 +337,19 @@ class Claim:
                 ref['snaks']['P248'][0]['datavalue']['value']['id'] = (ref_id := Claim._redirects[ref_id])
 
             if ref_id in result:
-                if set(ref['snaks'].keys()) <= ref_properties | {'P248', 'P12132', 'P5997'}:
+                if set(ref['snaks'].keys()) <= {property_id, 'P248', 'P12132', 'P5997'}:
                     for p12132 in (ref['snaks']['P12132'] if 'P12132' in ref['snaks'] else []):
                         if p12132['datavalue']['value']['id'] not in Claim.__get_snaks(result[ref_id], 'P12132'):
                             if 'P12132' not in result[ref_id]['snaks']:
                                 result[ref_id]['snaks']['P12132'] = []
                             result[ref_id]['snaks']['P12132'].append(p12132)
-                    for property_id in ref_properties | {'P5997'}:
+                    for property_id in {property_id, 'P5997'}:
                         if (property_id not in result[ref_id]['snaks']) and (property_id in ref['snaks']):
                             result[ref_id]['snaks'][property_id] = ref['snaks'][property_id]
                     if 'wdpy' in ref:
                         result[ref_id]['wdpy'] = 1
+                    if ('hash' in ref) and ('hash' not in result[ref_id]):
+                        result[ref_id]['hash'] = ref['hash']
                     continue  # do not add as a result, because merged into existing
                 ref_id = str(len(result))
             result[ref_id] = ref
@@ -384,7 +386,8 @@ class Claim:
                     if Wikidata.serialize(claim['mainsnak']['datavalue']['value'], value) == Wikidata.serialize(value):
                         self.claim['rank'] = 'deprecated'
                         self.claim['qualifiers'] = {} if 'qualifiers' not in self.claim else self.claim['qualifiers']
-                        self.claim['qualifiers']['P2241'] = [Wikidata.create_snak('P2241', 'Q42727519')]
+                        if 'P2241' not in self.claim['qualifiers']:
+                            self.claim['qualifiers']['P2241'] = [Wikidata.create_snak('P2241', 'Q42727519')]
                         return claim
             if 'qualifiers' in self.claim and 'P2241' in self.claim['qualifiers']:
                 if 'Q42727519' == self.claim['qualifiers']['P2241'][0]['datavalue']['value']['id']:
@@ -398,16 +401,14 @@ class Element:
                     'P6259': ''}
 
     def __init__(self, external_id: str, qid: str = None):
-        self.external_id, self.qid, self._entity, self._affected, self.__original = external_id, qid, None, set(), None
-        self._queue = []
+        self.external_id, self.qid = external_id, qid
+        self._entity, self._original, self._affected, self._queue = None, {}, set(), []
         if qid or (qid := self.get_qid()):  # There is a chance to find qid down the road
             self.set_qid(qid)
 
     def set_qid(self, qid):
         self.get_cache()[self.external_id] = self.qid = qid
-        self._entity = self.__original = None
-        self._affected = set()
-        self._queue = []
+        self._entity, self._original, self._affected, self._queue = None, {}, set(), []
         return qid
 
     def get_qid(self):
@@ -428,8 +429,25 @@ class Element:
             self._entity = {'labels': {}, 'claims': {}}
             if self.qid and (result := Wikidata.load({self.qid})):
                 self._entity = result[self.qid]
-            self.__original = json.dumps(self._entity, sort_keys=True)
+            self.save_checkpoint()
         return self._entity
+
+    def save_checkpoint(self):
+        self._original = {}
+        for property_id in self._entity['claims']:
+            for claim in self._entity['claims'][property_id]:
+                self._original[claim['id']] = json.dumps(claim, sort_keys=True)
+
+    def was_modified_since_checkpoint(self):
+        if self._entity is None:
+            return False
+        count = 0
+        for property_id in self._entity['claims']:
+            for c in self._entity['claims'][property_id]:
+                if c['id'] not in self._original or json.dumps(c, sort_keys=True) != self._original[c['id']]:
+                    return True
+                count += 1
+        return self._queue or (count != len(self._original))
 
     def has_to_be_created(self) -> bool:
         """Not blocked in cache, but qid is not known"""
@@ -462,20 +480,19 @@ class Element:
         return claim.claim
 
     def deprecate_all_but_one(self, property_id: str):
-        minimal = 999999
+        minimal = 99
         for statement in self.entity['claims'][property_id]:
             if 'rank' in statement and statement['rank'] == 'preferred':
                 return  # do not change any ranks
 
-            if 'mespos' in statement and minimal > int(statement['mespos']):  # ToDo: mespos should not be in wd.py
+            if 'mespos' in statement and minimal > int(statement['mespos']):
                 minimal = int(statement['mespos'])
 
         for statement in self.entity['claims'][property_id]:
-            if 'mespos' in statement:  # normal for statements with minimal mespos, deprecated for the rest
-                if int(statement['mespos']) == minimal:
-                    statement['rank'] = 'normal'
-                elif 'hash' not in statement['mainsnak'] and 'rank' not in statement:
-                    statement['rank'] = 'deprecated'
+            if int(statement.pop('mespos', '99')) == minimal:
+                statement['rank'] = 'normal'
+            elif 'hash' not in statement['mainsnak'] and 'rank' not in statement:
+                statement['rank'] = 'deprecated'
 
         for statement in self.entity['claims'][property_id]:
             Claim(statement).find_more_precise_claim(self.entity['claims'][property_id])
@@ -545,7 +562,7 @@ class Element:
         return 'batch import from [[' + self.db_ref + ']] for object ' + self.external_id
 
     def save(self):
-        if (self.__original is None) or (json.dumps(self.entity, sort_keys=True) == self.__original):
+        if not self.was_modified_since_checkpoint():
             return
 
         self.post_process()
@@ -562,8 +579,8 @@ class Element:
                 self.set_qid(response['entity']['id'])
                 self.trace('modified' if 'id' in data else 'created')
                 return self.qid
-            # else:  # Too many
-            #     self.trace('no change while saving {}'.format(data['data']))
+            else:
+                self.trace('no change detected while saving')
 
     def apply(self, parsed_data: Model):
         if not parsed_data:
@@ -593,7 +610,7 @@ class Element:
         for property_id in self._affected:
             for c in list(self.entity['claims'][property_id]):
                 if 'references' in c:
-                    if len(refs := Claim(c).check_if_no_refs(parsed_data.db_ref)) > 0:
+                    if len(refs := Claim(c).check_if_no_refs(parsed_data.property, parsed_data.db_ref)) > 0:
                         new_sources.update(refs)
                     elif len(c['references']) == 0 and c['mainsnak']['datatype'] != 'external-id':
                         self.delete_claim(c)
