@@ -33,36 +33,36 @@ class TestPreload(TestCase):
 class TestDeduplicates(TestCase):
     def test_simple_duplicate_no_wdpy(self, _):
         ref = Claim._create_ref('Q1111', {})
-        self.assertEqual(1, len(result := Claim._deduplicate([ref, ref], set())))
+        self.assertEqual(1, len(result := Claim._deduplicate([ref, ref], 'P1')))
         self.assertNotIn('wdpy', result[0])
 
     def test_simple_duplicate_combined_wdpy(self, _):
         ref = Claim._create_ref('Q1111', {})
-        self.assertEqual(1, len(result := Claim._deduplicate([ref, {**ref, 'wdpy': 1}], set())))
+        self.assertEqual(1, len(result := Claim._deduplicate([ref, {**ref, 'wdpy': 1}], 'P1')))
         self.assertIn('wdpy', result[0])
 
     def test_no_P248(self, _):
         ref = {'snaks': {'P143': [Wikidata.create_snak('P143', 'Q328')]}}
-        self.assertListEqual([ref, ref], Claim._deduplicate([ref, ref], {'P143'}))
+        self.assertListEqual([ref, ref], Claim._deduplicate([ref, ref], 'P143'))
 
     def test_resolve_redirect(self, _):
         ref1 = {'snaks': {'P248': [Wikidata.create_snak('P248', 'Q1111')]}}
         ref2 = {'snaks': {'P248': [Wikidata.create_snak('P248', 'Q2222')]}}
         Claim._redirects['Q2222'] = 'Q1111'
-        self.assertListEqual([ref1], Claim._deduplicate([ref1, ref2], set()))
+        self.assertListEqual([ref1], Claim._deduplicate([ref1, ref2], 'P1'))
 
     def test_non_mergeable_duplicates(self, _):
         ref1 = {'snaks': {'P248': [Wikidata.create_snak('P248', 'Q111')],
                           'P123': [Wikidata.create_snak('P123', 'Q222')]}}
         ref2 = {'snaks': {'P248': [Wikidata.create_snak('P248', 'Q111')],
                           'P123': [Wikidata.create_snak('P123', 'Q333')]}}
-        self.assertListEqual([ref1, ref2], Claim._deduplicate([ref1, ref2], set()))
+        self.assertListEqual([ref1, ref2], Claim._deduplicate([ref1, ref2], 'P1'))
 
     def test_copy_other_snak(self, _):
         ref1 = {'snaks': {'P248': [Wikidata.create_snak('P248', 'Q333')],
                           'P123': [Wikidata.create_snak('P123', 'Q444')]}}
         ref2 = {'snaks': {'P248': [Wikidata.create_snak('P248', 'Q333')]}}
-        self.assertListEqual([ref1], Claim._deduplicate([ref2, ref1], {'P123'}))
+        self.assertListEqual([ref1], Claim._deduplicate([ref2, ref1], 'P123'))
 
 
 @mock.patch('wd.Wikidata.type_of', return_value='wikibase-item')
