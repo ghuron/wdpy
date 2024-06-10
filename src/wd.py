@@ -441,6 +441,8 @@ class Element:
     def was_modified_since_checkpoint(self):
         if self._entity is None:
             return False
+        elif (self.qid is None) and self._entity['claims']:
+            return True
         count = 0
         for property_id in self._entity['claims']:
             for c in self._entity['claims'][property_id]:

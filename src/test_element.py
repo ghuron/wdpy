@@ -101,4 +101,11 @@ class TestDiff(TestCase):
         self.assertTrue(item.was_modified_since_checkpoint(), 'deleted into queue')
 
         item._queue = []
-        self.assertTrue(item.was_modified_since_checkpoint(), 'item with 1 statements against 2')
+        self.assertTrue(item.was_modified_since_checkpoint(), 'item with 1 statement against 2')
+
+    @mock.patch('wd.Wikidata.type_of', return_value='wikibase-item')
+    def test_new(self, _):
+        __ = (item := Element('test')).entity
+        self.assertFalse(item.was_modified_since_checkpoint(), 'new item with 0 statement')
+        item.obtain_claim(Wikidata.create_snak('P31', 'Q5'))
+        self.assertTrue(item.was_modified_since_checkpoint(), 'new item with 1 statement')
