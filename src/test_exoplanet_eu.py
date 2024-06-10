@@ -80,3 +80,7 @@ class TestModel(TestCase):
         input_snaks = Model.prepare_data('kepler_338_d--1930').input_snaks
         self.assertEqual('+2022-00-00T00:00:00Z', input_snaks[2]['datavalue']['value']['time'])
         self.assertEqual(['Q54012702'], input_snaks[2]['source'])
+
+    @mock.patch('wd.Wikidata.request', return_value=None)
+    def test_failed_request(self, _):
+        self.assertIsNone(Model.prepare_data('test'))

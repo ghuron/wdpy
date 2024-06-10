@@ -66,6 +66,7 @@ class Model(wd.AstroModel):
     @staticmethod
     def retrieve(exoplanet_id):
         """Load page corresponding to self.external_id and update Exoplanet.articles with parsed sources"""
+        Model.__page = None
         if response := wd.Wikidata.request(url := 'https://exoplanet.eu/catalog/' + exoplanet_id):
             Model.__page = BeautifulSoup(response.content, 'html.parser')
             for p in Model.__page.find_all('li', {'class': 'publication'}):
@@ -87,7 +88,7 @@ class Model(wd.AstroModel):
                 return wd.Wikidata.search('"{}" -haswbstatement:P31=Q1348305'.format(title))
 
     @classmethod
-    def prepare_data(cls, external_id, host_star: bool = False) -> []:
+    def prepare_data(cls, external_id, host_star: bool = False):
         result = Model(external_id, []) if host_star else Model.retrieve(external_id)
         if cls.__page:
             template = {'decorators': {'P12132': cls.db_ref}, 'source': [cls.db_ref]}
