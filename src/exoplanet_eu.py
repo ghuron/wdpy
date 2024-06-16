@@ -133,40 +133,39 @@ class Model(wd.AstroModel):
     def transform(cls, property_id: str, value, **kwargs):
         if not value or (value := value.strip()) == '—':
             return
+        if wd.Wikidata.type_of(property_id) != 'quantity':
+            value = value[:-2] + value[-1] if (property_id == 'P528') and (value[-2] == ' ') else value
+            return cls.enrich_qualifier(super().transform(property_id, value), value)
 
-        if wd.Wikidata.type_of(property_id) == 'quantity':
-            num = '\\d[-\\+.eE\\d]+'
-            unit = '\\s*(?P<unit>[A-Za-z]\\S*)?'
-            if reg := re.search(
-                    '(?P<value>{})\\s*\\(\\s*(?P<max>\\+{})\\s+-+(?P<min>{})\\s*\\){}'.format(num, num, num, unit),
-                    value):
-                result = super().transform(property_id, reg.group('value'), reg.group('min'), reg.group('max'))
-            elif reg := re.search(  # ToDo: Add source circumstance qualifier if > or < found
-                    '^[<>]?\\s*(?P<value>' + num + ')\\s*(\\(\\s*±\\s*(?P<bound>' + num + ')\\s*\\))?' + unit + '$',
-                    value):
-                if bound := reg.group('bound'):
-                    result = super().transform(property_id, reg.group('value'), bound, bound)
-                else:
-                    result = super().transform(property_id, reg.group('value'))
-            elif len(deg := value.split(':')) == 3:  # coordinates
-                try:
-                    deg[1], deg[2] = ('-' + deg[1], '-' + deg[2]) if deg[0].startswith('-') else (deg[1], deg[2])
-                    angle = (float(deg[2]) / 60 + float(deg[1])) / 60 + float(deg[0])
-                    digits = 3 + (len(value) - value.find('.') - 1 if value.find('.') > 0 else 0)
-                    value = wd.Wikidata.format_float(15 * angle if property_id == 'P6257' else angle, digits)
-                    if result := super().transform(property_id, value):
-                        result['datavalue']['value']['unit'] = 'http://www.wikidata.org/entity/Q28390'
-                except (ValueError, DecimalException):
-                    return super().transform(property_id, value)
+        num = '\\d[-\\+.eE\\d]+'
+        unit = '\\s*(?P<unit>[A-Za-z]\\S*)?'
+        if reg := re.search(
+                '(?P<value>{})\\s*\\(\\s*(?P<max>\\+{})\\s+-+(?P<min>{})\\s*\\){}'.format(num, num, num, unit),
+                value):
+            result = super().transform(property_id, reg.group('value'), reg.group('min'), reg.group('max'))
+        elif reg := re.search(  # ToDo: Add source circumstance qualifier if > or < found
+                '^[<>]?\\s*(?P<value>' + num + ')\\s*(\\(\\s*±\\s*(?P<bound>' + num + ')\\s*\\))?' + unit + '$',
+                value):
+            if bound := reg.group('bound'):
+                result = super().transform(property_id, reg.group('value'), bound, bound)
             else:
+                result = super().transform(property_id, reg.group('value'))
+        elif len(deg := value.split(':')) == 3:  # coordinates
+            try:
+                deg[1], deg[2] = ('-' + deg[1], '-' + deg[2]) if deg[0].startswith('-') else (deg[1], deg[2])
+                angle = (float(deg[2]) / 60 + float(deg[1])) / 60 + float(deg[0])
+                digits = 3 + (len(value) - value.find('.') - 1 if value.find('.') > 0 else 0)
+                value = wd.Wikidata.format_float(15 * angle if property_id == 'P6257' else angle, digits)
+                if result := super().transform(property_id, value):
+                    result['datavalue']['value']['unit'] = 'http://www.wikidata.org/entity/Q28390'
+            except (ValueError, DecimalException):
                 return super().transform(property_id, value)
+        else:
+            return super().transform(property_id, value)
 
-            if result and reg and (unit := cls.lut(reg.group('unit'))):
-                result['datavalue']['value']['unit'] = 'http://www.wikidata.org/entity/' + unit
-            return cls.enrich_qualifier(result, value)
-
-        value = value[:-2] + value[-1] if (property_id == 'P528') and (value[-2] == ' ') else value
-        return cls.enrich_qualifier(super().transform(property_id, value), value)
+        if result and reg and (unit := cls.lut(reg.group('unit'))):
+            result['datavalue']['value']['unit'] = 'http://www.wikidata.org/entity/' + unit
+        return cls.enrich_qualifier(result, value)
 
     def get_qid(self):
         if not Model.__ids:
