@@ -58,9 +58,9 @@ class Model(wd.AstroModel):
 
         for ident in data['identifier']:
             if ident.startswith('arXiv:'):
-                result.transform('P818', ident.replace('arXiv:', ''))
+                result.input_snaks.append(Model.transform('P818', ident.replace('arXiv:', '')))
             elif ident.startswith('10.') and not ('ARXIV' in ident.upper()):
-                result.transform('P356', ident.upper())
+                result.input_snaks.append(Model.transform('P356', ident.upper()))
 
         for field in Model.config('properties'):
             if (p := Model.config('properties')[field]) and (field in data):
