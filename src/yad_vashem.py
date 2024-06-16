@@ -68,13 +68,15 @@ class Element(wd.Element):
 
 class Model(wd.Model):
     property, db_ref, item, __offset = 'P1979', 'Q77598447', Element, 0
+    API = 'https://yv360.yadvashem.org/api/'
 
     @classmethod
     def next(cls):
-        pattern = 'https://yv360.yadvashem.org/api/Search/GetDataResultsQuery?pageNumber={}&pageSize=10&cardType=card'
-        payload = {"filters": {"filters": [{"fieldName": "data_bank", "values": ["righteous"]}]}, "currentTab": {}}
+        wd.Wikidata.request(Model.API + 'Search/BuildGlobalResultsQuery?site=righteous&valueToSearch=2024', json={})
         result, Model.__offset = [], Model.__offset + 1
-        if response := wd.Wikidata.request(pattern.format(Model.__offset), json=payload):
+        url = Model.API + 'Search/GetDataResultsQuery?&pageSize=10&cardType=card&pageNumber=' + str(Model.__offset)
+        payload = {"filters": {"filters": [{"fieldName": "data_bank", "values": ["righteous"]}]}, "currentTab": {}}
+        if response := wd.Wikidata.request(url, json=payload):
             for card in response.json()['cards']:
                 result.append(card['id'])
         return result
@@ -95,8 +97,7 @@ class Model(wd.Model):
     @staticmethod
     def extract(case_id, people: dict):
         Model._rows, Model.group_id = {}, case_id
-        if case := wd.Wikidata.request(
-                'https://yv360.yadvashem.org/api/Righteous/GetFullDetails?lang=en&id=' + case_id).json():
+        if case := wd.Wikidata.request(Model.API + 'Righteous/GetFullDetails?lang=en&id=' + case_id).json():
             result, remaining = {}, []
             for row in case['righteousList']:
                 if row['title'] is not None:
@@ -149,6 +150,14 @@ if Model.initialize(__file__):  # if not imported
 
     for _id in groups:
         # _id = '4022505'  # uncomment to debug specific group of people
-        if (wd_items := Model.extract(_id, groups[_id])) and Element.load(wd_items):
+        if wd_items := Model.extract(_id, groups[_id]):
+            Element.load(wd_items)
             for name in wd_items:
                 Model.get_by_id(name, forced=True).save()
+
+    while ids := Model.next():
+        for _id in ids:
+            if (_id not in groups) and (wd_items := Model.extract(_id, {})):
+                Element.load(wd_items)
+                for name in wd_items:
+                    Model.get_by_id(name, forced=True).save()
