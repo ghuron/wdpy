@@ -1,5 +1,4 @@
 #!/usr/bin/python3
-import json
 import logging
 
 import wd
@@ -15,33 +14,24 @@ class Element(wd.Element):
     @staticmethod
     def load(items: dict):
         Element.get_cache(reset=items)
-        Element._items = wd.Wikidata.load(set(filter(lambda x: isinstance(x, str), items.values())))
-        return Element._items
+        Element._items = r if (r := wd.Wikidata.load(set(filter(lambda x: isinstance(x, str), items.values())))) else {}
 
     @property
     def entity(self) -> dict:
         if not self._entity:
             self._entity = Element._items[self.qid] if self.qid in Element._items else {'labels': {}, 'claims': {}}
-            self.__original = json.dumps(self._entity)
+            self.save_checkpoint()
         return self._entity
 
     def obtain_claim(self, snak):
-        if snak is not None:
-            if snak['property'] in ['P585', 'P27']:  # date and nationality to qualifiers for award
-                award = super().obtain_claim(Model.transform('P166', 'Q112197'))
-                award['qualifiers'] = {} if 'qualifiers' not in award else award['qualifiers']
-                if snak['property'] not in award['qualifiers'] or snak['property'] not in self.award_cleared_qualifiers:
-                    self.award_cleared_qualifiers.append(snak['property'])  # clear each qualifier only once
-                    award['qualifiers'][snak['property']] = []
-                award['qualifiers'][snak['property']].append(snak)
-            elif claim := super().obtain_claim(snak):
-                if snak['property'] in ['P569', 'P570']:  # birth/death date statement only
-                    if 'rank' not in claim:  # unspecified rank means it was just created
-                        if snak['datavalue']['value']['precision'] == 11:  # date precision on the day level
-                            if snak['datavalue']['value']['time'].endswith('-01-01T00:00:00Z'):  # January 1
-                                claim['rank'] = 'deprecated'  # db artefact, only year known for sure
-                                claim['qualifiers'] = {'P2241': [wd.Wikidata.create_snak('P2241', 'Q41755623')]}
-                return claim
+        if claim := super().obtain_claim(snak):
+            if snak['property'] in ['P569', 'P570']:  # birth/death date statement only
+                if 'rank' not in claim:  # unspecified rank means it was just created
+                    if snak['datavalue']['value']['precision'] == 11:  # date precision on the day level
+                        if snak['datavalue']['value']['time'].endswith('-01-01T00:00:00Z'):  # January 1
+                            claim['rank'] = 'deprecated'  # db artefact, only year known for sure
+                            claim['qualifiers'] = {'P2241': [wd.Wikidata.create_snak('P2241', 'Q41755623')]}
+        return claim
 
     def post_process(self):
         if 'en' not in self.entity['labels']:
@@ -133,14 +123,18 @@ class Model(wd.Model):
 
     @classmethod
     def prepare_data(cls, external_id: str):
-        (snak := Model.transform(Model.property, Model.group_id))['qualifiers'] = {'P1810': external_id}
+        (snak := Model.transform(Model.property, Model.group_id))['qualifiers'] = [('P1810', external_id)]
         result = Model(external_id, [snak])
         result.input_snaks.append(cls.transform('P31', 'Q5'))
-        result.input_snaks.append(cls.transform('P166', 'Q112197'))
+        result.input_snaks.append(award := cls.transform('P166', 'Q112197'))
+        award['qualifiers'] = []
         for element in Model._rows[external_id]:
             if property_id := Model.config('properties', element['title']):
                 for val in element['value']:
-                    result.input_snaks.append(cls.transform(property_id, val['value']))
+                    if property_id in {'P27', 'P585'}:
+                        award['qualifiers'].append((property_id, Model.lut(val['value'])))
+                    elif snak := cls.transform(property_id, val['value']):
+                        result.input_snaks.append(snak)
         return result
 
 

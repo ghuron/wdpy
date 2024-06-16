@@ -22,7 +22,7 @@ class Element(wd.AstroItem):
     def obtain_claim(self, snak):
         if snak:
             if snak['property'] == 'P4501':
-                snak['qualifiers'] = {'P1013': 'Q2832068'}  # always geometric albedo
+                snak['qualifiers'] = [('P1013', 'Q2832068')]  # always geometric albedo
             if self.entity and 'claims' in self.entity and 'P1215' in self.entity['claims']:
                 if snak['property'] == 'P1215' and self.property_id not in self.entity['claims']:
                     for claim in self.entity['claims']['P1215']:  # Looking for visual magnitude statement

@@ -16,10 +16,10 @@ class TestExoplanetEu(TestCase):
     def test_obtain_claim(self, _, __):
         exo = Element('55 Cnc e')
 
-        (snak := Wikidata.create_snak('P1215', '8.88'))['qualifiers'] = {'P1227': 'Q4892529'}  # V diapason
+        (snak := Wikidata.create_snak('P1215', '8.88'))['qualifiers'] = [('P1227', 'Q4892529')]  # V diapason
         claim = exo.obtain_claim(snak)
 
-        (snak := Wikidata.create_snak('P1215', '9.99'))['qualifiers'] = {'P1227': 'Q4892529'}  # V diapason
+        (snak := Wikidata.create_snak('P1215', '9.99'))['qualifiers'] = [('P1227', 'Q4892529')]  # V diapason
         self.assertIsNone(exo.obtain_claim(snak))  # Do not mess with existing V mag
 
         claim['qualifiers'] = {'P1227': [Wikidata.create_snak('P1227', 'Q66659648')]}  # G diapason

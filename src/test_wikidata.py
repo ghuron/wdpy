@@ -85,9 +85,9 @@ class TestStatic(TestCase):
 
     @mock.patch('wd.Wikidata.type_of', return_value='wikibase-item')
     def test_qualifier_filter(self, _):
-        self.assertTrue(Wikidata.qualifier_filter({'qualifiers': {}}, {}))
-        self.assertFalse(Wikidata.qualifier_filter({'qualifiers': {'P972': 'Q1'}}, {}))
+        self.assertTrue(Wikidata.qualifier_filter({'qualifiers': []}, {}))
+        self.assertFalse(Wikidata.qualifier_filter({'qualifiers': [('P972', 'Q1')]}, {}))
         q2 = {'qualifiers': {'P972': [Wikidata.create_snak('P972', 'Q2')]}}
-        self.assertFalse(Wikidata.qualifier_filter({'qualifiers': {'P1227': 'Q2'}}, q2))
-        self.assertFalse(Wikidata.qualifier_filter({'qualifiers': {'P972': 'Q1'}}, q2))
-        self.assertTrue(Wikidata.qualifier_filter({'qualifiers': {'P972': 'Q2'}}, q2))
+        self.assertFalse(Wikidata.qualifier_filter({'qualifiers': [('P1227', 'Q2')]}, q2))
+        self.assertFalse(Wikidata.qualifier_filter({'qualifiers': [('P972', 'Q1')]}, q2))
+        self.assertTrue(Wikidata.qualifier_filter({'qualifiers': [('P972', 'Q2')]}, q2))

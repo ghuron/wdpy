@@ -183,27 +183,34 @@ class Wikidata:
 
     @staticmethod
     def qualifier_filter(conditions: dict, claim: dict) -> bool:
-        for property_id in (conditions['qualifiers'] if 'qualifiers' in conditions else {}):
+        for property_id, constraints in (conditions['qualifiers'] if 'qualifiers' in conditions else {}):
             if 'qualifiers' not in claim or (property_id not in claim['qualifiers']):  # No property_id qualifier
                 return False
             was_found = None
             for c in claim['qualifiers'][property_id]:
-                if was_found := Wikidata.equals(c, {'id': conditions['qualifiers'][property_id]}):
+                if was_found := Wikidata.equals(c, Wikidata.create_value(property_id, constraints)):
                     break
             if not was_found:  # Above loop did not find anything
                 return False
         return True  # All conditions are met
 
     @staticmethod
-    def create_snak(property_id: str, value, lower: str = None, upper: str = None):
-        """Create snak based on provided id of the property and string value"""
-        if not (t := Wikidata.type_of(property_id)) or value is None or value == '' or value == 'NaN':
-            return None
-        snak = {'datatype': t, 'property': property_id, 'snaktype': 'value',
-                'datavalue': {'value': value, 'type': t}}
-        if snak['datatype'] == 'quantity':
+    def create_value(property_id: str, value, lower: str = None, upper: str = None):
+        if value is None or value is None or value == '' or value == 'NaN':
+            return
+        if property_id is None or Wikidata.type_of(property_id) is None:
+            return
+        if Wikidata.type_of(property_id) == 'time':
+            return Wikidata.parse_date(value)
+        if Wikidata.type_of(property_id) == 'monolingualtext':
+            return {'text': value, 'language': 'en'}
+        if Wikidata.type_of(property_id) == 'wikibase-item':
+            if not re.search('Q\\d+$', value):
+                return
+            return {'entity-type': 'item', 'id': value}
+        if Wikidata.type_of(property_id) == 'quantity':
             try:
-                snak['datavalue']['value'] = {'amount': Wikidata.format_float(value), 'unit': '1'}
+                result = {'amount': Wikidata.format_float(value), 'unit': '1'}
                 if upper is not None and lower is not None:
                     min_bound = Decimal(Wikidata.fix_error(lower))
                     if min_bound < 0:
@@ -213,23 +220,19 @@ class Wikidata:
 
                     if min_bound > 0 or max_bound > 0:  # +/- 0 can be skipped
                         if max_bound != Decimal('Infinity'):
-                            snak['datavalue']['value']['lowerBound'] = Wikidata.format_float(amount - min_bound)
-                            snak['datavalue']['value']['upperBound'] = Wikidata.format_float(amount + max_bound)
+                            result['lowerBound'] = Wikidata.format_float(amount - min_bound)
+                            result['upperBound'] = Wikidata.format_float(amount + max_bound)
+                return result
             except (ValueError, DecimalException, KeyError):
                 return None
-        elif snak['datatype'] == 'wikibase-item':
-            if not re.search('Q\\d+$', value):
-                return None
-            snak['datavalue'] = {'type': 'wikibase-entityid', 'value': {'entity-type': 'item', 'id': value}}
-        elif snak['datatype'] == 'time':
-            if not (value := Wikidata.parse_date(snak['datavalue']['value'])):
-                return
-            snak['datavalue']['value'] = value
-        elif snak['datatype'] == 'external-id':
-            snak['datavalue']['type'] = 'string'
-        elif snak['datatype'] == 'monolingualtext':
-            snak['datavalue']['value'] = {'text': value, 'language': 'en'}
-        return snak
+        return value
+
+    @staticmethod
+    def create_snak(property_id: str, value, lower: str = None, upper: str = None):
+        """Create snak based on provided id of the property and string value"""
+        if (t := Wikidata.type_of(property_id)) and (r := Wikidata.create_value(property_id, value, lower, upper)):
+            dt = 'wikibase-entityid' if t == 'wikibase-item' else 'string' if t == 'external-id' else t
+            return {'datatype': t, 'property': property_id, 'snaktype': 'value', 'datavalue': {'value': r, 'type': dt}}
 
 
 class Claim:
@@ -248,15 +251,19 @@ class Claim:
             claim.claim['id'] = ident if '$' in ident else ident + '$' + str(uuid.uuid4())
         return claim
 
+    def set_qualifier(self, new_qualifier):
+        if new_qualifier:
+            self.claim['qualifiers'] = self.claim['qualifiers'] if 'qualifiers' in self.claim else {}
+            if new_qualifier['property'] not in self.claim['qualifiers']:
+                self.claim['qualifiers'][new_qualifier['property']] = []
+            for qualifier in self.claim['qualifiers'][new_qualifier['property']]:
+                if Wikidata.equals(qualifier, new_qualifier['datavalue']['value']):
+                    return
+            self.claim['qualifiers'][new_qualifier['property']].append(new_qualifier)
+
     def process_decorators(self, snak: dict, db_ref: str):
-        if 'qualifiers' in snak:
-            for p_id in snak['qualifiers']:
-                if new_qualifier := Wikidata.create_snak(p_id, snak['qualifiers'][p_id]):
-                    self.claim['qualifiers'] = self.claim['qualifiers'] if 'qualifiers' in self.claim else {}
-                    if p_id in self.claim['qualifiers']:
-                        if Wikidata.equals(self.claim['qualifiers'][p_id][0], new_qualifier['datavalue']['value']):
-                            continue
-                    self.claim['qualifiers'][p_id] = [new_qualifier]
+        for p_id, value in snak['qualifiers'] if 'qualifiers' in snak else []:
+            self.set_qualifier(Wikidata.create_snak(p_id, value))
 
         if ('source' in snak) or (self.claim['mainsnak']['datatype'] != 'external-id'):  # ToDo why we need such if?
             self.claim['references'] = self.claim['references'] if 'references' in self.claim else []
@@ -694,7 +701,7 @@ class Model:
             return snak
         for pattern in (config := cls.config(snak['property'].upper()))['translate']:
             if value.startswith(pattern):
-                return {**snak, 'qualifiers': {config['id']: config['translate'][pattern]}}
+                return {**snak, 'qualifiers': [(config['id'], config['translate'][pattern])]}
 
     @classmethod
     def prepare_data(cls, external_id: str):
@@ -720,8 +727,8 @@ class AstroItem(Element):
         if claim := super().obtain_claim(snak):
             if 'mespos' in snak and ('mespos' not in claim or int(claim['mespos']) > int(snak['mespos'])):
                 claim['mespos'] = snak['mespos']
-            if snak['property'] == 'P1215':
-                if 'qualifiers' in snak and 'P1227' in snak['qualifiers'] and snak['qualifiers']['P1227'] == 'Q4892529':
+            if claim['mainsnak']['property'] == 'P1215' and 'qualifiers' in claim and 'P1227' in claim['qualifiers']:
+                if claim['qualifiers']['P1227'][0]['datavalue']['value']['id'] == 'Q4892529':
                     claim['rank'] = 'preferred'  # V-magnitude is always preferred
         return claim
 

@@ -50,10 +50,10 @@ class Model(wd.AstroModel):
 
         for idx in range(0, len((data := response.json()['response']['docs'][0])['author'])):
             if author_id := Element.haswbstatement(data['orcid_pub'][idx], 'P496'):
-                (snak := result.transform('P50', author_id))['qualifiers'] = {'P1932': data['author'][idx]}
+                (snak := result.transform('P50', author_id))['qualifiers'] = [('P1932', data['author'][idx])]
             else:
-                (snak := result.transform('P2093', data['author'][idx]))['qualifiers'] = {}
-            snak['qualifiers']['P1545'] = str(idx + 1)
+                (snak := result.transform('P2093', data['author'][idx]))['qualifiers'] = []
+            snak['qualifiers'].append(('P1545', str(idx + 1)))
             result.input_snaks.append(snak)
 
         for ident in data['identifier']:
