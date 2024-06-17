@@ -371,7 +371,7 @@ class Claim:
                     aggregator = ref
                 else:
                     aggregator_needed = False
-                    result.append(ref)  # .confirm(ref, self))
+                result.append(ref)
             elif db_ref not in Claim.__get_snaks(ref, 'P248'):
                 if 'P12132' in ref['snaks']:
                     for r in list(ref['snaks']['P12132']):
@@ -380,8 +380,8 @@ class Claim:
                     if len(ref['snaks']['P12132']) == 0:
                         continue
                 result.append(ref)
-        if aggregator and aggregator_needed:
-            result.append(aggregator)  # .confirm(aggregator, self))
+        if aggregator and not aggregator_needed:
+            result.remove(aggregator)
         return result
 
     def find_more_precise_claim(self, statements: []) -> dict:
