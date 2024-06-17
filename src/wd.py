@@ -488,12 +488,9 @@ class Element:
         self._affected.add(snak['property'])
         return claim.claim
 
-    def deprecate_all_but_one(self, property_id: str):
+    def process_mespos(self, property_id: str):
         minimal = 99
         for statement in self.entity['claims'][property_id]:
-            if 'rank' in statement and statement['rank'] == 'preferred':
-                return  # do not change any ranks
-
             if 'mespos' in statement and minimal > int(statement['mespos']):
                 minimal = int(statement['mespos'])
 
@@ -503,11 +500,14 @@ class Element:
             elif 'hash' not in statement['mainsnak'] and 'rank' not in statement:
                 statement['rank'] = 'deprecated'
 
+    def deprecate_all_but_one(self, property_id: str):
         for statement in self.entity['claims'][property_id]:
             Claim(statement).find_more_precise_claim(self.entity['claims'][property_id])
 
         latest = 0
         for statement in self.entity['claims'][property_id]:
+            if 'rank' in statement and statement['rank'] == 'preferred':
+                return  # do not change any ranks
             if 'remove' not in statement and ('rank' not in statement or statement['rank'] == 'normal'):
                 if (current := Claim.get_latest_ref_date(statement)) > latest:
                     latest = current
@@ -630,6 +630,7 @@ class Element:
             if Wikidata.type_of(property_id) == 'external-id':
                 continue
 
+            self.process_mespos(property_id)
             if property_id in Element.SINGLE_VALUE:
                 self.remove_all_but_one(property_id, Element.SINGLE_VALUE[property_id])
             elif Wikidata.type_of(property_id) in ['quantity', 'string', 'monolingualtext'] and property_id != 'P528':
