@@ -1,6 +1,7 @@
 #!/usr/bin/python3
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 from urllib.parse import quote_plus
 
@@ -46,13 +47,16 @@ class Model(wd.AstroModel):
             return
 
         result = Model(external_id)
-        result.input_snaks.append(result.transform('P31', 'Q13442814'))
+        result.input_snaks.append(Model.transform('P31', 'Q13442814'))
 
         for idx in range(0, len((data := response.json()['response']['docs'][0])['author'])):
-            if author_id := Element.haswbstatement(data['orcid_pub'][idx], 'P496'):
-                (snak := result.transform('P50', author_id))['qualifiers'] = [('P1932', data['author'][idx])]
-            else:
-                (snak := result.transform('P2093', data['author'][idx]))['qualifiers'] = []
+            (snak := Model.transform('P2093', data['author'][idx]))['qualifiers'] = []
+            try:
+                if author_id := Element.haswbstatement(data['orcid_pub'][idx], 'P496'):
+                    (snak := Model.transform('P50', author_id))['qualifiers'] = [('P1932', data['author'][idx])]
+            except ValueError as e:
+                logging.warning('Found {} authors with ORCID-ID {}'.format(e.args[0], data['orcid_pub'][idx]))
+
             snak['qualifiers'].append(('P1545', str(idx + 1)))
             result.input_snaks.append(snak)
 

@@ -638,7 +638,13 @@ class Element:
                 self.deprecate_all_but_one(property_id)
 
     @classmethod
-    def haswbstatement(cls, external_id, property_id=None):
+    def haswbstatement(cls, external_id: str, property_id: str = None) -> str:
+        """
+        :param external_id: unique external data source identifier
+        :param property_id: property identifier if non-default for the model
+        :return: wikidata item identifier or None
+        :raises ValueError when more than 1 result found
+        """
         if external_id and (property_id := property_id if property_id else cls.property_id):
             return Wikidata.search('haswbstatement:"{}={}"'.format(property_id, external_id))
 
