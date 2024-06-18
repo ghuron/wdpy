@@ -488,17 +488,14 @@ class Element:
         self._affected.add(snak['property'])
         return claim.claim
 
-    def process_mespos(self, property_id: str):
+    def _process_mespos(self, property_id: str):
         minimal = 99
         for statement in self.entity['claims'][property_id]:
-            if 'mespos' in statement and minimal > int(statement['mespos']):
+            if minimal > int(statement['mespos'] if 'mespos' in statement else '99'):
                 minimal = int(statement['mespos'])
-
         for statement in self.entity['claims'][property_id]:
-            if int(statement.pop('mespos', '99')) == minimal:
-                statement['rank'] = 'normal'
-            elif 'hash' not in statement['mainsnak'] and 'rank' not in statement:
-                statement['rank'] = 'deprecated'
+            if (rank := int(statement.pop('mespos', '99'))) and ('hash' not in statement['mainsnak']):
+                statement['rank'] = 'normal' if rank == minimal else 'deprecated'
 
     def deprecate_all_but_one(self, property_id: str):
         for statement in self.entity['claims'][property_id]:
@@ -630,7 +627,7 @@ class Element:
             if Wikidata.type_of(property_id) == 'external-id':
                 continue
 
-            self.process_mespos(property_id)
+            self._process_mespos(property_id)
             if property_id in Element.SINGLE_VALUE:
                 self.remove_all_but_one(property_id, Element.SINGLE_VALUE[property_id])
             elif Wikidata.type_of(property_id) in ['quantity', 'string', 'monolingualtext'] and property_id != 'P528':
