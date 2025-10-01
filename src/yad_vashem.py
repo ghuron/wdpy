@@ -62,7 +62,7 @@ class Model(wd.Model):
 
     @classmethod
     def next(cls):
-        wd.Wikidata.request(Model.API + 'Search/BuildGlobalResultsQuery?site=righteous&valueToSearch=2024', json={})
+        wd.Wikidata.request(Model.API + 'Search/BuildGlobalResultsQuery?site=righteous&valueToSearch=2025', json={})
         result, Model.__offset = [], Model.__offset + 1
         url = Model.API + 'Search/GetDataResultsQuery?&pageSize=10&cardType=card&pageNumber=' + str(Model.__offset)
         payload = {"filters": {"filters": [{"fieldName": "data_bank", "values": ["righteous"]}]}, "currentTab": {}}
