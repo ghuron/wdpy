@@ -1,0 +1,18 @@
+[build-system]
+requires = ["setuptools", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "wdpy"
+version = "0.3"
+dependencies = ["requests"]
+
+[tool.setuptools.packages.find]
+
+where = ["src"]
+
+
+
+[tool.pytest.ini_options]
+
+pythonpath = ["src"]
