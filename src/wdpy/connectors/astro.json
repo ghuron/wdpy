@@ -1,0 +1,114 @@
+{
+  "transform": [
+    {
+      "pattern": ",.*48550/arXiv\\.(\\d{4}.\\d+|[a-z\\-]+(\\.[A-Z]{2})?\\/\\d{7}).*",
+      "property": "P818",
+      "repl": "\\g<1>"
+    },
+    {
+      "pattern": ".*arXiv:?(\\d{4})\\.?(\\d{4}\\d?).*",
+      "property": "P818",
+      "repl": "\\g<1>.\\g<2>"
+    },
+    {
+      "pattern": "http[s]?://(?:ui\\.)?adsabs.harvard.edu/abs/([^/]+).*",
+      "property": "P819",
+      "repl": "\\g<1>"
+    },
+    {
+      "pattern": ".*((?:1[789]\\d\\d|2[012]\\d\\d)[\\dA-Za-z.&]{12}[\\d.][\\dA-Zd.]{2}).*",
+      "property": "P819",
+      "repl": "\\g<1>"
+    },
+    {
+      "pattern": "(http[s]?://)?(dx\\.)?doi\\.org/",
+      "property": "P356",
+      "repl": ""
+    },
+    {
+      "pattern": ".*arxiv\\.org/(abs|pdf)/(\\d{4}.\\d+|[a-z\\-]+(\\.[A-Z]{2})?\\/\\d{7}).*",
+      "property": "P818",
+      "repl": "\\g<2>"
+    },
+    {
+      "pattern": "http[s]?://www\\.journals\\.uchicago\\.edu/doi/abs/",
+      "property": "P356",
+      "repl": ""
+    },
+    {
+      "pattern": ".*iopscience.iop.org/article/(10\\..+)$",
+      "property": "P356",
+      "repl": "\\g<1>"
+    },
+    {
+      "pattern": ".*iopscience.iop.org/(.+\\d)/?$",
+      "property": "P356",
+      "repl": "10.1088/\\g<1>"
+    },
+    {
+      "pattern": ".*iop.org/EJ/abstract/1402-4896/(.+\\d)/?$",
+      "property": "P356",
+      "repl": "10.1088/0031-8949/\\g<1>"
+    },
+    {
+      "pattern": ".*iop.org/EJ/abstract/1538-4357/(.+\\d)/?$",
+      "property": "P356",
+      "repl": "10.1088/0004-637X/\\g<1>"
+    },
+    {
+      "pattern": ".*iop.org/EJ/abstract/(.+\\d)/?$",
+      "property": "P356",
+      "repl": "10.1088/\\g<1>"
+    },
+    {
+      "pattern": ".*/aa(\\d+)-(\\d\\d)\\.(html|pdf)",
+      "property": "P356",
+      "repl": "10.1051/0004-6361:20\\g<2>\\g<1>"
+    },
+    {
+      "pattern": ".*/aa(\\d+)-(\\d{2})\\.(html|pdf)",
+      "property": "P356",
+      "repl": "10.1051/0004-6361/20\\g<2>\\g<1>"
+    },
+    {
+      "pattern": ".*/articles/aa/abs/2004/18/aa0959/aa0959.html",
+      "property": "P356",
+      "repl": "10.1051/0004-6361:20035959"
+    },
+    {
+      "pattern": "adsabs\\.harvard\\.edu/cgi-bin/nph-bib_query\\?bibcode=([^\\&]+).*",
+      "property": "P819",
+      "repl": "\\g<1>"
+    },
+    {
+      "pattern": "http://onlinelibrary.wiley.com/doi/([^x]+x).*",
+      "property": "P356",
+      "repl": "\\g<1>"
+    },
+    {
+      "pattern": "http://online.liebertpub.com/doi/abs/([^\\?]+).*",
+      "property": "P356",
+      "repl": "\\g<1>"
+    },
+    {
+      "pattern": ".*bn=(\\d{3})(\\d)(\\d{3})(\\d{5})(\\d)",
+      "property": "P212",
+      "repl": "\\g<1>-\\g<2>-\\g<3>-\\g<4>-\\g<5>"
+    },
+    {
+      "pattern": ".+jstor\\.org/stable/(info/)?",
+      "property": "P356",
+      "repl": ""
+    },
+    {
+      "pattern": ".*doi=([^&]+)(&.+)?$",
+      "property": "P356",
+      "repl": "\\g<1>"
+    },
+    {
+      "pattern": ".*/(nature\\d+).html",
+      "property": "P356",
+      "repl": "10.1038/\\g<1>"
+    }
+  ]
+}

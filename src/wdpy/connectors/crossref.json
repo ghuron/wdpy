@@ -1,0 +1,24 @@
+{
+  "db_ref": "Q5188229",
+  "extract": [404],
+  "properties": {
+    "P356": "https://api.crossref.org/works/{}"
+  },
+  "fields": {
+    "message": {
+      "DOI": "P356",
+      "type": "P31",
+      "page": "P304",
+      "volume": "P478",
+      "title": "P1476",
+      "language": "P407",
+      "journal-issue": {
+        "issue": "P433"
+      }
+    }
+  },
+  "translate": {
+    "en": "Q1860",
+    "journal-article": "Q13442814"
+  }
+}

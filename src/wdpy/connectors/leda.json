@@ -1,0 +1,7 @@
+{
+  "db_ref": "Q654724",
+  "properties": {
+    "P3083": "{} AND i.id ='{}'",
+    "P13228": "{} AND i.id ='Gaia DR3 {}'"
+  }
+}

@@ -1,0 +1,22 @@
+{
+  "db_ref": "Q5412157",
+  "properties": {
+    "P698": "https://www.ebi.ac.uk/europepmc/webservices/rest/search?resulttype=core&format=json&query=EXT_ID:{}",
+    "P356": "https://www.ebi.ac.uk/europepmc/webservices/rest/search?resulttype=core&format=json&query=DOI:{}"
+  },
+  "fields": {
+    "pmid": "P698",
+    "doi": "P356",
+    "title": "P1476",
+    "pageInfo": "P304",
+    "language": "P407",
+    "firstPublicationDate": "P577",
+    "pubTypeList": {
+      "pubType": "P31"
+    }
+  },
+  "translate": {
+    "eng": "Q1860",
+    "Journal Article": "Q13442814"
+  }
+}

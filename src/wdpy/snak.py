@@ -1,0 +1,158 @@
+from __future__ import annotations
+from dataclasses import dataclass
+from datetime import date, datetime
+import json, re
+from typing import Any, Callable, ClassVar, Dict, Iterable, List, Literal, Optional, Set, Tuple
+from wdpy import exec
+
+@dataclass
+class Snak:
+    """Wrapper around a Wikibase snak."""
+    property: str
+    value: Optional[Tuple[str, ...]] = None
+    snaktype: Literal['value', 'novalue', 'somevalue'] = 'value'
+    _PROPERTY_TYPES: ClassVar[Optional[Dict[str, str]]] = None
+
+    @staticmethod
+    def type_of(property_id: str) -> Optional[str]:
+        """Return the datatype of a Wikibase property by ID."""
+        if Snak._PROPERTY_TYPES is None:
+            Snak._PROPERTY_TYPES = {u.rsplit('/', 1)[-1]: _normalize_type(r['t'])
+                                    for u, r in (exec('SELECT ?p ?t { ?p '
+                                    'wikibase:propertyType ?t }') or {}).items()}
+        return Snak._PROPERTY_TYPES.get(property_id)
+
+    @staticmethod
+    def parse(data: Dict[str, Any]) -> Snak:
+        """Parse a Wikibase JSON snak into a Snak object."""
+        p, st = data.get('property', ''), data.get('snaktype', 'value')
+        if (dt := data.get('datatype')) and Snak._PROPERTY_TYPES is not None:
+            Snak._PROPERTY_TYPES.setdefault(p, dt)
+        if st != 'value' or not isinstance(dv := data.get('datavalue'), dict):
+            return Snak(p, None, st)
+        v, t = dv.get('value'), dv.get('type')
+        if not isinstance(v, dict): return Snak(p, (str(v),) if v is not None else None)
+        match t:
+            case 'wikibase-entityid': res = (v.get('id', ''),)
+            case 'quantity': res = (str(v.get('amount', '')), str(v.get('lowerBound', '')),
+                                  str(v.get('upperBound', '')), v.get('unit') or '1')
+            case 'time': res = (_format_time(v.get('time')) or '',
+                              str(v.get('precision', '')),
+                              (v.get('calendarmodel') or '').rsplit('/', 1)[-1])
+            case 'monolingualtext': res = (v.get('text', ''), v.get('language', ''))
+            case _: res = (str(v),)
+        return Snak(p, res)
+
+    @staticmethod
+    def create(property_id: str, value: Any, st: str = 'value') -> Optional[Snak]:
+        """Create a Snak object from a property ID and a value."""
+        if st != 'value': return Snak(property_id, None, st)
+        if value is None: return Snak(property_id, None)
+        if isinstance(value, (tuple, list)): return Snak(property_id, tuple(value))
+        k, s = Snak.type_of(property_id), str(value).strip()
+        if k == 'quantity': return Snak(property_id, (s, '', '', '1')) if s else None
+        if k == 'time':
+            if isinstance(value, (date, datetime)):
+                return Snak(property_id, (value.strftime('%Y%m%d'), '11', 'Q1985727'))
+            if not s: return None
+            pats = [(r'^(\d{4})(\d{2})(\d{2})$', 11, (1, 2, 3)),
+                    (r'^(\d{4})-(\d{1,2})-(\d{1,2})$', 11, (1, 2, 3)),
+                    (r'^(\d{1,2})/(\d{1,2})/(\d{4})$', 11, (3, 1, 2)),
+                    (r'^(\d{4})-(\d{1,2})$', 10, (1, 2, None)),
+                    (r'^(\d{1,2})/(\d{4})$', 10, (2, 1, None)), (r'^(\d{4})$', 9, (1, None, None))]
+            for r, pr, idx in pats:
+                if m := re.match(r, s):
+                    y, mo, d = [m.group(i) if i else None for i in idx]
+                    return Snak(property_id, (f"{y.zfill(4)}{mo.zfill(2) if mo else '00'}"
+                                             f"{d.zfill(2) if d else '00'}",
+                                             str(pr), 'Q1985727'))
+            return None
+        return Snak(property_id, (s,)) if s or k == 'string' else None
+
+    def json(self) -> str:
+        """Generate a Wikibase-compatible JSON string for the snak."""
+        d: Dict[str, Any] = {'snaktype': self.snaktype, 'property': self.property}
+        if dt := Snak.type_of(self.property): d['datatype'] = dt
+        if self.snaktype == 'value' and self.value:
+            v, res = self.value, None
+            match dt:
+                case 'wikibase-item':
+                    res = {'type': 'wikibase-entityid', 'value': {'entity-type': 'item',
+                           'id': v[0]}}
+                    if v[0][1:].isdigit(): res['value']['numeric-id'] = int(v[0][1:])
+                case 'wikibase-property':
+                    res = {'type': 'wikibase-entityid', 'value': {'entity-type':
+                           'property', 'id': v[0]}}
+                case 'string' | 'external-id' | 'url' | 'commons-media' | 'commonsMedia':
+                    res = {'type': 'string', 'value': v[0]}
+                case 'monolingual-text' | 'monolingualtext':
+                    res = {'type': 'monolingualtext', 'value': {'text': v[0],
+                           'language': (v[1] if len(v) > 1 else '') or 'mul'}}
+                case 'quantity':
+                    if v[0]:
+                        res = {'type': 'quantity', 'value': {'amount': v[0],
+                               'unit': v[3] if len(v) > 3 else '1'}}
+                        if len(v) > 1 and v[1]: res['value']['lowerBound'] = v[1]
+                        if len(v) > 2 and v[2]: res['value']['upperBound'] = v[2]
+                case 'time':
+                    res = {'type': 'time', 'value': {'time': f"+{v[0][:4]}-{v[0][4:6]}"
+                           f"-{v[0][6:]}T00:00:00Z" if len(v[0]) == 8 else v[0],
+                           'timezone': 0, 'before': 0, 'after': 0}}
+                    if len(v) > 1 and v[1]:
+                        res['value']['precision'] = int(v[1]) if v[1].isdigit() else v[1]
+                    if len(v) > 2 and v[2]:
+                        res['value']['calendarmodel'] = (f"http://www.wikidata.org/entity"
+                        f"/{v[2]}" if not v[2].startswith('http') else v[2])
+                case _: res = {'type': 'string', 'value': v[0]}
+            if res: d['datavalue'] = res
+            else: d.pop('datatype', None)
+        return json.dumps(d, sort_keys=True)
+
+    @staticmethod
+    def resolve_redirect(items: Iterable[Iterable[Snak]], redirects: Dict[str, str]) -> None:
+        """Resolve redirects for all P248 snaks in items."""
+        for s in (s for it in items for s in it if s.property == 'P248'):
+            if s.value and (target := redirects.get(s.value[0])):
+                s.value = (target,) + s.value[1:]
+
+    @staticmethod
+    def can_merge_references(source: Iterable[Snak],
+                             target: Iterable[Snak]) -> bool:
+        """Check if two sets of reference snaks can be merged."""
+        def group(snaks: Iterable[Snak]):
+            d: Dict[str, Set[Optional[Tuple[str, ...]]]] = {}
+            for s in snaks:
+                d.setdefault(s.property, set()).add(s.value)
+            return d
+        src, dst = group(source), group(target)
+        return all((p in {'P248', 'P12132'} or Snak.type_of(p) == 'external-id') and
+                   (not (s := src.get(p)) or not (t := dst.get(p)) or s == t)
+                   for p in set(src) | set(dst))
+
+    @staticmethod
+    def try_to_merge_references(source: List[Snak],
+                                target: List[Snak]) -> bool:
+        """Make target reference snaks identical to source if compatible."""
+        if not Snak.can_merge_references(source, target): return False
+        target.clear()
+        target.extend(source)
+        return True
+
+    @staticmethod
+    def get_p248_qids(items: Iterable[Iterable[Snak]]) -> Set[str]:
+        """Extract QIDs from P248 (stated in) snaks from multiple references."""
+        return {s.value[0] for it in items for s in it
+                if s.property == 'P248' and s.value and s.value[0]}
+
+def _normalize_type(uri: str) -> str:
+    s = uri.rsplit('#', 1)[-1]
+    m = {'CommonsMedia': 'commonsMedia', 'GlobeCoordinate': 'globecoordinate',
+         'WikibaseEntitySchema': 'entity-schema'}
+    return m.get(s, re.sub(r'([a-z])([A-Z])', r'\1-\2', s).lower())
+
+
+def _format_time(raw: Any) -> Optional[str]:
+    try:
+        return str(raw).split('T')[0].lstrip('+').replace('-', '') if raw else None
+    except:
+        return None

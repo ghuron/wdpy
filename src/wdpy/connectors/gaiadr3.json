@@ -1,0 +1,19 @@
+{
+  "db_ref": "Q66061041",
+  "properties": {
+    "P13228": "{} WHERE source_id={}"
+  },
+  "endpoint": "https://gea.esac.esa.int/tap-server/tap",
+  "queries": [
+    [
+      "SELECT source_id, source_id AS P13228,",
+      "       parallax AS P2214, parallax_error AS P2214h, parallax_error AS P2214l, 'Q21500224' AS P2214u,",
+      "       pmra AS P10752, pmra_error AS P10752h, pmra_error AS P10752l, 'Q22137107' AS P10752u,",
+      "       pmdec AS P10751, pmdec_error AS P10751h, pmdec_error AS P10751l, 'Q22137107' AS P10751u,",
+      "       logg_gspphot AS P7015, logg_gspphot_upper-logg_gspphot AS P7015h, logg_gspphot-logg_gspphot_lower AS P7015l, 'Q39699418' AS P7015u,",
+      "       teff_gspphot AS P6879, teff_gspphot_upper-teff_gspphot AS P6879h, teff_gspphot-teff_gspphot_lower AS P6879l, 'Q11579' AS P6879u,",
+      "       radial_velocity AS P2216, radial_velocity_error AS P2216h, radial_velocity_error AS P2216l, 'Q3674704' AS P2216u",
+      "  FROM gaiadr3.gaia_source"
+    ]
+  ]
+}
