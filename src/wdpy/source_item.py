@@ -5,7 +5,7 @@ import logging
 import sys
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, ClassVar, Dict, List, Optional
 import urllib.error
 from urllib.request import Request, build_opener
 
@@ -30,6 +30,8 @@ def request(url: str,
 @dataclass
 class SourceItem:
     patch: Optional[List[Statement]] = None
+    proposed_label: Optional[str] = None
+    _lookup_cache: ClassVar[Dict[str, Dict[Any, Optional[str]]]] = {}
 
     def __init_subclass__(cls, **kwargs:Any):
         super().__init_subclass__(**kwargs)
@@ -53,11 +55,15 @@ class SourceItem:
         return cls._config.get('source_item')
 
     @staticmethod
-    def lookup (property_id:str, external_id:Any) -> Optional[str]:
-        if result := haswbstatement(property_id, external_id):
-            if len(result) > 1:  # Todo: warning ONLY if it was pre-loaded
-                logging.warning(f'{len(result)} instances {property_id}="{external_id}", using {result[0]}')
-            return result[0]
+    def lookup(property_id: str, external_id: Any) -> Optional[str]:
+        by_prop = SourceItem._lookup_cache.setdefault(property_id, {})
+        if external_id not in by_prop:
+            by_prop[external_id] = None
+            if result := haswbstatement(property_id, external_id):
+                if len(result) > 1:  # Todo: warning ONLY if it was pre-loaded
+                    logging.warning(f'{len(result)} instances {property_id}="{external_id}", using {result[0]}')
+                by_prop[external_id] = result[0]
+        return by_prop[external_id]
     
     @classmethod
     def make_request(cls, ident: Statement) -> Optional[Request]:
@@ -73,6 +79,8 @@ class SourceItem:
         if self.patch is None:
             self.patch = []
         self.patch.append(s)
+        if property_id == 'P1476' and not self.proposed_label and value:
+            self.proposed_label = value[0]
         return s
 
     def obtain(self, source: dict, properties: dict, translate: dict = {}) -> None:
@@ -97,6 +105,26 @@ class SourceItem:
         self._author_num = getattr(self, '_author_num', 0) + 1
         s.set_qualifier('P1545', str(self._author_num))
         return s
+
+    @staticmethod
+    def register_new_item(statements: List[Statement]) -> None:
+        for s in statements:
+            if Snak.type_of(s.mainsnak.property) != 'external-id':
+                continue
+            if not s.id or not s.mainsnak.value:
+                continue
+            property_id = s.mainsnak.property
+            value = s.mainsnak.value[0]
+            qid = s.id.split('$')[0]
+            if property_id not in SourceItem._lookup_cache:
+                logging.error('No lookup performed for %s', property_id)
+                SourceItem._lookup_cache[property_id] = {}
+            elif value not in SourceItem._lookup_cache[property_id]:
+                logging.error('No lookup performed for %s:%s', property_id, value)
+            elif SourceItem._lookup_cache[property_id][value] is not None:
+                logging.error('Duplicate discovered for %s:%s %s+%s',
+                              property_id, value, qid, SourceItem._lookup_cache[property_id][value])
+            SourceItem._lookup_cache[property_id][value] = qid
 
     def parse(self, text: str) -> None:
         raise NotImplementedError('Subclasses must implement parse')

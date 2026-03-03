@@ -3,7 +3,7 @@ import sys
 from unittest import TestCase, mock
 
 import wdpy
-from wdpy import SourceItem
+from wdpy import SourceItem, Statement, Snak
 
 
 class TestRequest(TestCase):
@@ -69,10 +69,210 @@ class TestConfig(TestCase):
     def test_no_child_json(self):
         class Base(SourceItem):
             _config = {'a': 1}
-        
+
         with mock.patch.object(SourceItem, '_load_config', return_value={}):
             class Derived(Base):
                 pass
-            
+
         self.assertEqual(Derived._config, {'a': 1})
         self.assertIsNot(Derived._config, Base._config)
+
+
+class TestLookup(TestCase):
+    def setUp(self):
+        SourceItem._lookup_cache.clear()
+
+    @mock.patch('wdpy.source_item.haswbstatement')
+    def test_hit_returns_qid(self, mock_hws):
+        mock_hws.return_value = ['Q42']
+        self.assertEqual(SourceItem.lookup('P31', 'some-id'), 'Q42')
+
+    @mock.patch('wdpy.source_item.haswbstatement')
+    def test_miss_returns_none(self, mock_hws):
+        mock_hws.return_value = None
+        self.assertIsNone(SourceItem.lookup('P31', 'unknown'))
+
+    @mock.patch('wdpy.source_item.haswbstatement')
+    def test_second_call_uses_cache(self, mock_hws):
+        mock_hws.return_value = ['Q42']
+        SourceItem.lookup('P31', 'some-id')
+        SourceItem.lookup('P31', 'some-id')
+        mock_hws.assert_called_once()
+
+    @mock.patch('wdpy.source_item.haswbstatement')
+    def test_negative_result_cached(self, mock_hws):
+        mock_hws.return_value = None
+        SourceItem.lookup('P31', 'unknown')
+        SourceItem.lookup('P31', 'unknown')
+        mock_hws.assert_called_once()
+
+    @mock.patch('wdpy.source_item.haswbstatement')
+    def test_different_ids_queried_separately(self, mock_hws):
+        mock_hws.side_effect = [['Q1'], ['Q2']]
+        self.assertEqual(SourceItem.lookup('P31', 'id-1'), 'Q1')
+        self.assertEqual(SourceItem.lookup('P31', 'id-2'), 'Q2')
+        self.assertEqual(mock_hws.call_count, 2)
+
+    @mock.patch('wdpy.source_item.haswbstatement')
+    def test_different_properties_queried_separately(self, mock_hws):
+        mock_hws.side_effect = [['Q1'], ['Q2']]
+        SourceItem.lookup('P31', 'same-id')
+        SourceItem.lookup('P496', 'same-id')
+        self.assertEqual(mock_hws.call_count, 2)
+
+    @mock.patch('wdpy.source_item.haswbstatement')
+    def test_multiple_results_warns_and_returns_first(self, mock_hws):
+        mock_hws.return_value = ['Q1', 'Q2', 'Q3']
+        with self.assertLogs('root', level='WARNING') as cm:
+            result = SourceItem.lookup('P31', 'dup-id')
+        self.assertEqual(result, 'Q1')
+        self.assertTrue(any('3 instances' in line for line in cm.output))
+
+
+def _ext_id_statement(property_id: str, value: str, qid: str) -> Statement:
+    """Build a minimal external-id Statement with a GUID-style id."""
+    return Statement(mainsnak=Snak(property_id, (value,)), id=f'{qid}$abc-def')
+
+
+class TestRegisterNewItem(TestCase):
+    def setUp(self):
+        SourceItem._lookup_cache.clear()
+
+    def _register(self, statements, expected_qid=None, expected_value=None,
+                  expected_property=None):
+        """Helper: patch Snak.type_of to return 'external-id' and call register."""
+        with mock.patch.object(Snak, 'type_of', return_value='external-id'):
+            SourceItem.register_new_item(statements)
+
+    # --- happy path ---
+
+    def test_registers_qid_after_lookup_miss(self):
+        """Normal flow: lookup recorded None, item created, cache updated."""
+        SourceItem._lookup_cache['P496'] = {'0000-0001': None}
+        s = _ext_id_statement('P496', '0000-0001', 'Q42')
+        with mock.patch.object(Snak, 'type_of', return_value='external-id'):
+            SourceItem.register_new_item([s])
+        self.assertEqual(SourceItem._lookup_cache['P496']['0000-0001'], 'Q42')
+
+    def test_qid_extracted_from_statement_id(self):
+        """QID is the part of statement.id before '$'."""
+        SourceItem._lookup_cache['P496'] = {'orcid-1': None}
+        s = Statement(mainsnak=Snak('P496', ('orcid-1',)), id='Q999$some-guid')
+        with mock.patch.object(Snak, 'type_of', return_value='external-id'):
+            SourceItem.register_new_item([s])
+        self.assertEqual(SourceItem._lookup_cache['P496']['orcid-1'], 'Q999')
+
+    def test_multiple_external_id_statements(self):
+        """All external-id statements in the list are registered."""
+        SourceItem._lookup_cache['P496'] = {'id-a': None}
+        SourceItem._lookup_cache['P213'] = {'isni-b': None}
+        statements = [
+            _ext_id_statement('P496', 'id-a', 'Q10'),
+            _ext_id_statement('P213', 'isni-b', 'Q10'),
+        ]
+        with mock.patch.object(Snak, 'type_of', return_value='external-id'):
+            SourceItem.register_new_item(statements)
+        self.assertEqual(SourceItem._lookup_cache['P496']['id-a'], 'Q10')
+        self.assertEqual(SourceItem._lookup_cache['P213']['isni-b'], 'Q10')
+
+    # --- error conditions ---
+
+    def test_property_not_in_cache_logs_error_and_registers(self):
+        """Property never looked up: logs error but still writes to cache."""
+        s = _ext_id_statement('P496', 'new-id', 'Q7')
+        with mock.patch.object(Snak, 'type_of', return_value='external-id'):
+            with self.assertLogs('root', level='ERROR') as cm:
+                SourceItem.register_new_item([s])
+        self.assertTrue(any('No lookup performed for P496' in line for line in cm.output))
+        self.assertEqual(SourceItem._lookup_cache['P496']['new-id'], 'Q7')
+
+    def test_value_not_in_cache_logs_error_and_registers(self):
+        """Property in cache but value never looked up: logs error, writes to cache."""
+        SourceItem._lookup_cache['P496'] = {}  # property known, but value absent
+        s = _ext_id_statement('P496', 'unseen-id', 'Q8')
+        with mock.patch.object(Snak, 'type_of', return_value='external-id'):
+            with self.assertLogs('root', level='ERROR') as cm:
+                SourceItem.register_new_item([s])
+        self.assertTrue(any('No lookup performed for P496:unseen-id' in line for line in cm.output))
+        self.assertEqual(SourceItem._lookup_cache['P496']['unseen-id'], 'Q8')
+
+    def test_duplicate_logs_error_and_overwrites(self):
+        """Cached value already non-None: logs duplicate error, still updates cache."""
+        SourceItem._lookup_cache['P496'] = {'dup-id': 'Q1'}
+        s = _ext_id_statement('P496', 'dup-id', 'Q2')
+        with mock.patch.object(Snak, 'type_of', return_value='external-id'):
+            with self.assertLogs('root', level='ERROR') as cm:
+                SourceItem.register_new_item([s])
+        self.assertTrue(any('Duplicate discovered' in line for line in cm.output))
+        self.assertEqual(SourceItem._lookup_cache['P496']['dup-id'], 'Q2')
+
+    # --- filtering ---
+
+    def test_non_external_id_statement_is_skipped(self):
+        """Statements whose property type is not external-id are ignored."""
+        s = Statement(mainsnak=Snak('P31', ('Q5',)), id='Q42$abc')
+        with mock.patch.object(Snak, 'type_of', return_value='wikibase-item'):
+            SourceItem.register_new_item([s])
+        self.assertEqual(SourceItem._lookup_cache, {})
+
+    def test_statement_without_id_is_skipped(self):
+        """Statement with no id (not yet saved) is silently ignored."""
+        s = Statement(mainsnak=Snak('P496', ('some-val',)), id=None)
+        with mock.patch.object(Snak, 'type_of', return_value='external-id'):
+            SourceItem.register_new_item([s])
+        self.assertEqual(SourceItem._lookup_cache, {})
+
+    def test_statement_without_value_is_skipped(self):
+        """Snak with no value (novalue/somevalue) is silently ignored."""
+        s = Statement(mainsnak=Snak('P496', None), id='Q42$abc')
+        with mock.patch.object(Snak, 'type_of', return_value='external-id'):
+            SourceItem.register_new_item([s])
+        self.assertEqual(SourceItem._lookup_cache, {})
+
+    # --- interaction with lookup() ---
+
+    def test_register_makes_subsequent_lookup_use_cache(self):
+        """After registering, lookup() returns cached QID without calling haswbstatement."""
+        SourceItem._lookup_cache['P496'] = {'0000-0002': None}
+        s = _ext_id_statement('P496', '0000-0002', 'Q55')
+        with mock.patch.object(Snak, 'type_of', return_value='external-id'):
+            SourceItem.register_new_item([s])
+        with mock.patch('wdpy.source_item.haswbstatement') as mock_hws:
+            result = SourceItem.lookup('P496', '0000-0002')
+        self.assertEqual(result, 'Q55')
+        mock_hws.assert_not_called()
+
+
+class TestProposedLabel(TestCase):
+    def _item(self):
+        return SourceItem()
+
+    def test_proposed_label_initially_none(self):
+        self.assertIsNone(self._item().proposed_label)
+
+    def test_p1476_sets_proposed_label(self):
+        item = self._item()
+        item.add_claim('P1476', 'Some Title', 'en')
+        self.assertEqual(item.proposed_label, 'Some Title')
+
+    def test_first_p1476_wins(self):
+        item = self._item()
+        item.add_claim('P1476', 'First Title', 'en')
+        item.add_claim('P1476', 'Second Title', 'fr')
+        self.assertEqual(item.proposed_label, 'First Title')
+
+    def test_other_property_does_not_set_label(self):
+        item = self._item()
+        item.add_claim('P31', 'Q5')
+        self.assertIsNone(item.proposed_label)
+
+    def test_p1476_without_value_does_not_set_label(self):
+        item = self._item()
+        item.add_claim('P1476')
+        self.assertIsNone(item.proposed_label)
+
+    def test_p1476_claim_still_added_to_patch(self):
+        item = self._item()
+        s = item.add_claim('P1476', 'A Title', 'en')
+        self.assertIn(s, item.patch)
+        self.assertEqual(item.patch[0].mainsnak.property, 'P1476')
