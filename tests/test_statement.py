@@ -2,6 +2,20 @@ import json
 from unittest import TestCase, mock
 from wdpy import Snak, Statement, References
 
+
+# ── helpers ──────────────────────────────────────────────────────────────────
+
+def p50(qid: str, ordinal: str, display_name: str = '') -> Statement:
+    quals = [Snak('P1545', (ordinal,))]
+    if display_name:
+        quals.append(Snak('P1932', (display_name,)))
+    return Statement(Snak('P50', (qid,)), qualifiers=quals)
+
+
+def p2093(name: str, ordinal: str) -> Statement:
+    return Statement(Snak('P2093', (name,)),
+                     qualifiers=[Snak('P1545', (ordinal,))])
+
 @mock.patch('wdpy.Snak.type_of', return_value='string')
 class Parse(TestCase):
     def test_basic(self, *_):
@@ -175,3 +189,106 @@ class Upsert(TestCase):
         candidate = Statement(Snak('P31', ('Q5',)), references=References([ref]))
         incoming.upsert([candidate])
         self.assertEqual(len(candidate.references._items), 1)
+
+
+class DeduplicateAuthors(TestCase):
+
+    ORD = 'P1545'
+
+    def dedup(self, *stmts):
+        return Statement.deduplicate_authors(list(stmts), self.ORD)
+
+    # ── no-op cases ──────────────────────────────────────────────────────────
+
+    def test_empty_list(self):
+        self.assertEqual(self.dedup(), [])
+
+    def test_single_author_no_duplicate(self):
+        self.assertEqual(self.dedup(p2093('Alice', '1')), [])
+
+    def test_no_ordinal_qualifier_skipped(self):
+        s = Statement(Snak('P2093', ('Alice',)))     # no P1545
+        self.assertEqual(self.dedup(s), [])
+
+    def test_different_ordinals_no_deletion(self):
+        self.assertEqual(self.dedup(p2093('Alice', '1'), p2093('Bob', '2')), [])
+
+    # ── P2093 vs P2093 ───────────────────────────────────────────────────────
+
+    def test_p2093_first_longer_second_deleted(self):
+        first = p2093('Alice Smith', '1')
+        second = p2093('A. Smith', '1')
+        result = self.dedup(first, second)
+        self.assertEqual(result, [second])
+
+    def test_p2093_second_longer_first_deleted(self):
+        first = p2093('A. Smith', '1')
+        second = p2093('Alice Smith', '1')
+        result = self.dedup(first, second)
+        self.assertEqual(result, [first])
+
+    def test_p2093_equal_length_first_kept(self):
+        first = p2093('Alice', '1')
+        second = p2093('Smith', '1')
+        result = self.dedup(first, second)
+        self.assertEqual(result, [second])
+
+    # ── P50 vs P2093 ─────────────────────────────────────────────────────────
+
+    def test_p2093_then_p50_p2093_deleted(self):
+        string_author = p2093('Alice Smith', '1')
+        linked_author = p50('Q42', '1')
+        result = self.dedup(string_author, linked_author)
+        self.assertEqual(result, [string_author])
+
+    def test_p50_then_p2093_p2093_deleted(self):
+        linked_author = p50('Q42', '1')
+        string_author = p2093('Alice Smith', '1')
+        result = self.dedup(linked_author, string_author)
+        self.assertEqual(result, [string_author])
+
+    # ── P50 vs P50, same QID ─────────────────────────────────────────────────
+
+    def test_p50_same_qid_second_longer_name_first_deleted(self):
+        first = p50('Q42', '1', 'A. Smith')
+        second = p50('Q42', '1', 'Alice Smith')
+        result = self.dedup(first, second)
+        self.assertEqual(result, [first])
+
+    def test_p50_same_qid_first_longer_name_second_deleted(self):
+        first = p50('Q42', '1', 'Alice Smith')
+        second = p50('Q42', '1', 'A. Smith')
+        result = self.dedup(first, second)
+        self.assertEqual(result, [second])
+
+    def test_p50_same_qid_no_p1932_second_deleted(self):
+        first = p50('Q42', '1')      # no display name
+        second = p50('Q42', '1')
+        result = self.dedup(first, second)
+        self.assertEqual(result, [second])
+
+    # ── P50 vs P50, different QIDs ───────────────────────────────────────────
+
+    def test_p50_different_qids_both_kept(self):
+        self.assertEqual(self.dedup(p50('Q1', '1'), p50('Q2', '1')), [])
+
+    def test_p50_different_qids_third_same_as_first_kept_with_first(self):
+        # Q1 appears twice at ordinal 1, Q2 is different → Q2 kept, second Q1 deleted
+        a = p50('Q1', '1', 'Alice')
+        b = p50('Q2', '1', 'Bob')
+        c = p50('Q1', '1', 'Alice Smith')   # same QID as a, longer name
+        result = self.dedup(a, b, c)
+        # b gets a 'continue' (different QID from incumbent a), so best['1'] stays a
+        # then c: same QID as a, longer name → c wins, a deleted
+        self.assertIn(a, result)
+        self.assertNotIn(b, result)
+        self.assertNotIn(c, result)
+
+    # ── multiple ordinals ─────────────────────────────────────────────────────
+
+    def test_mixed_ordinals_only_duplicates_deleted(self):
+        a1 = p2093('Alice Smith', '1')
+        a1_dup = p2093('A. Smith', '1')
+        b2 = p50('Q99', '2')
+        result = self.dedup(a1, a1_dup, b2)
+        self.assertEqual(result, [a1_dup])

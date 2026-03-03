@@ -113,6 +113,65 @@ class Statement:
                 return candidate
         return None
 
+    @staticmethod
+    def deduplicate_authors(statements: List[Statement],
+                            ordinal_property: str) -> List[Statement]:
+        """Deduplicate author statements sharing the same ordinal qualifier.
+
+        Groups statements by the value of ordinal_property (e.g. P1545).
+        Statements without that qualifier are ignored.  For each ordinal that
+        has more than one author statement the inferior one is selected for
+        deletion using these rules (applied in order):
+
+        - P50 (linked item) always beats P2093 (string name).
+        - Two P50 statements linking to *different* items are both kept.
+        - Among same-type duplicates the statement with the longer display
+          name wins; for P50 the display name is the P1932 qualifier value.
+
+        Returns the list of redundant statements that should be deleted.
+        """
+        def _display_name(s: Statement) -> str:
+            if s.mainsnak.property == 'P2093':
+                return s.mainsnak.value[0] if s.mainsnak.value else ''
+            for q in (s.qualifiers or []):
+                if q.property == 'P1932' and q.value:
+                    return q.value[0]
+            return ''
+
+        to_delete: List[Statement] = []
+        best: Dict[str, Statement] = {}
+
+        for s in statements:
+            ordinal = next(
+                (q.value[0] for q in (s.qualifiers or [])
+                 if q.property == ordinal_property and q.value),
+                None,
+            )
+            if ordinal is None:
+                continue
+
+            if ordinal not in best:
+                best[ordinal] = s
+                continue
+
+            incumbent = best[ordinal]
+
+            if s.mainsnak.property == 'P50':
+                if incumbent.mainsnak.property == 'P2093':
+                    best[ordinal], s = s, incumbent          # P50 beats P2093
+                elif (s.mainsnak.value and incumbent.mainsnak.value
+                      and s.mainsnak.value[0] != incumbent.mainsnak.value[0]):
+                    continue                                  # different items, keep both
+                elif len(_display_name(s)) > len(_display_name(incumbent)):
+                    best[ordinal], s = s, incumbent          # longer name wins
+            elif incumbent.mainsnak.property == 'P2093':    # both P2093
+                if len(_display_name(s)) > len(_display_name(incumbent)):
+                    best[ordinal], s = s, incumbent
+
+            to_delete.append(s)
+
+        return to_delete
+
     def save(self, summary: str) -> Optional[Dict[str, Any]]:
         """Persist statement via wbsetclaim."""
         return api_write('wbsetclaim', claim=self.json(), summary=summary)
