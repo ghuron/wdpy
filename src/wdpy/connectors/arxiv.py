@@ -8,6 +8,8 @@ class ArxivItem(SourceItem):
             self.patch = []
             return True
         id_text = getattr(entry.find('w3:id', ns), 'text', '') or ''
+        if self.patch and self.patch[0].mainsnak.property == 'P818' and '/abs/' not in id_text:
+            return False
         arxiv_id = id_text.split('/')[-1].split('v')[0]
         self.add_claim('P31', 'Q13442814')
         if arxiv_id: self.add_claim('P953', 'https://arxiv.org/pdf/' + arxiv_id)

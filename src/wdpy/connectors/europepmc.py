@@ -6,6 +6,8 @@ class EuropePMC(SourceItem):
     def parse(self, text: str) -> bool:
         results = json.loads(text).get('resultList', {}).get('result', [])
         if len(results) != 1:
+            if self.patch and self.patch[0].mainsnak.property == 'P698':
+                return False
             self.patch = []
             return True
         d = results[0]

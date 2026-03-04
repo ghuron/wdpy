@@ -3,7 +3,7 @@ from wdpy import Snak, Statement
 from wdpy.connectors import ADS
 
 
-class TestADS(TestCase):
+class TestExtract(TestCase):
     def test_doi_returns_result(self):
         result = ADS.extract(Statement(Snak('P356', ('10.1088/2041-8205/763/1/L1',))))
         self.assertEqual(result.patch[0].mainsnak.property, 'P356')

@@ -156,7 +156,12 @@ class SourceItem:
         if not (req := cls.make_request(ident)):
             return None
         url = req.full_url
-        if not (resp := build_opener().open(req, timeout=30)):
+        try:
+            resp = build_opener().open(req, timeout=30)
+        except urllib.error.HTTPError as e:
+            resp = e
+        except Exception as e:
+            logging.error('Request failed for %s: %s', url, e)
             return None
         handled = cls._config.get('extract', [])
         with resp:
