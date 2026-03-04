@@ -1,6 +1,7 @@
 from __future__ import annotations
 import json
 import logging
+import uuid
 from typing import Any, Dict, List, Optional
 
 from wdpy import Statement, SourceItem, get_entities, api_write
@@ -75,6 +76,23 @@ class Item:
             grouped.setdefault(stmt.mainsnak.property, []).append(stmt)
         for prop, items in grouped.items():
             self.claims[prop] = items
+
+    def merge(self, statement: Statement) -> Statement:
+        """Upsert a statement into this item's claims.
+
+        If an existing statement with the same mainsnak value and compatible
+        qualifiers is found, references are merged into it and it is returned.
+        Otherwise the statement is appended as a new claim (with an id assigned
+        when the item already has a qid) and returned.
+        """
+        self._ensure_loaded()
+        bucket = self.claims.setdefault(statement.mainsnak.property, [])
+        if (existing := statement.upsert(bucket)) is None:
+            if self.qid:
+                statement.id = f'{self.qid}${uuid.uuid4()}'
+            bucket.append(statement)
+            return statement
+        return existing
 
     def json(self) -> str:
         data: Dict[str, Any] = {}

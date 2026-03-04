@@ -80,6 +80,73 @@ class ItemTestCase(unittest.TestCase):
         self.assertEqual('item', kwargs.get('new'))
         self.assertIn('data', kwargs)
 
+class Merge(unittest.TestCase):
+
+    def setUp(self):
+        self.item = wdpy.Item('Q1')
+        self.item._loaded = True
+
+    def _s(self, val='Q5', prop='P31'):
+        return wdpy.Statement(wdpy.Snak(prop, (val,)))
+
+    # ── insert ────────────────────────────────────────────────────────────────
+
+    def test_new_property_bucket_created(self):
+        s = self._s()
+        self.item.merge(s)
+        self.assertIn('P31', self.item.claims)
+
+    def test_new_statement_appended(self):
+        s = self._s()
+        result = self.item.merge(s)
+        self.assertIn(s, self.item.claims['P31'])
+        self.assertIs(result, s)
+
+    def test_id_assigned_when_qid_known(self):
+        self.item.merge(self._s())
+        self.assertTrue(self.item.claims['P31'][0].id.startswith('Q1$'))
+
+    def test_no_id_assigned_without_qid(self):
+        self.item.qid = None
+        s = self._s()
+        self.item.merge(s)
+        self.assertIsNone(s.id)
+
+    def test_second_distinct_value_also_inserted(self):
+        self.item.merge(self._s('Q5'))
+        self.item.merge(self._s('Q6'))
+        self.assertEqual(len(self.item.claims['P31']), 2)
+
+    def test_multiple_properties_independent(self):
+        self.item.merge(self._s('Q5', 'P31'))
+        self.item.merge(self._s('Q5', 'P21'))
+        self.assertEqual(len(self.item.claims['P31']), 1)
+        self.assertEqual(len(self.item.claims['P21']), 1)
+
+    # ── upsert ────────────────────────────────────────────────────────────────
+
+    def test_duplicate_returns_existing(self):
+        existing = self._s()
+        self.item.claims['P31'] = [existing]
+        result = self.item.merge(self._s())
+        self.assertIs(result, existing)
+        self.assertEqual(len(self.item.claims['P31']), 1)
+
+    def test_duplicate_does_not_overwrite_existing_id(self):
+        existing = self._s()
+        existing.id = 'Q1$original'
+        self.item.claims['P31'] = [existing]
+        self.item.merge(self._s())
+        self.assertEqual(self.item.claims['P31'][0].id, 'Q1$original')
+
+    # ── _ensure_loaded called ─────────────────────────────────────────────────
+
+    @patch('wdpy.item.get_entities', return_value={})
+    def test_triggers_load_if_not_loaded(self, mock_get):
+        item = wdpy.Item('Q99')
+        item.merge(self._s())
+        mock_get.assert_called_once()
+
     @patch('wdpy.item.api_write', return_value={'entity': {'id': 'Q7'}})
     def test_write_updates_existing_item(self, api_write_mock, *_):
         item = wdpy.Item('Q7')
