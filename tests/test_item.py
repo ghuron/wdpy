@@ -38,20 +38,6 @@ class ItemTestCase(unittest.TestCase):
             compress_mock.assert_called_once_with('QX')
             self.assertIsNone(item.claims['P31'][0].references)
 
-    @patch('wdpy.References.compress')
-    def test_transform_replaces_property_with_patch(self, compress_mock, *_):
-        item = wdpy.Item()
-        existing = wdpy.Statement(wdpy.Snak('P31', ('Q1',)))
-        item.claims = {'P31': [existing]}
-        item._loaded = True
-        reference = wdpy.References([{'snaks': {'P248': [{'snaktype': 'value', 'property': 'P248', 'datavalue': {'type': 'wikibase-entityid', 'value': {'id': 'QX'}}}]}}])
-        fresh = wdpy.Statement(wdpy.Snak('P31', ('Q2',)), references=reference)
-        model = DummyModel(patch=[fresh])
-
-        item.transform(model)
-
-        compress_mock.assert_called_once_with('QX')
-        self.assertEqual([fresh], item.claims['P31'])
 
     def test_json_serialization_includes_labels_and_claims(self, *_):
         item = wdpy.Item('Q1')
@@ -79,6 +65,97 @@ class ItemTestCase(unittest.TestCase):
         self.assertEqual('wbeditentity', args[0])
         self.assertEqual('item', kwargs.get('new'))
         self.assertIn('data', kwargs)
+
+class Transform(unittest.TestCase):
+
+    def setUp(self):
+        self.item = wdpy.Item('Q1')
+        self.item._loaded = True
+
+    def _refs(self, qid='QX'):
+        return wdpy.References([{'snaks': {'P248': [{'snaktype': 'value', 'property': 'P248',
+                                  'datavalue': {'type': 'wikibase-entityid', 'value': {'id': qid}}}]}}])
+
+    # ── guard conditions ──────────────────────────────────────────────────────
+
+    def test_none_patch_is_no_op(self):
+        self.item.claims['P31'] = [wdpy.Statement(wdpy.Snak('P31', ('Q5',)))]
+        self.item.transform(DummyModel(patch=None))
+        self.assertEqual(len(self.item.claims['P31']), 1)
+
+    def test_non_source_item_is_no_op(self):
+        self.item.claims['P31'] = [wdpy.Statement(wdpy.Snak('P31', ('Q5',)))]
+        self.item.transform(object())
+        self.assertEqual(len(self.item.claims['P31']), 1)
+
+    # ── empty patch (compress-only path) ──────────────────────────────────────
+
+    def test_empty_patch_compresses_existing_statements(self):
+        ref = self._refs()
+        self.item.claims['P31'] = [wdpy.Statement(wdpy.Snak('P31', ('Q5',)), references=ref)]
+        with unittest.mock.patch.object(wdpy.References, 'compress') as m:
+            self.item.transform(DummyModel(patch=[]))
+        m.assert_called_once_with('QX')
+
+    def test_empty_patch_sets_references_to_none_when_emptied(self):
+        ref = self._refs()
+        stmt = wdpy.Statement(wdpy.Snak('P31', ('Q5',)), references=ref)
+        self.item.claims['P31'] = [stmt]
+        with unittest.mock.patch.object(wdpy.References, 'compress',
+                                        side_effect=lambda _: ref._items.clear()):
+            self.item.transform(DummyModel(patch=[]))
+        self.assertIsNone(stmt.references)
+
+    def test_empty_patch_ignores_properties_not_in_model(self):
+        ref = self._refs()
+        stmt = wdpy.Statement(wdpy.Snak('P21', ('Q6',)), references=ref)
+        self.item.claims['P21'] = [stmt]
+        with unittest.mock.patch.object(wdpy.References, 'compress') as m:
+            self.item.transform(DummyModel(patch=[]))
+        m.assert_not_called()
+
+    # ── non-empty patch (merge path) ──────────────────────────────────────────
+
+    def test_new_statement_added_to_item(self):
+        self.item.transform(DummyModel(patch=[wdpy.Statement(wdpy.Snak('P31', ('Q5',)))]))
+        self.assertEqual(len(self.item.claims['P31']), 1)
+
+    def test_matching_statement_not_duplicated(self):
+        existing = wdpy.Statement(wdpy.Snak('P31', ('Q5',)))
+        self.item.claims['P31'] = [existing]
+        self.item.transform(DummyModel(patch=[wdpy.Statement(wdpy.Snak('P31', ('Q5',)))]))
+        self.assertEqual(len(self.item.claims['P31']), 1)
+
+    def test_non_matching_statement_appended_alongside_existing(self):
+        existing = wdpy.Statement(wdpy.Snak('P31', ('Q5',)))
+        self.item.claims['P31'] = [existing]
+        self.item.transform(DummyModel(patch=[wdpy.Statement(wdpy.Snak('P31', ('Q99',)))]))
+        self.assertEqual(len(self.item.claims['P31']), 2)
+
+    def test_compress_called_on_affected_property_after_merge(self):
+        ref = self._refs()
+        existing = wdpy.Statement(wdpy.Snak('P31', ('Q5',)), references=ref)
+        self.item.claims['P31'] = [existing]
+        with unittest.mock.patch.object(wdpy.References, 'compress') as m:
+            self.item.transform(DummyModel(patch=[wdpy.Statement(wdpy.Snak('P31', ('Q5',)))]))
+        m.assert_called_once_with('QX')
+
+    def test_compress_not_called_on_unaffected_property(self):
+        ref = self._refs()
+        self.item.claims['P21'] = [wdpy.Statement(wdpy.Snak('P21', ('Q6',)), references=ref)]
+        with unittest.mock.patch.object(wdpy.References, 'compress') as m:
+            self.item.transform(DummyModel(patch=[wdpy.Statement(wdpy.Snak('P31', ('Q5',)))]))
+        m.assert_not_called()
+
+    def test_compress_sets_references_to_none_when_emptied(self):
+        ref = self._refs()
+        existing = wdpy.Statement(wdpy.Snak('P31', ('Q5',)), references=ref)
+        self.item.claims['P31'] = [existing]
+        with unittest.mock.patch.object(wdpy.References, 'compress',
+                                        side_effect=lambda _: ref._items.clear()):
+            self.item.transform(DummyModel(patch=[wdpy.Statement(wdpy.Snak('P31', ('Q5',)))]))
+        self.assertIsNone(existing.references)
+
 
 class Merge(unittest.TestCase):
 

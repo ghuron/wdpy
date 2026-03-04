@@ -57,25 +57,25 @@ class Item:
         self._ensure_loaded()
         source = model.get_db_ref()
 
-        def compress(statement: Statement) -> None:
-            if not isinstance(statement, Statement) or not source:
-                return
-            if statement.references:
-                statement.references.compress(source)
-                if not statement.references:
-                    statement.references = None
-
         if not model.patch:
             for prop in model.get_properties():
                 for stmt in self.claims.get(prop) or []:
-                    compress(stmt)
+                    if stmt.references:
+                        stmt.references.compress(source)
+                        if not stmt.references:
+                            stmt.references = None
             return
-        grouped: Dict[str, List[Statement]] = {}
+
+        affected: set = set()
         for stmt in model.patch:
-            compress(stmt)
-            grouped.setdefault(stmt.mainsnak.property, []).append(stmt)
-        for prop, items in grouped.items():
-            self.claims[prop] = items
+            affected.add(self.merge(stmt).mainsnak.property)
+
+        for prop in affected:
+            for stmt in self.claims.get(prop) or []:
+                if stmt.references and source:
+                    stmt.references.compress(source)
+                    if not stmt.references:
+                        stmt.references = None
 
     def merge(self, statement: Statement) -> Statement:
         """Upsert a statement into this item's claims.
