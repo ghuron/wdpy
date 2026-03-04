@@ -1,5 +1,5 @@
 {
-   "source_item": "Q654724",
+   "source": "Q654724",
    "tap_endpoint":"http://simbad.u-strasbg.fr/simbad/sim-tap/sync",
    "properties":{
       "P3083":"{} AND i.id ='{}'",

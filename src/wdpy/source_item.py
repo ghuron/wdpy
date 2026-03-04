@@ -1,7 +1,9 @@
 from __future__ import annotations
 import http.client
+import importlib
 import json
 import logging
+import pkgutil
 import sys
 from dataclasses import dataclass
 from pathlib import Path
@@ -32,11 +34,28 @@ class SourceItem:
     patch: Optional[List[Statement]] = None
     proposed_label: Optional[str] = None
     _lookup_cache: ClassVar[Dict[str, Dict[Any, Optional[str]]]] = {}
+    _registry: ClassVar[List[type]] = []
+    _connectors_loaded: ClassVar[bool] = False
 
-    def __init_subclass__(cls, **kwargs:Any):
+    def __init_subclass__(cls, **kwargs: Any):
         super().__init_subclass__(**kwargs)
         cls._config = getattr(cls, '_config', {}).copy()
         cls._config.update(cls._load_config(cls.__module__))
+        if cls._config.get('source'):
+            SourceItem._registry.append(cls)
+
+    @classmethod
+    def get_extractors(cls) -> List[type]:
+        """Return all SourceItem subclasses found in wdpy.connectors."""
+        if not cls._connectors_loaded:
+            cls._connectors_loaded = True
+            import wdpy.connectors
+            for _, name, _ in pkgutil.iter_modules(wdpy.connectors.__path__):
+                try:
+                    importlib.import_module(f'wdpy.connectors.{name}')
+                except Exception as e:
+                    logging.warning('Failed to load connector %s: %s', name, e)
+        return cls._registry
     
     @staticmethod
     def _load_config(module_name: str) -> Dict[str, Any]:
@@ -52,7 +71,7 @@ class SourceItem:
 
     @classmethod
     def get_db_ref(cls) -> Optional[str]:
-        return cls._config.get('source_item')
+        return cls._config.get('source')
 
     @staticmethod
     def lookup(property_id: str, external_id: Any) -> Optional[str]:
@@ -126,22 +145,27 @@ class SourceItem:
                               property_id, value, qid, SourceItem._lookup_cache[property_id][value])
             SourceItem._lookup_cache[property_id][value] = qid
 
-    def parse(self, text: str) -> None:
+    def parse(self, text: str) -> bool:
         raise NotImplementedError('Subclasses must implement parse')
 
     @classmethod
     def extract(cls, ident: Statement) -> Optional[SourceItem]:
+        """Returns None on retrieval failure; instance with empty patch if datasource
+        confirms the record does not exist; instance with non-empty patch where
+        patch[0] is the requested id (possibly updated from a redirect)."""
         if not (req := cls.make_request(ident)):
             return None
         url = req.full_url
-        if not (resp := request(url, timeout=30)):
+        if not (resp := build_opener().open(req, timeout=30)):
             return None
         handled = cls._config.get('extract', [])
         with resp:
-            if 404 in handled and resp.getcode() == 404:
+            if ((code := resp.getcode()) == 404) and (404 in handled):
                 return cls(patch=[])
             destination = resp.geturl()
             text = resp.read().decode('utf-8')
+            if code != 200:
+                logging.error(f'Returned code {code} for {url}, message: {text}')
         destination_url = destination or url
         redirected = 301 in handled and destination_url.lower() != url.lower()
         if redirected:
@@ -149,5 +173,4 @@ class SourceItem:
         else:
             patch_ident = ident
         item = cls(patch=[patch_ident])
-        item.parse(text)
-        return item
+        return item if item.parse(text) else None

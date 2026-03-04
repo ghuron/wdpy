@@ -1,6 +1,5 @@
 from typing import Any, Dict, List, Optional, Union
-from wdpy.core import build_request, parse_csv
-from wdpy.source_item import SourceItem
+from wdpy import build_request, parse_csv, SourceItem, Statement
 
 class AstroItem(SourceItem):
     @classmethod
@@ -37,3 +36,7 @@ class AstroItem(SourceItem):
         if (rows := SimbadItem.exec(query)) and (main_id := list(rows.keys())[0]):
             return main_id
         return None
+
+    @classmethod
+    def extract(cls, ident: Statement) -> Optional[SourceItem]:
+        return None # Temporary until ADQL extractor is implemented

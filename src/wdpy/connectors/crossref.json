@@ -1,5 +1,5 @@
 {
-  "db_ref": "Q5188229",
+  "source": "Q5188229",
   "extract": [404],
   "properties": {
     "P356": "https://api.crossref.org/works/{}"

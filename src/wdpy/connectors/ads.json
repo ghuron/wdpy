@@ -1,5 +1,5 @@
 {
-  "db_ref": "Q752099",
+  "source": "Q752099",
   "properties": {
     "P819": "https://api.adsabs.harvard.edu/v1/search/query?q=bibcode:\"{}\"",
     "P356": "https://api.adsabs.harvard.edu/v1/search/query?q=doi:\"{}\"",

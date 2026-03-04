@@ -15,13 +15,14 @@ class ADS(SourceItem):
                 headers={'Authorization': 'Bearer ogOoi0uDxIebyeseB3tAbf5mBTJxXQQWQqE5TW40'}
             )
 
-    def parse(self, text: str) -> None:
+    def parse(self, text: str) -> bool:
         docs = json.loads(text).get('response', {}).get('docs', [])
         if len(docs) != 1:
             if self.patch and self.patch[0].mainsnak.property == 'P819':
                 logging.warning('Got %d results for %s', len(docs), self.patch[0].mainsnak.value)
-            self.patch = []
-            return
+                self.patch = []
+                return True
+            return False
         d = docs[0]
         if 'page' in d:
             p = d['page'][0] if isinstance(d['page'], list) else d['page']
@@ -41,6 +42,7 @@ class ADS(SourceItem):
             elif ident.startswith('10.') and 'ARXIV' not in ident.upper():
                 self.add_claim('P356', ident)
         self.add_claim('P31', 'Q13442814')
+        return True
 
 
 def _get_orcid(d: dict, idx: int) -> Optional[str]:

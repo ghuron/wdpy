@@ -1,5 +1,5 @@
 {
-  "db_ref": "Q5412157",
+  "source": "Q5412157",
   "properties": {
     "P698": "https://www.ebi.ac.uk/europepmc/webservices/rest/search?resulttype=core&format=json&query=EXT_ID:{}",
     "P356": "https://www.ebi.ac.uk/europepmc/webservices/rest/search?resulttype=core&format=json&query=DOI:{}"

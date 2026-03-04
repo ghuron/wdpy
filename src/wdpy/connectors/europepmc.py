@@ -3,11 +3,11 @@ from wdpy import SourceItem
 
 
 class EuropePMC(SourceItem):
-    def parse(self, text: str) -> None:
+    def parse(self, text: str) -> bool:
         results = json.loads(text).get('resultList', {}).get('result', [])
         if len(results) != 1:
             self.patch = []
-            return
+            return True
         d = results[0]
         fields = self._config.get('fields', {})
         translate = self._config.get('translate', {})
@@ -17,3 +17,4 @@ class EuropePMC(SourceItem):
         for a in d.get('authorList', {}).get('author', []):
             orcid = a['authorId']['value'] if a.get('authorId', {}).get('type') == 'ORCID' else None
             self.add_author(a.get('firstName', '') + ' ' + a.get('lastName', ''), orcid)
+        return True

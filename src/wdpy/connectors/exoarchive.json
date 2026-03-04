@@ -1,5 +1,5 @@
 {
-  "db_ref": "Q5420639",
+  "source": "Q5420639",
   "properties": {
     "P5667": "SELECT * FROM ({}) a WHERE main_id ='{}'"
   },

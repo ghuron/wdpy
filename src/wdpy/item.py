@@ -4,7 +4,7 @@ import logging
 import uuid
 from typing import Any, Dict, List, Optional
 
-from wdpy import Statement, SourceItem, get_entities, api_write
+from wdpy import Snak, Statement, SourceItem, get_entities, api_write
 
 
 class Item:
@@ -14,12 +14,72 @@ class Item:
         self.claims: Dict[str, List[Statement]] = {}
         self._loaded = False
 
+    def sync(self) -> Optional[Item]:
+        """Fetch data from all applicable sources and transform them into this item.
+
+        Iterates external-id claims to discover applicable source models,
+        transforming each in turn.  If a QID is discovered mid-sync for a
+        previously-unknown item, the item is reloaded and all prior transforms
+        are re-applied from scratch.
+
+        Returns self when a P31 claim is present after all transforms, else None.
+        """
+        transformed: List[SourceItem] = []
+
+        while model := self._extract_new(transformed):
+            if self.qid is None:
+                if not self.labels and model.proposed_label:
+                    self.labels['mul'] = model.proposed_label
+                for stmt in (model.patch or []):
+                    if Snak.type_of(stmt.mainsnak.property) == 'external-id' and stmt.mainsnak.value:
+                        if qid := SourceItem.lookup(stmt.mainsnak.property, stmt.mainsnak.value[0]):
+                            self.qid, self._loaded = qid, False
+                            self.claims, self.labels = {}, {}
+                            to_reapply, transformed = transformed, []
+                            for m in to_reapply:
+                                self.transform(m)
+                            break
+            self.transform(model)
+            transformed.append(model)
+
+        return self if self.claims.get('P31') else None
+
+    def _extract_new(self, transformed: List[SourceItem]) -> Optional[SourceItem]:
+        """Return the next untransformed source model, or None when exhausted."""
+        self._ensure_loaded()
+        deprecated = {
+            (prop, stmt.mainsnak.value[0])
+            for prop, stmts in self.claims.items()
+            if Snak.type_of(prop) == 'external-id'
+            for stmt in stmts
+            if stmt.rank == 'deprecated' and stmt.mainsnak.value
+        }
+        for prop, stmts in self.claims.items():
+            if Snak.type_of(prop) != 'external-id':
+                continue
+            for stmt in stmts:
+                if stmt.rank == 'deprecated' or not stmt.mainsnak.value:
+                    continue
+                for model_type in SourceItem.get_extractors():
+                    if (model := model_type.extract(stmt)) is None:
+                        continue
+                    if model.patch:
+                        s = model.patch[0]
+                        if s.mainsnak.value and (s.mainsnak.property, s.mainsnak.value[0]) in deprecated:
+                            continue
+                    if model not in transformed:
+                        return model
+        return None
+
     @classmethod
     def get_by_id(cls, property_id: str, external_id: Any) -> Optional[Item]:
         """Return Item with found qid or create/load with all updates"""
         if property_id and external_id:
             if _id := SourceItem.lookup(property_id, external_id):
                 return cls(_id)
+            new_item = cls()
+            new_item.merge(Statement(Snak(property_id, (str(external_id),))))
+            return new_item.sync()
 
     def _ensure_loaded(self) -> None:
         if self._loaded:

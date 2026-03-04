@@ -1,5 +1,5 @@
 {
-    "db_ref": "Q118398",
+    "source": "Q118398",
     "properties": {
         "P818": "https://export.arxiv.org/api/query?id_list={}",
         "P356": "https://export.arxiv.org/api/query?search_query={}"

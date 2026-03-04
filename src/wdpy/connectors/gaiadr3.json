@@ -1,5 +1,5 @@
 {
-  "db_ref": "Q66061041",
+  "source": "Q66061041",
   "properties": {
     "P13228": "{} WHERE source_id={}"
   },

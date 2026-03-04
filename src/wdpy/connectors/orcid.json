@@ -1,5 +1,5 @@
 {
-  "db_ref": "Q123508757",
+  "source": "Q123508757",
   "properties": {
     "P496": "https://pub.orcid.org/v3.0/{}/person"
   },
