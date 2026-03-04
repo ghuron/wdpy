@@ -1,6 +1,7 @@
 import json
 from unittest import TestCase, mock
 from wdpy import Snak, Statement, References
+from wdpy.references import _PUB_DATES, _REDIRECTS
 
 
 # ── helpers ──────────────────────────────────────────────────────────────────
@@ -292,3 +293,178 @@ class DeduplicateAuthors(TestCase):
         b2 = p50('Q99', '2')
         result = self.dedup(a1, a1_dup, b2)
         self.assertEqual(result, [a1_dup])
+
+
+# ── helpers for date-based tests ──────────────────────────────────────────────
+
+def _dated_refs(date: int) -> References:
+    """References with a single P248 snak whose publication date is `date`."""
+    qid = f'Q{date}'
+    _PUB_DATES[qid] = date
+    return References([{'snaks': {'P248': [Snak('P248', (qid,))]}}])
+
+
+class SelectOutdated(TestCase):
+    GROUP = 'P1545'
+
+    def setUp(self):
+        _PUB_DATES.clear()
+        _REDIRECTS.clear()
+
+    def _s(self, val='Q1', date=None):
+        refs = _dated_refs(date) if date is not None else None
+        return Statement(Snak('P31', (val,)), references=refs)
+
+    def _sg(self, val='Q1', group='1', date=None):
+        s = self._s(val, date)
+        s.qualifiers = [Snak(self.GROUP, (group,))]
+        return s
+
+    def _nv(self, group=None):
+        quals = [Snak(self.GROUP, (group,))] if group else None
+        return Statement(Snak('P31', None, 'novalue'), qualifiers=quals)
+
+    # ── no group_by ───────────────────────────────────────────────────────────
+
+    def test_empty(self):
+        self.assertEqual(Statement.select_outdated([]), [])
+
+    def test_single(self):
+        self.assertEqual(Statement.select_outdated([self._s()]), [])
+
+    def test_older_deleted(self):
+        old = self._s('Q1', 20200101)
+        new = self._s('Q2', 20220101)
+        self.assertEqual(Statement.select_outdated([new, old]), [old])
+
+    def test_older_first_still_deleted(self):
+        old = self._s('Q1', 20200101)
+        new = self._s('Q2', 20220101)
+        self.assertEqual(Statement.select_outdated([old, new]), [old])
+
+    def test_no_refs_deleted_when_other_is_dated(self):
+        no_date = self._s('Q1')
+        dated = self._s('Q2', 20220101)
+        self.assertEqual(Statement.select_outdated([no_date, dated]), [no_date])
+
+    def test_equal_dates_first_kept_second_deleted(self):
+        a = self._s('Q1', 20220101)
+        b = self._s('Q2', 20220101)
+        self.assertEqual(Statement.select_outdated([a, b]), [b])
+
+    def test_novalue_beats_value(self):
+        val = self._s('Q1', 20220101)
+        nv = self._nv()
+        result = Statement.select_outdated([val, nv])
+        self.assertIn(val, result)
+        self.assertNotIn(nv, result)
+
+    def test_two_novalue_second_deleted(self):
+        nv1, nv2 = self._nv(), self._nv()
+        self.assertEqual(Statement.select_outdated([nv1, nv2]), [nv2])
+
+    # ── with group_by ─────────────────────────────────────────────────────────
+
+    def test_missing_qualifier_always_deleted(self):
+        s = self._s()   # no P1545
+        self.assertEqual(Statement.select_outdated([s], group_by=self.GROUP), [s])
+
+    def test_groups_managed_independently(self):
+        a_old = self._sg('Q1', '1', 20200101)
+        a_new = self._sg('Q2', '1', 20220101)
+        b_old = self._sg('Q3', '2', 20190101)
+        b_new = self._sg('Q4', '2', 20210101)
+        result = Statement.select_outdated([a_old, a_new, b_old, b_new],
+                                           group_by=self.GROUP)
+        self.assertIn(a_old, result)
+        self.assertIn(b_old, result)
+        self.assertNotIn(a_new, result)
+        self.assertNotIn(b_new, result)
+
+    def test_unqualified_deleted_alongside_group_outdated(self):
+        no_qual = self._s()
+        old = self._sg('Q1', '1', 20200101)
+        new = self._sg('Q2', '1', 20220101)
+        result = Statement.select_outdated([no_qual, old, new], group_by=self.GROUP)
+        self.assertIn(no_qual, result)
+        self.assertIn(old, result)
+        self.assertNotIn(new, result)
+
+    def test_novalue_in_group_beats_value(self):
+        val = self._sg('Q1', '1', 20220101)
+        nv = self._nv(group='1')
+        result = Statement.select_outdated([val, nv], group_by=self.GROUP)
+        self.assertIn(val, result)
+        self.assertNotIn(nv, result)
+
+
+class RankByRecency(TestCase):
+
+    def setUp(self):
+        _PUB_DATES.clear()
+        _REDIRECTS.clear()
+
+    def _s(self, date=None, *, rank=None, p2241=False):
+        refs = _dated_refs(date) if date is not None else None
+        quals = [Snak('P2241', ('Q1',))] if p2241 else None
+        return Statement(Snak('P31', ('Q1',)), rank=rank, qualifiers=quals, references=refs)
+
+    # ── no-op cases ───────────────────────────────────────────────────────────
+
+    def test_empty(self):
+        Statement.rank_by_recency([])   # must not raise
+
+    def test_preferred_halts_all_changes(self):
+        preferred = self._s(20220101, rank='preferred')
+        old = self._s(20200101)
+        Statement.rank_by_recency([old, preferred])
+        self.assertIsNone(old.rank)
+
+    def test_p2241_statement_not_modified(self):
+        s = self._s(p2241=True)
+        Statement.rank_by_recency([s])
+        self.assertIsNone(s.rank)
+
+    # ── rank assignment ───────────────────────────────────────────────────────
+
+    def test_single_no_date_becomes_normal(self):
+        s = self._s()
+        Statement.rank_by_recency([s])
+        self.assertEqual(s.rank, 'normal')
+
+    def test_newer_normal_older_deprecated(self):
+        new = self._s(20220101)
+        old = self._s(20200101)
+        Statement.rank_by_recency([new, old])
+        self.assertEqual(new.rank, 'normal')
+        self.assertEqual(old.rank, 'deprecated')
+
+    def test_order_independent(self):
+        new = self._s(20220101)
+        old = self._s(20200101)
+        Statement.rank_by_recency([old, new])
+        self.assertEqual(new.rank, 'normal')
+        self.assertEqual(old.rank, 'deprecated')
+
+    def test_no_refs_deprecated_when_other_is_dated(self):
+        dated = self._s(20220101)
+        undated = self._s()
+        Statement.rank_by_recency([dated, undated])
+        self.assertEqual(dated.rank, 'normal')
+        self.assertEqual(undated.rank, 'deprecated')
+
+    def test_equal_dates_first_normal_second_deprecated(self):
+        a = self._s(20220101)
+        b = self._s(20220101)
+        Statement.rank_by_recency([a, b])
+        self.assertEqual(a.rank, 'normal')
+        self.assertEqual(b.rank, 'deprecated')
+
+    def test_p2241_excluded_others_ranked(self):
+        with_reason = self._s(20230101, p2241=True)
+        new = self._s(20220101)
+        old = self._s(20200101)
+        Statement.rank_by_recency([with_reason, new, old])
+        self.assertIsNone(with_reason.rank)
+        self.assertEqual(new.rank, 'normal')
+        self.assertEqual(old.rank, 'deprecated')

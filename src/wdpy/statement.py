@@ -175,3 +175,84 @@ class Statement:
     def save(self, summary: str) -> Optional[Dict[str, Any]]:
         """Persist statement via wbsetclaim."""
         return api_write('wbsetclaim', claim=self.json(), summary=summary)
+
+    @staticmethod
+    def select_outdated(statements: List[Statement],
+                        group_by: Optional[str] = None) -> List[Statement]:
+        """Return statements to delete, keeping only the most recently sourced per group.
+
+        Statements are grouped by the value of the group_by qualifier (or treated as
+        one group when group_by is None).  Within each group the keeper is the
+        novalue/somevalue statement if one exists, otherwise the statement with the
+        highest reference publication date.  Statements lacking the group_by qualifier
+        are always returned for deletion.
+        """
+        _MISSING = object()
+
+        def _group(s: Statement):
+            if not group_by:
+                return None
+            for q in (s.qualifiers or []):
+                if q.property == group_by and q.value:
+                    return q.value[0]
+            return _MISSING
+
+        # First pass: find the best ref date per group (None = novalue/somevalue wins).
+        best: Dict[Any, Optional[str]] = {}
+        for s in statements:
+            if (g := _group(s)) is _MISSING:
+                continue
+            if s.mainsnak.snaktype != 'value':
+                best[g] = None
+            elif g not in best:
+                best[g] = (s.references and s.references.publication_date) or '00000000'
+            elif best[g] is not None:
+                d = (s.references and s.references.publication_date) or '00000000'
+                if d > best[g]:
+                    best[g] = d
+
+        # Second pass: keep exactly one per group, queue the rest for deletion.
+        kept: set = set()
+        to_delete: List[Statement] = []
+        for s in statements:
+            if (g := _group(s)) is _MISSING:
+                to_delete.append(s)
+                continue
+            if best.get(g) is None:          # novalue group
+                if s.mainsnak.snaktype == 'value' or g in kept:
+                    to_delete.append(s)
+                else:
+                    kept.add(g)
+            elif g in kept or ((s.references and s.references.publication_date) or '00000000') < best[g]:
+                to_delete.append(s)
+            else:
+                kept.add(g)
+        return to_delete
+
+    @staticmethod
+    def rank_by_recency(statements: List[Statement]) -> None:
+        """Assign deprecated rank to all but the most recently sourced statement.
+
+        Statements carrying a P2241 (reason for deprecation) qualifier are left
+        unchanged.  If any statement already has preferred rank, nothing is modified.
+        The one statement with the highest reference publication date keeps normal
+        rank; all others receive deprecated rank.
+        """
+        for s in statements:
+            if s.rank == 'preferred':
+                return
+
+        best_date = '00000000'
+        for s in statements:
+            if not any(q.property == 'P2241' for q in (s.qualifiers or [])):
+                if (d := (s.references and s.references.publication_date) or '00000000') > best_date:
+                    best_date = d
+
+        remaining = 1
+        for s in statements:
+            if not any(q.property == 'P2241' for q in (s.qualifiers or [])):
+                if remaining > 0 and ((s.references and s.references.publication_date) or '00000000') == best_date:
+                    s.rank = 'normal'
+                    remaining -= 1
+                else:
+                    s.rank = 'deprecated'
