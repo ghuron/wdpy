@@ -61,12 +61,9 @@ class Item:
                 if stmt.rank == 'deprecated' or not stmt.mainsnak.value:
                     continue
                 for model_type in SourceItem.get_extractors():
-                    if (model := model_type.extract(stmt)) is None:
+                    model = model_type.extract(stmt)
+                    if not (model.patch or model.prior_ident):
                         continue
-                    if model.patch:
-                        s = model.patch[0]
-                        if s.mainsnak.value and (s.mainsnak.property, s.mainsnak.value[0]) in deprecated:
-                            continue
                     if model not in transformed:
                         return model
         return None
@@ -112,10 +109,23 @@ class Item:
         self._loaded = True
 
     def transform(self, model: SourceItem) -> None:
-        if not isinstance(model, SourceItem) or model.patch is None:
+        if not isinstance(model, SourceItem):
+            return
+        if model.patch is None and not model.prior_ident and not model.new_ident:
             return
         self._ensure_loaded()
         source = model.get_db_ref()
+
+        if model.prior_ident:
+            prop = model.prior_ident.mainsnak.property
+            old_val = model.prior_ident.mainsnak.value
+            for stmt in self.claims.get(prop) or []:
+                if stmt.mainsnak.value == old_val:
+                    if model.new_ident:
+                        stmt.mainsnak.value = model.new_ident.mainsnak.value
+                    else:
+                        stmt.set_rank('deprecated', 'Q21441764')
+                    break
 
         if not model.patch:
             for prop in model.get_properties():

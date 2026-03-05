@@ -11,11 +11,11 @@ class ORCID(SourceItem):
             req.add_header('Accept', 'application/json')
         return req
 
-    def parse(self, text: str) -> bool:
+    def parse(self, text: str, ident: Statement) -> None:
         data = json.loads(text)
         if 'path' not in data:
-            self.patch = []
-            return True
+            self.prior_ident = ident
+            return
         self.add_claim('P496', data['path'].split('/')[1])
         self.add_claim('P31', 'Q5')
         self.add_claim('P106', 'Q1650915')
@@ -23,4 +23,3 @@ class ORCID(SourceItem):
             prop = self._config.get('fields', {}).get(i.get('external-id-type'))
             if prop:
                 self.add_claim(prop, i.get('external-id-value'))
-        return True

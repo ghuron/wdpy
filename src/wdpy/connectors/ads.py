@@ -15,14 +15,14 @@ class ADS(SourceItem):
                 headers={'Authorization': 'Bearer ogOoi0uDxIebyeseB3tAbf5mBTJxXQQWQqE5TW40'}
             )
 
-    def parse(self, text: str) -> bool:
+    def parse(self, text: str, ident: Statement) -> None:
         docs = json.loads(text).get('response', {}).get('docs', [])
         if len(docs) != 1:
-            if self.patch and self.patch[0].mainsnak.property == 'P819':
-                logging.warning('Got %d results for %s', len(docs), self.patch[0].mainsnak.value)
-                self.patch = []
-                return True
-            return False
+            if ident.mainsnak.property == 'P819':
+                logging.warning('Got %d results for %s', len(docs), ident.mainsnak.value)
+                if len(docs) == 0:
+                    self.prior_ident = ident
+            return
         d = docs[0]
         if 'page' in d:
             p = d['page'][0] if isinstance(d['page'], list) else d['page']
@@ -36,13 +36,12 @@ class ADS(SourceItem):
         self.obtain(d, self._config.get('fields', {}), self._config.get('translate', {}))
         for i, name in enumerate(d.get('author', []), 1):
             self.add_author(name, _get_orcid(d, i - 1))
-        for ident in d.get('identifier', []):
-            if ident.startswith('arXiv:'):
-                self.add_claim('P818', ident[6:])
-            elif ident.startswith('10.') and 'ARXIV' not in ident.upper():
-                self.add_claim('P356', ident)
+        for identifier in d.get('identifier', []):
+            if identifier.startswith('arXiv:'):
+                self.add_claim('P818', identifier[6:])
+            elif identifier.startswith('10.') and 'ARXIV' not in identifier.upper():
+                self.add_claim('P356', identifier)
         self.add_claim('P31', 'Q13442814')
-        return True
 
 
 def _get_orcid(d: dict, idx: int) -> Optional[str]:

@@ -33,6 +33,8 @@ def request(url: str,
 class SourceItem:
     patch: Optional[List[Statement]] = None
     proposed_label: Optional[str] = None
+    prior_ident: Optional[Statement] = None
+    new_ident: Optional[Statement] = None
     _lookup_cache: ClassVar[Dict[str, Dict[Any, Optional[str]]]] = {}
     _registry: ClassVar[List[type]] = []
     _connectors_loaded: ClassVar[bool] = False
@@ -145,16 +147,26 @@ class SourceItem:
                               property_id, value, qid, SourceItem._lookup_cache[property_id][value])
             SourceItem._lookup_cache[property_id][value] = qid
 
-    def parse(self, text: str) -> bool:
+    def parse(self, text: str, ident: Statement) -> None:
         raise NotImplementedError('Subclasses must implement parse')
 
     @classmethod
-    def extract(cls, ident: Statement) -> Optional[SourceItem]:
-        """Returns None on retrieval failure; instance with empty patch if datasource
-        confirms the record does not exist; instance with non-empty patch where
-        patch[0] is the requested id (possibly updated from a redirect)."""
+    def extract(cls, ident: Statement) -> SourceItem:
+        """Fetch and parse the record for `ident`. Always returns a SourceItem.
+
+        Empty (patch/prior_ident/new_ident all None): no info — network error,
+        unrecognised property, or parse failure.
+
+        prior_ident set, new_ident None: ident confirmed gone; caller should
+        deprecate that statement.
+
+        prior_ident and new_ident set: ident redirected; caller should replace
+        old value with new_ident. patch carries any additional claims.
+
+        Only patch set: ident unchanged; patch carries new claims to merge.
+        """
         if not (req := cls.make_request(ident)):
-            return None
+            return cls()
         url = req.full_url
         try:
             resp = build_opener().open(req, timeout=30)
@@ -162,20 +174,23 @@ class SourceItem:
             resp = e
         except Exception as e:
             logging.error('Request failed for %s: %s', url, e)
-            return None
+            return cls()
         handled = cls._config.get('extract', [])
         with resp:
             if ((code := resp.getcode()) == 404) and (404 in handled):
-                return cls(patch=[])
+                first_prop = next(iter(cls._config.get('properties', {})), None)
+                if ident.mainsnak.property == first_prop:
+                    return cls(prior_ident=ident)
+                return cls()
             destination = resp.geturl()
             text = resp.read().decode('utf-8')
             if code != 200:
                 logging.error(f'Returned code {code} for {url}, message: {text}')
         destination_url = destination or url
         redirected = 301 in handled and destination_url.lower() != url.lower()
+        item = cls()
         if redirected:
-            patch_ident = cls.update_ident(ident, destination_url)
-        else:
-            patch_ident = ident
-        item = cls(patch=[patch_ident])
-        return item if item.parse(text) else None
+            item.prior_ident = ident
+            item.new_ident = cls.update_ident(ident, destination_url)
+        item.parse(text, ident)
+        return item

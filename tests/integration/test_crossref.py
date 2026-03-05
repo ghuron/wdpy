@@ -6,8 +6,10 @@ from wdpy.connectors.crossref import Crossref
 class TestExtract(TestCase):
     def test_doi_returns_result(self):
         result = Crossref.extract(Statement(Snak('P356', ('10.1088/2041-8205/763/1/L1',))))
-        self.assertEqual(result.patch[0].mainsnak.property, 'P356')
+        self.assertTrue(result.patch)
 
-    def test_nonexistent_doi_returns_empty_patch(self):
+    def test_nonexistent_doi_sets_prior_ident(self):
         result = Crossref.extract(Statement(Snak('P356', ('X',))))
-        self.assertEqual(result.patch, [])
+        self.assertIsNotNone(result.prior_ident)
+        self.assertIsNone(result.patch)
+        self.assertIsNone(result.new_ident)
