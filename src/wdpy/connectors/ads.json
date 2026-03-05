@@ -1,7 +1,7 @@
 {
   "source": "Q752099",
   "properties": {
-    "P819": "https://api.adsabs.harvard.edu/v1/search/query?q=bibcode:\"{}\"",
+    "P819": "https://api.adsabs.harvard.edu/v1/search/query?q=identifier:\"{}\"",
     "P356": "https://api.adsabs.harvard.edu/v1/search/query?q=doi:\"{}\"",
     "P818": "https://api.adsabs.harvard.edu/v1/search/query?q=doi:\"10.48550%2FarXiv.{}\""
   },

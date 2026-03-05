@@ -33,3 +33,11 @@ class TestExtract(TestCase):
         self.assertIsNone(result.prior_ident)
         self.assertIsNone(result.patch)
         self.assertIsNone(result.new_ident)
+
+    def test_bibcode_redirect(self):
+        ident = Statement(Snak('P819', ('2023arXiv230313424H',)))
+        result = ADS.extract(ident)
+        self.assertIs(result.prior_ident, ident)
+        self.assertEqual(result.new_ident.mainsnak.property, 'P819')
+        self.assertEqual(result.new_ident.mainsnak.value, ('2023A&A...673A.114H',))
+        self.assertTrue(result.patch)

@@ -2,7 +2,7 @@ import json
 import logging
 from typing import Optional
 from urllib.request import Request
-from wdpy import SourceItem, Statement, build_request
+from wdpy import Snak, SourceItem, Statement, build_request
 
 
 class ADS(SourceItem):
@@ -33,7 +33,17 @@ class ADS(SourceItem):
                     d['page'] = f'{p} - {int(p) + d["page_count"] - 1}'
                 except (ValueError, KeyError):
                     pass
-        self.obtain(d, self._config.get('fields', {}), self._config.get('translate', {}))
+        fields = self._config.get('fields', {})
+        translate = self._config.get('translate', {})
+
+        if ident.mainsnak.property == 'P819':
+            bibcode = d.get('bibcode')
+            if bibcode and bibcode != ident.mainsnak.value[0]:
+                self.prior_ident = ident
+                self.new_ident = Statement(Snak('P819', (bibcode,)))
+            fields = {k: v for k, v in fields.items() if k != 'bibcode'}
+
+        self.obtain(d, fields, translate)
         for i, name in enumerate(d.get('author', []), 1):
             self.add_author(name, _get_orcid(d, i - 1))
         for identifier in d.get('identifier', []):
