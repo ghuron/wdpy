@@ -6,7 +6,7 @@
     "P818": "https://api.adsabs.harvard.edu/v1/search/query?q=doi:\"10.48550%2FarXiv.{}\""
   },
   "fields": {
-    "bibcode": "P819",
+    "bibcode": "",
     "author": "",
     "identifier": "",
     "issue": "P433",

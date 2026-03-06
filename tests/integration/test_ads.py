@@ -39,7 +39,7 @@ class TestExtract(TestCase):
             '2023arXiv230313424H':          ('P819', True),
             '2303.13424':                   ('P818', False),
             '10.1051/0004-6361/202346285':  ('P356', False),
-            '10.48550/arXiv.2303.13424':    ('P356', True),
+            '10.48550/ARXIV.2303.13424':    ('P356', True),
         }
         result = ADS.extract(Statement(Snak('P819', ('2023arXiv230313424H',))))
         for s in (result.patch or []):
@@ -56,7 +56,7 @@ class TestExtract(TestCase):
         expected = {
             '2008arXiv0812.5116B':          ('P819', False),
             '0812.5116':                    ('P818', False),
-            '10.48550/arXiv.0812.5116':     ('P356', False),
+            '10.48550/ARXIV.0812.5116':     ('P356', False),
         }
         result = ADS.extract(Statement(Snak('P819', ('2008arXiv0812.5116B',))))
         for s in (result.patch or []):

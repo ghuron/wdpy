@@ -42,25 +42,39 @@ class ADS(SourceItem):
         fields = self._config.get('fields', {})
         translate = self._config.get('translate', {})
 
+        redirected = False
         if ident.mainsnak.property == 'P819':
             bibcode = d.get('bibcode')
             if bibcode and bibcode != ident.mainsnak.value[0]:
                 self.deprecate_ident(ident)
-                self.add_claim('P819', bibcode)
-            fields = {k: v for k, v in fields.items() if k != 'bibcode'}
+                redirected = True
 
         self.obtain(d, fields, translate)
         for i, name in enumerate(d.get('author', []), 1):
             self.add_author(name, _get_orcid(d, i - 1))
+
         identifiers = d.get('identifier', [])
-        has_journal_doi = any(i.startswith('10.') and 'ARXIV' not in i.upper() for i in identifiers)
-        for identifier in identifiers:
-            if identifier.startswith('arXiv:'):
-                self.add_claim('P818', identifier[6:])
-            elif identifier.startswith('10.'):
-                s = self.add_claim('P356', identifier)
-                if has_journal_doi and 'ARXIV' in identifier.upper():
-                    s.rank = 'deprecated'
+        arxiv_ids = [i[6:] for i in identifiers if i.startswith('arXiv:')]
+        dois = [i for i in identifiers if i.startswith('10.')]
+        bibcodes = [i for i in identifiers if not i.startswith('arXiv:') and not i.startswith('10.')]
+        if redirected:
+            bibcodes = [bc for bc in bibcodes if bc != ident.mainsnak.value[0]]
+
+        for arxiv_id in arxiv_ids:
+            self.add_claim('P818', arxiv_id)
+
+        has_journal_doi = any('ARXIV' not in doi.upper() for doi in dois)
+        for doi in dois:
+            s = self.add_claim('P356', doi)
+            if s and has_journal_doi and 'ARXIV' in doi.upper():
+                s.rank = 'deprecated'
+
+        has_journal_bibcode = any('arxiv' not in bc.lower() for bc in bibcodes)
+        for bc in bibcodes:
+            s = self.add_claim('P819', bc)
+            if s and has_journal_bibcode and 'arxiv' in bc.lower():
+                s.rank = 'deprecated'
+
         self.add_claim('P31', 'Q13442814')
 
 
