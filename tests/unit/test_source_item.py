@@ -346,3 +346,129 @@ class TestExtract(TestCase):
         result = _BaseConnector.extract(self._ident())
         self.assertIsNotNone(result)
         self.assertIsNone(result.patch)
+
+
+def _make_snak(prop, val):
+    return Snak(prop, (val,))
+
+
+def _statement(prop, val, rank='normal'):
+    return Statement(mainsnak=_make_snak(prop, val), rank=rank)
+
+
+class _RefConnector(SourceItem):
+    """Minimal connector with a db-ref source for _apply_references tests."""
+    _config = {
+        'source': 'Q180736',  # db_ref QID
+        'properties': {'P356': 'http://example.com/{}'},
+    }
+
+    def parse(self, text, ident):
+        pass
+
+
+class TestApplyReferences(TestCase):
+    """Unit tests for SourceItem._apply_references."""
+
+    # --- no-op conditions ---
+
+    def test_no_db_ref_is_noop(self):
+        item = _RefConnector()
+        item.patch = [_statement('P356', '10.1234/x')]
+        with mock.patch.object(_RefConnector, 'get_db_ref', return_value=None):
+            item._apply_references()
+        self.assertIsNone(item.patch[0].references)
+
+    def test_empty_patch_is_noop(self):
+        item = _RefConnector()
+        item.patch = []
+        with mock.patch.object(Snak, 'create', return_value=mock.MagicMock()):
+            item._apply_references()
+        # no crash, nothing to assert beyond that
+
+    # --- primary ident case (patch contains primary-prop statement) ---
+
+    @mock.patch.object(Snak, 'create')
+    def test_primary_ident_ref_contains_p248_and_primary(self, mock_create):
+        p248_snak = mock.MagicMock(name='p248')
+        id_snak = mock.MagicMock(name='id_snak')
+        mock_create.side_effect = lambda prop, val: p248_snak if prop == 'P248' else id_snak
+
+        item = _RefConnector()
+        item.patch = [_statement('P356', '10.1234/x'), _statement('P31', 'Q13442814')]
+
+        item._apply_references()
+
+        mock_create.assert_any_call('P248', 'Q180736')
+        mock_create.assert_any_call('P356', '10.1234/x')
+        for s in item.patch:
+            self.assertIsNotNone(s.references)
+
+    # --- secondary ident case (patch has NO primary-prop statement) ---
+
+    @mock.patch.object(Snak, 'create')
+    def test_secondary_ident_ref_contains_only_p248(self, mock_create):
+        p248_snak = mock.MagicMock(name='p248')
+        mock_create.side_effect = lambda prop, val: p248_snak if prop == 'P248' else None
+
+        item = _RefConnector()
+        # patch has no P356 statement → patch_ident is None
+        item.patch = [_statement('P31', 'Q13442814')]
+
+        item._apply_references()
+
+        # P356 snak must NOT be created
+        for call in mock_create.call_args_list:
+            self.assertNotEqual(call.args[0], 'P356')
+        self.assertIsNotNone(item.patch[0].references)
+
+    # --- deprecated primary-prop statement is not used as ident ---
+
+    @mock.patch.object(Snak, 'create')
+    def test_deprecated_primary_prop_not_used_as_ident(self, mock_create):
+        p248_snak = mock.MagicMock(name='p248')
+        mock_create.side_effect = lambda prop, val: p248_snak if prop == 'P248' else None
+
+        item = _RefConnector()
+        normal = _statement('P31', 'Q13442814')
+        deprecated_p356 = _statement('P356', 'old-doi', rank='deprecated')
+        item.patch = [deprecated_p356, normal]
+
+        item._apply_references()
+
+        # P356 snak must NOT be created (deprecated ident skipped)
+        for call in mock_create.call_args_list:
+            self.assertNotEqual(call.args[0], 'P356')
+        self.assertIsNotNone(normal.references)
+        self.assertIsNotNone(deprecated_p356.references)
+
+    # --- all statements receive the reference regardless of rank ---
+
+    @mock.patch.object(Snak, 'create')
+    def test_deprecated_statement_gets_reference(self, mock_create):
+        mock_create.return_value = mock.MagicMock()
+
+        item = _RefConnector()
+        normal = _statement('P31', 'Q13442814')
+        deprecated = _statement('P356', 'old-id', rank='deprecated')
+        item.patch = [normal, deprecated]
+
+        item._apply_references()
+
+        self.assertIsNotNone(normal.references)
+        self.assertIsNotNone(deprecated.references)
+
+    # --- all normal statements receive the reference ---
+
+    @mock.patch.object(Snak, 'create')
+    def test_primary_prop_statement_receives_reference(self, mock_create):
+        """patch[0] with property == primary_prop must get the reference (Bug 1 fix)."""
+        mock_create.return_value = mock.MagicMock()
+
+        item = _RefConnector()
+        doi_stmt = _statement('P356', '10.1234/x')   # the primary-prop statement
+        item.patch = [doi_stmt]
+
+        item._apply_references()
+
+        self.assertIsNotNone(doi_stmt.references)

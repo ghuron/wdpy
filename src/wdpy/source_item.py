@@ -12,7 +12,7 @@ import urllib.error
 from urllib.request import Request, build_opener
 
 
-from wdpy import haswbstatement, Snak, Statement
+from wdpy import haswbstatement, References, Snak, Statement
 from wdpy.core import build_request
 
 
@@ -73,6 +73,10 @@ class SourceItem:
     def get_db_ref(cls) -> Optional[str]:
         return cls._config.get('source')
 
+    @classmethod
+    def get_primary_property(cls) -> Optional[str]:
+        return next(iter(cls._config.get('properties', {})), None)
+
     @staticmethod
     def lookup(property_id: str, external_id: Any) -> Optional[str]:
         by_prop = SourceItem._lookup_cache.setdefault(property_id, {})
@@ -93,8 +97,11 @@ class SourceItem:
     def update_ident(cls, ident: Statement, url: str) -> Statement:
         raise NotImplementedError('Subclasses must implement update_ident')
 
-    def add_claim(self, property_id: str, *value: str) -> Statement:
-        s = Statement(Snak(property_id, value or None))
+    def add_claim(self, property_id: str, *value: str) -> Optional[Statement]:
+        normalized = value[0] if len(value) == 1 else (value or None)
+        if not (snak := Snak.create(property_id, normalized)):
+            return None
+        s = Statement(snak)
         if self.patch is None:
             self.patch = []
         self.patch.append(s)
@@ -180,10 +187,10 @@ class SourceItem:
             logging.error('Request failed for %s: %s', url, e)
             return cls()
         handled = cls._config.get('extract', [])
+        primary_prop = cls.get_primary_property()
         with resp:
             if ((code := resp.getcode()) == 404) and (404 in handled):
-                first_prop = next(iter(cls._config.get('properties', {})), None)
-                if ident.mainsnak.property == first_prop:
+                if ident.mainsnak.property == primary_prop:
                     item = cls()
                     item.deprecate_ident(ident)
                     return item
@@ -200,4 +207,36 @@ class SourceItem:
             item.patch = [new_ident]
             item.deprecate_ident(ident)
         item.parse(text, ident)
+
+        item._apply_references()
         return item
+
+    def _apply_references(self) -> None:
+        """Attach a source reference to every non-deprecated statement in self.patch.
+
+        The reference always contains P248 (stated in <db_ref>). When self.patch
+        contains a non-deprecated statement with the primary property, the reference
+        also includes that identifier snak so reviewers can trace the exact value used.
+        """
+        db_ref = self.get_db_ref()
+        if not db_ref:
+            return
+        if not self.patch:
+            return
+        primary_prop = self.get_primary_property()
+        patch_ident = next(
+            (s for s in self.patch
+             if s.rank != 'deprecated' and s.mainsnak.property == primary_prop),
+            None
+        ) if primary_prop else None
+        ref_snaks: Dict[str, List[Snak]] = {}
+        if p248 := Snak.create('P248', db_ref):
+            ref_snaks['P248'] = [p248]
+        if patch_ident is not None and patch_ident.mainsnak.value:
+            if id_snak := Snak.create(primary_prop, patch_ident.mainsnak.value[0]):
+                ref_snaks[primary_prop] = [id_snak]
+        if ref_snaks:
+            r = References()
+            r.include(ref_snaks)
+            for s in self.patch:
+                s.references = r
