@@ -38,5 +38,5 @@ class AstroItem(SourceItem):
         return None
 
     @classmethod
-    def extract(cls, ident: Statement) -> Optional[SourceItem]:
-        return None # Temporary until ADQL extractor is implemented
+    def extract(cls, ident: Statement) -> SourceItem:
+        return cls() # Temporary until ADQL extractor is implemented
