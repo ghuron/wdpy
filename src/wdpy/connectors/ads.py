@@ -1,18 +1,24 @@
 import json
 import logging
+from pathlib import Path
 from typing import Optional
 from urllib.request import Request
 from wdpy import Snak, SourceItem, Statement, build_request
+
+_TOKEN_PATH = Path(__file__).parents[3] / '.ads'
+_TOKEN = _TOKEN_PATH.read_text().strip() if _TOKEN_PATH.exists() else None
 
 
 class ADS(SourceItem):
     @classmethod
     def make_request(cls, ident: Statement) -> Optional[Request]:
+        if _TOKEN is None:
+            return None
         if url := cls._config["properties"].get(ident.mainsnak.property):
             return build_request(
                 url.format((ident.mainsnak.value or ('',))[0]) +
                 f'&fl={",".join(ADS._config["fields"])}',
-                headers={'Authorization': 'Bearer ogOoi0uDxIebyeseB3tAbf5mBTJxXQQWQqE5TW40'}
+                headers={'Authorization': f'Bearer {_TOKEN}'}
             )
 
     def parse(self, text: str, ident: Statement) -> None:
