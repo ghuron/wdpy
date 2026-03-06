@@ -61,11 +61,16 @@ class Item:
                 if stmt.rank == 'deprecated' or not stmt.mainsnak.value:
                     continue
                 for model_type in SourceItem.get_extractors():
+                    if any(
+                        type(m) is model_type
+                        and any(s.mainsnak == stmt.mainsnak for s in (m.patch or []))
+                        for m in transformed
+                    ):
+                        continue
                     model = model_type.extract(stmt)
                     if not model.patch:
                         continue
-                    if model not in transformed:
-                        return model
+                    return model
         return None
 
     @classmethod
