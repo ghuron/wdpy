@@ -24,4 +24,4 @@ class ArxivItem(SourceItem):
             if len(name := (a.text or '').strip()) > 3:
                 self.add_claim('P2093', name).set_qualifier('P1545', str(i := i + 1))
         if len(doi := entry.findall('arxiv:doi', ns)) == 1 and doi[0].text:
-            self.add_claim('P356', doi[0].text.upper())
+            self.add_claim('P356', doi[0].text)

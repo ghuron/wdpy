@@ -67,6 +67,7 @@ class Snak:
                                              f"{d.zfill(2) if d else '00'}",
                                              str(pr), 'Q1985727'))
             return None
+        if property_id == 'P356' and s: s = s.upper()
         return Snak(property_id, (s,)) if s or k == 'string' else None
 
     def json(self) -> str:
