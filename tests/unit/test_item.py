@@ -156,38 +156,25 @@ class Transform(unittest.TestCase):
             self.item.transform(DummyModel(patch=[wdpy.Statement(wdpy.Snak('P31', ('Q5',)))]))
         self.assertIsNone(existing.references)
 
-    # ── prior_ident handling ──────────────────────────────────────────────────
+    # ── rank propagation via patch ────────────────────────────────────────────
 
-    def test_prior_ident_empty_patch_deprecates_statement(self):
-        prior = wdpy.Statement(wdpy.Snak('P31', ('Q5',)))
-        existing = wdpy.Statement(wdpy.Snak('P31', ('Q5',)))
+    def test_deprecated_rank_in_patch_propagates_to_existing(self):
+        existing = wdpy.Statement(wdpy.Snak('P31', ('Q5',)), rank='normal')
         self.item.claims['P31'] = [existing]
-        model = DummyModel(patch=[])
-        model.prior_ident = prior
-        self.item.transform(model)
+        patch_stmt = wdpy.Statement(wdpy.Snak('P31', ('Q5',)), rank='deprecated')
+        self.item.transform(DummyModel(patch=[patch_stmt]))
         self.assertEqual(existing.rank, 'deprecated')
-        self.assertTrue(any(q.property == 'P2241' for q in (existing.qualifiers or [])))
 
-    def test_prior_ident_with_new_ident_updates_value_in_place(self):
-        prior = wdpy.Statement(wdpy.Snak('P31', ('Q5',)))
-        existing = wdpy.Statement(wdpy.Snak('P31', ('Q5',)))
-        self.item.claims['P31'] = [existing]
-        new_stmt = wdpy.Statement(wdpy.Snak('P31', ('Q99',)))
-        model = DummyModel(patch=[])
-        model.prior_ident = prior
-        model.new_ident = new_stmt
-        self.item.transform(model)
-        self.assertEqual(existing.mainsnak.value, ('Q99',))
-        self.assertIsNone(existing.rank)
-
-    def test_prior_ident_no_matching_statement_is_no_op(self):
-        prior = wdpy.Statement(wdpy.Snak('P31', ('Q5',)))
-        other = wdpy.Statement(wdpy.Snak('P31', ('Q6',)))
-        self.item.claims['P31'] = [other]
-        model = DummyModel(patch=[])
-        model.prior_ident = prior
-        self.item.transform(model)
-        self.assertIsNone(other.rank)
+    def test_new_ident_via_patch_inserts_canonical_and_deprecates_old(self):
+        old = wdpy.Statement(wdpy.Snak('P31', ('Q5',)), rank='normal')
+        self.item.claims['P31'] = [old]
+        deprecated_old = wdpy.Statement(wdpy.Snak('P31', ('Q5',)), rank='deprecated')
+        new_canonical = wdpy.Statement(wdpy.Snak('P31', ('Q99',)), rank='normal')
+        self.item.transform(DummyModel(patch=[new_canonical, deprecated_old]))
+        self.assertEqual(old.rank, 'deprecated')
+        self.assertEqual(len(self.item.claims['P31']), 2)
+        values = {s.mainsnak.value for s in self.item.claims['P31']}
+        self.assertIn(('Q99',), values)
 
 
 class Merge(unittest.TestCase):

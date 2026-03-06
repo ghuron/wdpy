@@ -310,37 +310,39 @@ class TestExtract(TestCase):
         return Statement(Snak(prop, ('old-id',)))
 
     @mock.patch('wdpy.source_item.build_opener')
-    def test_authoritative_404_sets_prior_ident(self, build_mock):
+    def test_authoritative_404_sets_deprecated_patch(self, build_mock):
         build_mock.return_value.open.return_value = _make_resp_mock(404, 'http://example.com/old-id')
         ident = self._ident('P999')
         result = _BaseConnector.extract(ident)
-        self.assertIsNone(result.patch)
-        self.assertIsNone(result.new_ident)
-        self.assertIs(result.prior_ident, ident)
+        self.assertIsNotNone(result.patch)
+        self.assertEqual(len(result.patch), 1)
+        self.assertEqual(result.patch[0].rank, 'deprecated')
+        self.assertIs(result.patch[0].mainsnak, ident.mainsnak)
+        self.assertFalse(hasattr(result, 'prior_ident'))
 
     @mock.patch('wdpy.source_item.build_opener')
     def test_non_authoritative_404_returns_empty(self, build_mock):
         build_mock.return_value.open.return_value = _make_resp_mock(404, 'http://example2.com/old-id')
         result = _BaseConnector.extract(self._ident('P998'))
         self.assertIsNone(result.patch)
-        self.assertIsNone(result.prior_ident)
-        self.assertIsNone(result.new_ident)
 
     @mock.patch('wdpy.source_item.build_opener')
-    def test_redirect_sets_prior_and_new_ident(self, build_mock):
+    def test_redirect_sets_patch_with_new_and_deprecated_ident(self, build_mock):
         build_mock.return_value.open.return_value = _make_resp_mock(
             200, 'http://example.com/new-id'
         )
         ident = self._ident()
         result = _BaseConnector.extract(ident)
-        self.assertIs(result.prior_ident, ident)
-        self.assertEqual(result.new_ident.mainsnak.value, ('new-id',))
+        self.assertIsNotNone(result.patch)
+        self.assertEqual(result.patch[0].mainsnak.value, ('new-id',))
+        self.assertEqual(result.patch[-1].rank, 'deprecated')
+        self.assertIs(result.patch[-1].mainsnak, ident.mainsnak)
 
     @mock.patch('wdpy.source_item.build_opener')
-    def test_no_redirect_prior_ident_is_none(self, build_mock):
+    def test_no_redirect_patch_is_none(self, build_mock):
         build_mock.return_value.open.return_value = _make_resp_mock(
             200, 'http://example.com/old-id'
         )
         result = _BaseConnector.extract(self._ident())
         self.assertIsNotNone(result)
-        self.assertIsNone(result.prior_ident)
+        self.assertIsNone(result.patch)

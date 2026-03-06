@@ -13,14 +13,16 @@ class TestExtract(TestCase):
         result = ArxivItem.extract(Statement(Snak('P356', ('10.4171/161',))))
         self.assertTrue(result.patch)
 
-    def test_nonexistent_arxiv_id_sets_prior_ident(self):
-        result = ArxivItem.extract(Statement(Snak('P818', ('X',))))
-        self.assertIsNotNone(result.prior_ident)
-        self.assertIsNone(result.patch)
-        self.assertIsNone(result.new_ident)
+    def test_nonexistent_arxiv_id_sets_deprecated_patch(self):
+        ident = Statement(Snak('P818', ('X',)))
+        result = ArxivItem.extract(ident)
+        self.assertIsNotNone(result.patch)
+        deprecated = [s for s in result.patch if s.rank == 'deprecated']
+        self.assertTrue(deprecated)
+        self.assertIs(deprecated[0].mainsnak, ident.mainsnak)
+        self.assertFalse(hasattr(result, 'prior_ident'))
 
     def test_nonexistent_doi_returns_empty(self):
         result = ArxivItem.extract(Statement(Snak('P356', ('10.99999/nonexistent',))))
-        self.assertIsNone(result.prior_ident)
         self.assertIsNone(result.patch)
-        self.assertIsNone(result.new_ident)
+        self.assertFalse(hasattr(result, 'prior_ident'))

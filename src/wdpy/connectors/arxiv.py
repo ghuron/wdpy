@@ -6,11 +6,11 @@ class ArxivItem(SourceItem):
         ns = self._config['namespaces']
         if (entry := ElementTree.fromstring(text).find('w3:entry', ns)) is None:
             if ident.mainsnak.property == 'P818':
-                self.prior_ident = ident
+                self.deprecate_ident(ident)
             return
         id_text = getattr(entry.find('w3:id', ns), 'text', '') or ''
         if ident.mainsnak.property == 'P818' and '/abs/' not in id_text:
-            self.prior_ident = ident
+            self.deprecate_ident(ident)
             return
         arxiv_id = id_text.split('/')[-1].split('v')[0]
         self.add_claim('P31', 'Q13442814')

@@ -8,8 +8,11 @@ class TestExtract(TestCase):
         result = ORCID.extract(Statement(Snak('P496', ('0000-0001-5109-3700',))))
         self.assertTrue(result.patch)
 
-    def test_nonexistent_orcid_sets_prior_ident(self):
-        result = ORCID.extract(Statement(Snak('P496', ('0000-0000-0000-0000',))))
-        self.assertIsNotNone(result.prior_ident)
-        self.assertIsNone(result.patch)
-        self.assertIsNone(result.new_ident)
+    def test_nonexistent_orcid_sets_deprecated_patch(self):
+        ident = Statement(Snak('P496', ('0000-0000-0000-0000',)))
+        result = ORCID.extract(ident)
+        self.assertIsNotNone(result.patch)
+        deprecated = [s for s in result.patch if s.rank == 'deprecated']
+        self.assertTrue(deprecated)
+        self.assertIs(deprecated[0].mainsnak, ident.mainsnak)
+        self.assertFalse(hasattr(result, 'prior_ident'))

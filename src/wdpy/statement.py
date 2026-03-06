@@ -110,6 +110,8 @@ class Statement:
                 continue
             if self._qualifiers_present_in(candidate):
                 self._merge_references_into(candidate)
+                if self.rank is not None:
+                    candidate.rank = self.rank
                 return candidate
         return None
 

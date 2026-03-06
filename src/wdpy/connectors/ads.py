@@ -21,7 +21,7 @@ class ADS(SourceItem):
             if ident.mainsnak.property == 'P819':
                 logging.warning('Got %d results for %s', len(docs), ident.mainsnak.value)
                 if len(docs) == 0:
-                    self.prior_ident = ident
+                    self.deprecate_ident(ident)
             return
         d = docs[0]
         if 'page' in d:
@@ -39,18 +39,22 @@ class ADS(SourceItem):
         if ident.mainsnak.property == 'P819':
             bibcode = d.get('bibcode')
             if bibcode and bibcode != ident.mainsnak.value[0]:
-                self.prior_ident = ident
-                self.new_ident = Statement(Snak('P819', (bibcode,)))
+                self.deprecate_ident(ident)
+                self.add_claim('P819', bibcode)
             fields = {k: v for k, v in fields.items() if k != 'bibcode'}
 
         self.obtain(d, fields, translate)
         for i, name in enumerate(d.get('author', []), 1):
             self.add_author(name, _get_orcid(d, i - 1))
-        for identifier in d.get('identifier', []):
+        identifiers = d.get('identifier', [])
+        has_journal_doi = any(i.startswith('10.') and 'ARXIV' not in i.upper() for i in identifiers)
+        for identifier in identifiers:
             if identifier.startswith('arXiv:'):
                 self.add_claim('P818', identifier[6:])
-            elif identifier.startswith('10.') and 'ARXIV' not in identifier.upper():
-                self.add_claim('P356', identifier)
+            elif identifier.startswith('10.'):
+                s = self.add_claim('P356', identifier)
+                if has_journal_doi and 'ARXIV' in identifier.upper():
+                    s.rank = 'deprecated'
         self.add_claim('P31', 'Q13442814')
 
 

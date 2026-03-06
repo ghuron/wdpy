@@ -192,6 +192,27 @@ class Upsert(TestCase):
         self.assertEqual(len(candidate.references._items), 1)
 
 
+class UpsertRank(TestCase):
+
+    def test_propagates_deprecated_rank(self):
+        incoming = Statement(Snak('P31', ('Q5',)), rank='deprecated')
+        candidate = Statement(Snak('P31', ('Q5',)), rank='normal')
+        incoming.upsert([candidate])
+        self.assertEqual(candidate.rank, 'deprecated')
+
+    def test_propagates_normal_rank(self):
+        incoming = Statement(Snak('P31', ('Q5',)), rank='normal')
+        candidate = Statement(Snak('P31', ('Q5',)), rank='deprecated')
+        incoming.upsert([candidate])
+        self.assertEqual(candidate.rank, 'normal')
+
+    def test_none_rank_preserves_existing(self):
+        incoming = Statement(Snak('P31', ('Q5',)), rank=None)
+        candidate = Statement(Snak('P31', ('Q5',)), rank='deprecated')
+        incoming.upsert([candidate])
+        self.assertEqual(candidate.rank, 'deprecated')
+
+
 class DeduplicateAuthors(TestCase):
 
     ORD = 'P1545'

@@ -33,8 +33,6 @@ def request(url: str,
 class SourceItem:
     patch: Optional[List[Statement]] = None
     proposed_label: Optional[str] = None
-    prior_ident: Optional[Statement] = None
-    new_ident: Optional[Statement] = None
     _lookup_cache: ClassVar[Dict[str, Dict[Any, Optional[str]]]] = {}
     _registry: ClassVar[List[type]] = []
     _connectors_loaded: ClassVar[bool] = False
@@ -104,6 +102,14 @@ class SourceItem:
             self.proposed_label = value[0]
         return s
 
+    def deprecate_ident(self, ident: Statement, reason: str = 'Q21441764') -> None:
+        """Append ident as a deprecated statement to patch."""
+        s = Statement(ident.mainsnak, ident.id, 'deprecated', ident.qualifiers)
+        s.set_qualifier('P2241', reason)
+        if self.patch is None:
+            self.patch = []
+        self.patch.append(s)
+
     def obtain(self, source: dict, properties: dict, translate: dict = {}) -> None:
         for key, prop in properties.items():
             if (val := source.get(key)) is None or not prop:
@@ -154,16 +160,14 @@ class SourceItem:
     def extract(cls, ident: Statement) -> SourceItem:
         """Fetch and parse the record for `ident`. Always returns a SourceItem.
 
-        Empty (patch/prior_ident/new_ident all None): no info — network error,
-        unrecognised property, or parse failure.
+        Empty (patch None): no info — network error, unrecognised property,
+        or parse failure.
 
-        prior_ident set, new_ident None: ident confirmed gone; caller should
-        deprecate that statement.
+        patch set with a deprecated statement: ident confirmed gone or
+        redirected; patch may also carry additional claims.
 
-        prior_ident and new_ident set: ident redirected; caller should replace
-        old value with new_ident. patch carries any additional claims.
-
-        Only patch set: ident unchanged; patch carries new claims to merge.
+        Only normal statements in patch: ident unchanged; patch carries new
+        claims to merge.
         """
         if not (req := cls.make_request(ident)):
             return cls()
@@ -180,7 +184,9 @@ class SourceItem:
             if ((code := resp.getcode()) == 404) and (404 in handled):
                 first_prop = next(iter(cls._config.get('properties', {})), None)
                 if ident.mainsnak.property == first_prop:
-                    return cls(prior_ident=ident)
+                    item = cls()
+                    item.deprecate_ident(ident)
+                    return item
                 return cls()
             destination = resp.geturl()
             text = resp.read().decode('utf-8')
@@ -190,7 +196,8 @@ class SourceItem:
         redirected = 301 in handled and destination_url.lower() != url.lower()
         item = cls()
         if redirected:
-            item.prior_ident = ident
-            item.new_ident = cls.update_ident(ident, destination_url)
+            new_ident = cls.update_ident(ident, destination_url)
+            item.patch = [new_ident]
+            item.deprecate_ident(ident)
         item.parse(text, ident)
         return item

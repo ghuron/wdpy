@@ -7,7 +7,7 @@ class EuropePMC(SourceItem):
         results = json.loads(text).get('resultList', {}).get('result', [])
         if len(results) != 1:
             if ident.mainsnak.property == 'P698':
-                self.prior_ident = ident
+                self.deprecate_ident(ident)
             return
         d = results[0]
         fields = self._config.get('fields', {})

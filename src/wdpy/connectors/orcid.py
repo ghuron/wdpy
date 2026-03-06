@@ -14,7 +14,7 @@ class ORCID(SourceItem):
     def parse(self, text: str, ident: Statement) -> None:
         data = json.loads(text)
         if 'path' not in data:
-            self.prior_ident = ident
+            self.deprecate_ident(ident)
             return
         self.add_claim('P496', data['path'].split('/')[1])
         self.add_claim('P31', 'Q5')
