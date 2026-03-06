@@ -14,6 +14,7 @@ class ArxivItem(SourceItem):
             return
         arxiv_id = id_text.split('/')[-1].split('v')[0]
         self.add_claim('P31', 'Q13442814')
+        if arxiv_id: self.add_claim('P818', arxiv_id)
         if arxiv_id: self.add_claim('P953', 'https://arxiv.org/pdf/' + arxiv_id)
         t = entry.find('w3:title', ns)
         if t is not None and (title := ' '.join((t.text or '').split())):
