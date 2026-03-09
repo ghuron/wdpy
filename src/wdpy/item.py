@@ -180,8 +180,8 @@ class Item:
             data['claims'] = claims
         return json.dumps(data, ensure_ascii=False)
 
-    def write(self) -> Optional[str]:
-        payload: Dict[str, Any] = {'data': self.json()}
+    def write(self, summary: str) -> Optional[str]:
+        payload: Dict[str, Any] = {'data': self.json(), 'summary': summary}
         if self.qid:
             payload['id'] = self.qid
         else:

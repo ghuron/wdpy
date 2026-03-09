@@ -174,9 +174,12 @@ class Statement:
 
         return to_delete
 
-    def save(self, summary: str) -> Optional[Dict[str, Any]]:
+    def write(self, summary: str) -> Optional[str]:
         """Persist statement via wbsetclaim."""
-        return api_write('wbsetclaim', claim=self.json(), summary=summary)
+        response = api_write('wbsetclaim', claim=self.json(), summary=summary)
+        if response and isinstance(response.get('claim'), dict):
+            return response['claim'].get('id')
+        return None
 
     @staticmethod
     def select_outdated(statements: List[Statement],

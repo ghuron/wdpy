@@ -21,11 +21,11 @@ if logon('Ghuron@Ghuron', '1t0ev93e72p8neccgquoo87jllr49mli'):
                         if not (new_id := redirect[old_id].get('main_id')):
                             p3083 = Statement(Snak('P3083', (old_id,)), statement_id)
                             p3083.set_rank('deprecated', 'Q21441764')
-                            p3083.save('deprecated due to its absence in [[Q654724]]')
+                            p3083.write('deprecated due to its absence in [[Q654724]]')
                             time.sleep(1)
                         elif old_id != redirect[old_id].get('main_id'):
                             p3083 = Statement(Snak('P3083', (redirect[old_id]['main_id'],)), statement_id)
-                            p3083.save(f'was {old_id}')
+                            p3083.write(f'was {old_id}')
                             time.sleep(1)
         elif chunk is not None and len(chunk) == 0:
             logging.info(f'0 results for offset {offset}')
