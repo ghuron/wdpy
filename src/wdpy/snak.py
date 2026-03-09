@@ -96,11 +96,17 @@ class Snak:
                         if len(v) > 1 and v[1]: res['value']['lowerBound'] = v[1]
                         if len(v) > 2 and v[2]: res['value']['upperBound'] = v[2]
                 case 'time':
-                    res = {'type': 'time', 'value': {'time': f"+{v[0][:4]}-{v[0][4:6]}"
-                           f"-{v[0][6:]}T00:00:00Z" if len(v[0]) == 8 else v[0],
-                           'timezone': 0, 'before': 0, 'after': 0}}
-                    if len(v) > 1 and v[1]:
-                        res['value']['precision'] = int(v[1]) if v[1].isdigit() else v[1]
+                    time_str, _, suffix = v[0].partition('/')
+                    precision = (int(suffix) if suffix.isdigit() else
+                                 int(v[1]) if len(v) > 1 and v[1] and v[1].isdigit() else 11)
+                    if len(time_str) == 8:
+                        mo = time_str[4:6] if time_str[4:6] != '00' else '01'
+                        day = time_str[6:] if time_str[6:] != '00' else '01'
+                        time_out = f"+{time_str[:4]}-{mo}-{day}T00:00:00Z"
+                    else:
+                        time_out = time_str
+                    res = {'type': 'time', 'value': {'time': time_out,
+                           'timezone': 0, 'before': 0, 'after': 0, 'precision': precision}}
                     if len(v) > 2 and v[2]:
                         res['value']['calendarmodel'] = (f"http://www.wikidata.org/entity"
                         f"/{v[2]}" if not v[2].startswith('http') else v[2])

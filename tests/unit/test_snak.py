@@ -162,6 +162,19 @@ class Json(TestCase):
         snak, expected = ETHALONS['time']
         self.assertEqual(json.loads(snak.json()), expected)
 
+    @mock.patch.object(Snak, 'type_of', return_value='time')
+    def test_time_no_precision_defaults_to_11(self, *_):
+        snak = Snak('P813', ('20240526',))
+        payload = json.loads(snak.json())
+        self.assertEqual(11, payload['datavalue']['value']['precision'])
+
+    @mock.patch.object(Snak, 'type_of', return_value='time')
+    def test_time_precision_suffix_in_time_string(self, *_):
+        snak = Snak('P813', ('+2013-01-00T00:00:00Z/10',))
+        payload = json.loads(snak.json())
+        self.assertEqual(10, payload['datavalue']['value']['precision'])
+        self.assertEqual('+2013-01-00T00:00:00Z', payload['datavalue']['value']['time'])
+
     def test_monolingual(self, *_):
         snak, expected = ETHALONS['monolingual']
         self.assertEqual(json.loads(snak.json()), expected)
