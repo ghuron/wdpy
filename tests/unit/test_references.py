@@ -43,7 +43,7 @@ class Include(TestCase):
         refs.include({'P248': [Snak('P248', ('Q1',))]})
         mock.assert_called_once()
         self.assertEqual(len(refs._items), 1)
-        self.assertTrue(refs._confirmed[0])
+        self.assertTrue(any(s.property == 'P813' for s in refs._items[0]))
 
     @mock.patch('wdpy.references._preload')
     @mock.patch.object(Snak, 'try_to_merge_references', return_value=False)
@@ -52,7 +52,7 @@ class Include(TestCase):
         refs.include({'P248': [Snak('P248', ('Q1',))]})
         mock.assert_called_once()
         self.assertEqual(len(refs._items), 2)
-        self.assertTrue(refs._confirmed[1])
+        self.assertTrue(any(s.property == 'P813' for s in refs._items[1]))
 
     @mock.patch('wdpy.references._preload')
     def test_preload_all(self, mock: mock.MagicMock):

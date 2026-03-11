@@ -177,6 +177,49 @@ class Transform(unittest.TestCase):
         self.assertIn(('Q99',), values)
 
 
+class DeleteClaim(unittest.TestCase):
+
+    def setUp(self):
+        self.item = wdpy.Item('Q1')
+        self.item._loaded = True
+
+    def _stmt(self, prop='P31', val='Q5', stmt_id=None, snak_hash=None):
+        s = wdpy.Statement(wdpy.Snak(prop, (val,)))
+        s.id = stmt_id
+        s.mainsnak.hash = snak_hash
+        return s
+
+    def test_unsaved_statement_removed_from_claims_no_removal_queued(self):
+        stmt = self._stmt(snak_hash=None)
+        self.item.claims['P31'] = [stmt]
+        self.item.delete_claim(stmt)
+        self.assertEqual(self.item.claims['P31'], [])
+        self.assertEqual(self.item._removals, [])
+
+    def test_persisted_statement_removed_and_queued(self):
+        stmt = self._stmt(stmt_id='Q1$abc-123', snak_hash='abc123')
+        self.item.claims['P31'] = [stmt]
+        self.item.delete_claim(stmt)
+        self.assertEqual(self.item.claims['P31'], [])
+        self.assertEqual(self.item._removals, [('P31', 'Q1$abc-123')])
+
+    def test_unknown_property_does_not_raise(self):
+        stmt = self._stmt(prop='P999', stmt_id='Q1$xyz', snak_hash='xyz')
+        # P999 not in claims at all
+        self.item.delete_claim(stmt)  # should not raise
+        self.assertEqual(self.item._removals, [('P999', 'Q1$xyz')])
+
+    def test_json_includes_removal_entry(self):
+        stmt = self._stmt(stmt_id='Q1$abc-123')
+        self.item.claims = {}
+        self.item._removals = [('P31', 'Q1$abc-123')]
+        payload = json.loads(self.item.json())
+        self.assertIn('P31', payload['claims'])
+        removal = payload['claims']['P31'][0]
+        self.assertEqual(removal['id'], 'Q1$abc-123')
+        self.assertEqual(removal['remove'], '')
+
+
 class Merge(unittest.TestCase):
 
     def setUp(self):

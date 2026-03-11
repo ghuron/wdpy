@@ -1,8 +1,8 @@
 from __future__ import annotations
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import date, datetime
 import json, re
-from typing import Any, Callable, ClassVar, Dict, Iterable, List, Literal, Optional, Set, Tuple
+from typing import Any, ClassVar, Dict, Iterable, List, Literal, Optional, Set, Tuple
 from wdpy import exec
 
 @dataclass
@@ -11,7 +11,14 @@ class Snak:
     property: str
     value: Optional[Tuple[str, ...]] = None
     snaktype: Literal['value', 'novalue', 'somevalue'] = 'value'
+    hash: Optional[str] = field(default=None, compare=False)
     _PROPERTY_TYPES: ClassVar[Optional[Dict[str, str]]] = None
+    TODAY: ClassVar[date] = date.today()
+
+    @staticmethod
+    def retrieved() -> Snak:
+        """Return a P813 (retrieved) snak with today's date."""
+        return Snak('P813', (Snak.TODAY.strftime('%Y%m%d'), '11', 'Q1985727'))
 
     @staticmethod
     def type_of(property_id: str) -> Optional[str]:
@@ -28,10 +35,11 @@ class Snak:
         p, st = data.get('property', ''), data.get('snaktype', 'value')
         if (dt := data.get('datatype')) and Snak._PROPERTY_TYPES is not None:
             Snak._PROPERTY_TYPES.setdefault(p, dt)
+        h = data.get('hash')
         if st != 'value' or not isinstance(dv := data.get('datavalue'), dict):
-            return Snak(p, None, st)
+            return Snak(p, None, st, h)
         v, t = dv.get('value'), dv.get('type')
-        if not isinstance(v, dict): return Snak(p, (str(v),) if v is not None else None)
+        if not isinstance(v, dict): return Snak(p, (str(v),) if v is not None else None, hash=h)
         match t:
             case 'wikibase-entityid': res = (v.get('id', ''),)
             case 'quantity': res = (str(v.get('amount', '')), str(v.get('lowerBound', '')),
@@ -41,7 +49,7 @@ class Snak:
                               (v.get('calendarmodel') or '').rsplit('/', 1)[-1])
             case 'monolingualtext': res = (v.get('text', ''), v.get('language', ''))
             case _: res = (str(v),)
-        return Snak(p, res)
+        return Snak(p, res, hash=h)
 
     @staticmethod
     def create(property_id: str, value: Any, st: str = 'value') -> Optional[Snak]:

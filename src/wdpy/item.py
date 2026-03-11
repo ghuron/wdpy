@@ -2,7 +2,7 @@ from __future__ import annotations
 import json
 import logging
 import uuid
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 from wdpy import Snak, Statement, SourceItem, get_entities, api_write
 
@@ -13,6 +13,7 @@ class Item:
         self.labels: Dict[str, str] = {}
         self.claims: Dict[str, List[Statement]] = {}
         self._loaded = False
+        self._removals: List[Tuple[str, str]] = []
 
     def sync(self) -> Optional[Item]:
         """Fetch data from all applicable sources and transform them into this item.
@@ -158,6 +159,14 @@ class Item:
             return statement
         return existing
 
+    def delete_claim(self, stmt: Statement) -> None:
+        """Remove a statement from this item; if it was server-saved, queue it for deletion on the next write()."""
+        prop = stmt.mainsnak.property
+        if prop in self.claims:
+            self.claims[prop] = [s for s in self.claims[prop] if s is not stmt]
+        if stmt.mainsnak.hash is not None and stmt.id is not None:
+            self._removals.append((prop, stmt.id))
+
     def json(self) -> str:
         data: Dict[str, Any] = {}
         if self.qid:
@@ -167,7 +176,7 @@ class Item:
                 lang: {'language': lang, 'value': text}
                 for lang, text in self.labels.items()
             }
-        if self.claims:
+        if self.claims or self._removals:
             claims: Dict[str, List[Any]] = {}
             for prop, statements in self.claims.items():
                 items: List[Any] = []
@@ -177,10 +186,15 @@ class Item:
                     except json.JSONDecodeError:
                         logging.error('Invalid statement JSON for %s', prop)
                 claims[prop] = items
+            for prop, stmt_id in self._removals:
+                claims.setdefault(prop, []).append({'id': stmt_id, 'remove': ''})
             data['claims'] = claims
         return json.dumps(data, ensure_ascii=False)
 
     def write(self, summary: str) -> Optional[str]:
+        author_stmts = (self.claims.get('P50') or []) + (self.claims.get('P2093') or [])
+        for stmt in Statement.deduplicate_authors(author_stmts, 'P1545'):
+            self.delete_claim(stmt)
         payload: Dict[str, Any] = {'data': self.json(), 'summary': summary}
         if self.qid:
             payload['id'] = self.qid
@@ -192,5 +206,6 @@ class Item:
                 new_qid = entity.get('id')
                 if isinstance(new_qid, str):
                     self.qid = new_qid
+            self._removals.clear()
             return self.qid
         return None

@@ -10,15 +10,13 @@ _PUB_DATES: Dict[str, int] = {}
 
 class References:
     _items: List[List[Snak]]
-    _confirmed: List[bool]
 
     def __init__(self, wikibase_refs: Optional[Iterable[Any]] = None):
-        self._items, self._confirmed = [], []
+        self._items = []
         for ref in (wikibase_refs or []):
             payload = ref.get('snaks', {}) if isinstance(ref, dict) else {}
             self._items.append([s if isinstance(s, Snak) else Snak.parse(s)
                                 for val in payload.values() for s in (val or [])])
-            self._confirmed.append(False)
 
     def __bool__(self) -> bool:
         return bool(self._items)
@@ -37,35 +35,37 @@ class References:
         items = [new_item] + self._items
         _preload(items)
         Snak.resolve_redirect(items, _REDIRECTS)
-        for i, item in enumerate(self._items):
+        for item in self._items:
             if Snak.try_to_merge_references(new_item, item):
-                self._confirmed[i] = True
+                item[:] = [s for s in item if s.property != 'P813'] + [Snak.retrieved()]
                 return
+        new_item.append(Snak.retrieved())
         self._items.append(new_item)
-        self._confirmed.append(True)
 
     def compress(self, qid: str) -> None:
         target = (qid or '').strip()
-        if not target: return
-        _preload(self._items)
-        Snak.resolve_redirect(self._items, _REDIRECTS)
+        # if not target: return
+        # _preload(self._items)
+        # Snak.resolve_redirect(self._items, _REDIRECTS)
 
-        def has(item: List[Snak], prop: str) -> bool:
-            return any(s.property == prop and s.value and s.value[0] == target
-                       for s in item)
+        # def has(item: List[Snak], prop: str) -> bool:
+        #     return any(s.property == prop and s.value and s.value[0] == target
+        #                for s in item)
 
-        confirmed_found = any(c and has(item, 'P12132')
-                              for item, c in zip(self._items, self._confirmed))
-        new_items, new_confirmed = [], []
-        for item, confirmed in zip(self._items, self._confirmed):
-            if confirmed or not (has(item, 'P248') or has(item, 'P12132')):
-                if confirmed_found and has(item, 'P248'):
-                    item = [s for s in item if not (s.property == 'P248' and
-                            s.value and s.value[0] == target)]
-                if item:
-                    new_items.append(item)
-                    new_confirmed.append(confirmed)
-        self._items, self._confirmed = new_items, new_confirmed
+        # def confirmed(item: List[Snak]) -> bool:
+        #     return any(s.property == 'P813' for s in item)
+
+        # confirmed_found = any(confirmed(item) and has(item, 'P12132')
+        #                       for item in self._items)
+        # new_items = []
+        # for item in self._items:
+        #     if confirmed(item) or not (has(item, 'P248') or has(item, 'P12132')):
+        #         if confirmed_found and has(item, 'P248'):
+        #             item = [s for s in item if not (s.property == 'P248' and
+        #                     s.value and s.value[0] == target)]
+        #         if item:
+        #             new_items.append(item)
+        # self._items = new_items
 
     @property
     def publication_date(self) -> Optional[str]:
