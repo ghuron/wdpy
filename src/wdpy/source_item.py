@@ -211,32 +211,35 @@ class SourceItem:
         item._apply_references()
         return item
 
-    def _apply_references(self) -> None:
-        """Attach a source reference to every non-deprecated statement in self.patch.
+    def get_ref_snaks(self) -> Dict[str, List[Snak]]:
+        """Return the reference snaks for this source item without modifying anything.
 
-        The reference always contains P248 (stated in <db_ref>). When self.patch
-        contains a non-deprecated statement with the primary property, the reference
-        also includes that identifier snak so reviewers can trace the exact value used.
+        Always includes P248 (stated in <db_ref>). Also includes the primary
+        identifier snak when a non-deprecated statement with that property exists
+        in self.patch, so callers can trace the exact external ID that was synced.
         """
         db_ref = self.get_db_ref()
         if not db_ref:
-            return
+            return {}
+        result: Dict[str, List[Snak]] = {}
+        if p248 := Snak.create('P248', db_ref):
+            result['P248'] = [p248]
+        primary_prop = self.get_primary_property()
+        if primary_prop and self.patch:
+            if ident := next(
+                (s for s in self.patch
+                 if s.rank != 'deprecated' and s.mainsnak.property == primary_prop),
+                None
+            ):
+                result[ident.mainsnak.property] = [ident.mainsnak]
+        return result
+
+    def _apply_references(self) -> None:
+        """Attach a source reference to every statement in self.patch."""
         if not self.patch:
             return
-        primary_prop = self.get_primary_property()
-        patch_ident = next(
-            (s for s in self.patch
-             if s.rank != 'deprecated' and s.mainsnak.property == primary_prop),
-            None
-        ) if primary_prop else None
-        ref_snaks: Dict[str, List[Snak]] = {}
-        if p248 := Snak.create('P248', db_ref):
-            ref_snaks['P248'] = [p248]
-        if patch_ident is not None and patch_ident.mainsnak.value:
-            if id_snak := Snak.create(primary_prop, patch_ident.mainsnak.value[0]):
-                ref_snaks[primary_prop] = [id_snak]
-        if ref_snaks:
-            r = References()
-            r.include(ref_snaks)
+        if ref_snaks := self.get_ref_snaks():
             for s in self.patch:
+                r = References()
+                r.upsert(ref_snaks)
                 s.references = r

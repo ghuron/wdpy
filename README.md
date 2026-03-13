@@ -17,7 +17,7 @@ The framework handles the mechanics of Wikidata's API (authentication, CSRF toke
 # Built-in connectors
 
 | Connector | External source               | Triggered by      |
-| ----------| ------------------------------| ------------------|
+| -----------| -------------------------------| -------------------|
 | ArXiv     | arXiv.org                     | arXiv ID (P818)   |
 | ADS       | NASA Astrophysics Data System | bibcode (P819)    |
 | SIMBAD    | SIMBAD Astronomical Database  | SIMBAD ID (P3083) |

@@ -388,19 +388,18 @@ class TestApplyReferences(TestCase):
 
     # --- primary ident case (patch contains primary-prop statement) ---
 
-    @mock.patch.object(Snak, 'create')
-    def test_primary_ident_ref_contains_p248_and_primary(self, mock_create):
-        p248_snak = mock.MagicMock(name='p248')
-        id_snak = mock.MagicMock(name='id_snak')
-        mock_create.side_effect = lambda prop, val: p248_snak if prop == 'P248' else id_snak
-
+    def test_primary_ident_ref_contains_p248_and_primary(self):
+        primary_stmt = _statement('P356', '10.1234/x')
         item = _RefConnector()
-        item.patch = [_statement('P356', '10.1234/x'), _statement('P31', 'Q13442814')]
+        item.patch = [primary_stmt, _statement('P31', 'Q13442814')]
 
         item._apply_references()
 
-        mock_create.assert_any_call('P248', 'Q180736')
-        mock_create.assert_any_call('P356', '10.1234/x')
+        ref_snaks = item.patch[0].references._items[0]
+        props = {s.property for s in ref_snaks}
+        self.assertIn('P248', props)
+        self.assertIn('P356', props)
+        self.assertIs(next(s for s in ref_snaks if s.property == 'P356'), primary_stmt.mainsnak)
         for s in item.patch:
             self.assertIsNotNone(s.references)
 

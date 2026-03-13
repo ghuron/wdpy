@@ -30,7 +30,7 @@ class References:
             res.append({'snaks': payload})
         return json.dumps(res, sort_keys=True)
 
-    def include(self, snaks_dict: Dict[str, List[Snak]]) -> None:
+    def upsert(self, snaks_dict: Dict[str, List[Snak]]) -> None:
         new_item = [s for val in snaks_dict.values() for s in (val or [])]
         items = [new_item] + self._items
         _preload(items)
@@ -42,30 +42,44 @@ class References:
         new_item.append(Snak.retrieved())
         self._items.append(new_item)
 
-    def compress(self, qid: str) -> None:
-        target = (qid or '').strip()
-        # if not target: return
-        # _preload(self._items)
-        # Snak.resolve_redirect(self._items, _REDIRECTS)
+    def compress(self, ref_snaks: Dict[str, List[Snak]]) -> bool:
+        """Remove stale references for the external item identified by ref_snaks.
 
-        # def has(item: List[Snak], prop: str) -> bool:
-        #     return any(s.property == prop and s.value and s.value[0] == target
-        #                for s in item)
+        A reference is stale when it points to the same source (P248) and the
+        same external identifier as ref_snaks, but was not upserted during the
+        current batch (i.e. has no P813 dated today). Redirect aliases are
+        resolved so a reference carrying an old identifier QID is still matched.
 
-        # def confirmed(item: List[Snak]) -> bool:
-        #     return any(s.property == 'P813' for s in item)
+        Returns True if matching references were found and none remain afterward.
+        """
+        if not ref_snaks:
+            return False
 
-        # confirmed_found = any(confirmed(item) and has(item, 'P12132')
-        #                       for item in self._items)
-        # new_items = []
-        # for item in self._items:
-        #     if confirmed(item) or not (has(item, 'P248') or has(item, 'P12132')):
-        #         if confirmed_found and has(item, 'P248'):
-        #             item = [s for s in item if not (s.property == 'P248' and
-        #                     s.value and s.value[0] == target)]
-        #         if item:
-        #             new_items.append(item)
-        # self._items = new_items
+        _preload(self._items)
+        Snak.resolve_redirect(self._items, _REDIRECTS)
+
+        today = Snak.retrieved().value
+
+        def matches(item: List[Snak]) -> bool:
+            for prop, snaks in ref_snaks.items():
+                for snak in snaks:
+                    if not any(s.property == prop and s.value == snak.value for s in item):
+                        return False
+            return True
+
+        kept = []
+        found_match = False
+        for item in self._items:
+            if matches(item):
+                found_match = True
+                if any(s.property == 'P813' and s.value == today for s in item):
+                    item[:] = [s for s in item if s.property != 'P813']
+                    kept.append(item)
+                # else: stale — drop entirely
+            else:
+                kept.append(item)
+        self._items = kept
+        return found_match and not self._items
 
     @property
     def publication_date(self) -> Optional[str]:

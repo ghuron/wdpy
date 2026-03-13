@@ -91,7 +91,7 @@ class Statement:
             by_prop: Dict[str, List[Snak]] = {}
             for s in ref_snaks:
                 by_prop.setdefault(s.property, []).append(s)
-            target.references.include(by_prop)
+            target.references.upsert(by_prop)
 
     def upsert(self, existing: List[Statement]) -> Optional[Statement]:
         """Find a matching statement in existing and merge references into it.

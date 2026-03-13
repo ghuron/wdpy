@@ -35,12 +35,62 @@ class Json(TestCase):
                      'property': 'P433', 'datavalue': {'type': 'string', 'value': '1'}}]}}]
         self.assertEqual(json.loads(refs.json()), expected)
 
+class Compress(TestCase):
+    def _ref_snaks(self, qid='QX'):
+        return {'P248': [Snak('P248', (qid,))]}
+
+    @mock.patch('wdpy.references._preload')
+    @mock.patch.object(Snak, 'resolve_redirect')
+    def test_non_matching_item_kept(self, *_):
+        refs = References([
+            {'snaks': {'P248': [{'snaktype': 'value', 'property': 'P248',
+                                 'datavalue': {'type': 'wikibase-entityid', 'value': {'id': 'QY'}}}]}}
+        ])
+        result = refs.compress(self._ref_snaks('QX'))
+        self.assertFalse(result)
+        self.assertEqual(len(refs._items), 1)
+
+    @mock.patch('wdpy.references._preload')
+    @mock.patch.object(Snak, 'resolve_redirect')
+    def test_stale_matching_item_deleted(self, *_):
+        refs = References([
+            {'snaks': {'P248': [{'snaktype': 'value', 'property': 'P248',
+                                 'datavalue': {'type': 'wikibase-entityid', 'value': {'id': 'QX'}}}]}}
+        ])
+        result = refs.compress(self._ref_snaks('QX'))
+        self.assertTrue(result)
+        self.assertEqual(len(refs._items), 0)
+
+    @mock.patch('wdpy.references._preload')
+    @mock.patch.object(Snak, 'resolve_redirect')
+    @mock.patch.object(Snak, 'retrieved', return_value=Snak('P813', ('2026-03-13',)))
+    def test_fresh_matching_item_loses_p813(self, *_):
+        today = ('2026-03-13',)
+        refs = References([
+            {'snaks': {'P248': [{'snaktype': 'value', 'property': 'P248',
+                                 'datavalue': {'type': 'wikibase-entityid', 'value': {'id': 'QX'}}}],
+                       'P813': [{'snaktype': 'value', 'property': 'P813',
+                                 'datavalue': {'type': 'string', 'value': '2026-03-13'}}]}}
+        ])
+        result = refs.compress(self._ref_snaks('QX'))
+        self.assertFalse(result)
+        self.assertEqual(len(refs._items), 1)
+        self.assertFalse(any(s.property == 'P813' for s in refs._items[0]))
+
+    def test_returns_false_on_empty_ref_snaks(self):
+        refs = References([{'snaks': {'P433': [Snak('P433', ('1',))]}}])
+        self.assertFalse(refs.compress({}))
+
+    def test_returns_false_when_already_empty(self):
+        self.assertFalse(References([]).compress(self._ref_snaks()))
+
+
 class Include(TestCase):
     @mock.patch('wdpy.references._preload')
     @mock.patch.object(Snak, 'try_to_merge_references', return_value=True)
     def test_merges(self, mock: mock.MagicMock, *_):
         refs = References([{'snaks': {}}])
-        refs.include({'P248': [Snak('P248', ('Q1',))]})
+        refs.upsert({'P248': [Snak('P248', ('Q1',))]})
         mock.assert_called_once()
         self.assertEqual(len(refs._items), 1)
         self.assertTrue(any(s.property == 'P813' for s in refs._items[0]))
@@ -49,7 +99,7 @@ class Include(TestCase):
     @mock.patch.object(Snak, 'try_to_merge_references', return_value=False)
     def test_appends(self, mock: mock.MagicMock, *_):
         refs = References([{'snaks': {}}])
-        refs.include({'P248': [Snak('P248', ('Q1',))]})
+        refs.upsert({'P248': [Snak('P248', ('Q1',))]})
         mock.assert_called_once()
         self.assertEqual(len(refs._items), 2)
         self.assertTrue(any(s.property == 'P813' for s in refs._items[1]))
@@ -57,7 +107,7 @@ class Include(TestCase):
     @mock.patch('wdpy.references._preload')
     def test_preload_all(self, mock: mock.MagicMock):
         refs = References([{'snaks': {'P248': [{'snaktype': 'value', 'property': 'P248', 'datavalue': {'type': 'wikibase-entityid', 'value': {'id': 'Q1'}}}]}}])
-        refs.include({'P248': [Snak('P248', ('Q2',))]})
+        refs.upsert({'P248': [Snak('P248', ('Q2',))]})
         # Check that it preloads both Q2 (new) and Q1 (existing)
         # The first argument to _preload is the list of items
         items = mock.call_args[0][0]

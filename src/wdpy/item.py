@@ -117,30 +117,23 @@ class Item:
     def transform(self, model: SourceItem) -> None:
         if not isinstance(model, SourceItem):
             return
-        if model.patch is None:
+        if not model.patch:
             return
         self._ensure_loaded()
-        source = model.get_db_ref()
-
-        if not model.patch:
-            for prop in model.get_properties():
-                for stmt in self.claims.get(prop) or []:
-                    if stmt.references:
-                        stmt.references.compress(source)
-                        if not stmt.references:
-                            stmt.references = None
-            return
+        ref_snaks = model.get_ref_snaks()
 
         affected: set = set()
         for stmt in model.patch:
             affected.add(self.merge(stmt).mainsnak.property)
 
         for prop in affected:
+            to_delete = []
             for stmt in self.claims.get(prop) or []:
-                if stmt.references and source:
-                    stmt.references.compress(source)
-                    if not stmt.references:
-                        stmt.references = None
+                if stmt.references and ref_snaks:
+                    if stmt.references.compress(ref_snaks):
+                        to_delete.append(stmt)
+            for stmt in to_delete:
+                self.delete_claim(stmt)
 
     def merge(self, statement: Statement) -> Statement:
         """Upsert a statement into this item's claims.
@@ -191,10 +184,25 @@ class Item:
             data['claims'] = claims
         return json.dumps(data, ensure_ascii=False)
 
-    def write(self, summary: str) -> Optional[str]:
+    def postprocess(self) -> None:
         author_stmts = (self.claims.get('P50') or []) + (self.claims.get('P2093') or [])
         for stmt in Statement.deduplicate_authors(author_stmts, 'P1545'):
             self.delete_claim(stmt)
+
+        for prop, stmts in self.claims.items():
+            if Snak.type_of(prop) != 'external-id':
+                continue
+            if sum(1 for s in stmts if s.rank != 'deprecated') != 1:
+                continue
+            for all_stmts in self.claims.values():
+                for stmt in all_stmts:
+                    if stmt.references:
+                        for ref in stmt.references._items:
+                            ref[:] = [s for s in ref if s.property != prop]
+                        stmt.references._items = [r for r in stmt.references._items if r]
+
+    def write(self, summary: str) -> Optional[str]:
+        self.postprocess()
         payload: Dict[str, Any] = {'data': self.json(), 'summary': summary}
         if self.qid:
             payload['id'] = self.qid
