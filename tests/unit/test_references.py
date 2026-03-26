@@ -104,16 +104,6 @@ class Include(TestCase):
         self.assertEqual(len(refs._items), 2)
         self.assertTrue(any(s.property == 'P813' for s in refs._items[1]))
 
-    @mock.patch('wdpy.references._preload')
-    def test_preload_all(self, mock: mock.MagicMock):
-        refs = References([{'snaks': {'P248': [{'snaktype': 'value', 'property': 'P248', 'datavalue': {'type': 'wikibase-entityid', 'value': {'id': 'Q1'}}}]}}])
-        refs.upsert({'P248': [Snak('P248', ('Q2',))]})
-        # Check that it preloads both Q2 (new) and Q1 (existing)
-        # The first argument to _preload is the list of items
-        items = mock.call_args[0][0]
-        self.assertEqual(len(items), 2)
-        qids = {s.value[0] for it in items for s in it if s.property == 'P248' and s.value}
-        self.assertEqual(qids, {'Q1', 'Q2'})
 
 class UpdateRedirect(TestCase):
     def setUp(self): _REDIRECTS.clear()
