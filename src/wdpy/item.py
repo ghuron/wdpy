@@ -7,6 +7,16 @@ from typing import Any, Dict, List, Optional, Tuple
 from wdpy import Snak, Statement, SourceItem, get_entities, api_write
 
 
+def _ordinal_key(s: Statement, ordinal_property: str) -> int:
+    for q in (s.qualifiers or []):
+        if q.property == ordinal_property and q.value:
+            try:
+                return int(q.value[0])
+            except ValueError:
+                pass
+    return 10**9  # no ordinal → sort to end
+
+
 class Item:
     def __init__(self, qid: Optional[str] = None) -> None:
         self.qid = qid
@@ -122,18 +132,21 @@ class Item:
         self._ensure_loaded()
         ref_snaks = model.get_ref_snaks()
 
-        affected: set = set()
+        seen: set = set()
+        merged: List[Statement] = []
         for stmt in model.patch:
-            affected.add(self.merge(stmt).mainsnak.property)
+            result = self.merge(stmt)
+            if id(result) not in seen:
+                seen.add(id(result))
+                merged.append(result)
 
-        for prop in affected:
-            to_delete = []
-            for stmt in self.claims.get(prop) or []:
-                if stmt.references and ref_snaks:
-                    if stmt.references.compress(ref_snaks):
-                        to_delete.append(stmt)
-            for stmt in to_delete:
-                self.delete_claim(stmt)
+        to_delete = []
+        for stmt in merged:
+            if stmt.references and ref_snaks:
+                if stmt.references.compress(ref_snaks):
+                    to_delete.append(stmt)
+        for stmt in to_delete:
+            self.delete_claim(stmt)
 
     def merge(self, statement: Statement) -> Statement:
         """Upsert a statement into this item's claims.
@@ -160,6 +173,57 @@ class Item:
         if stmt.mainsnak.hash is not None and stmt.id is not None:
             self._removals.append((prop, stmt.id))
 
+    def prune_property(self, property_id: str, group_by: Optional[str] = None) -> int:
+        """Delete outdated statements for a property, keeping one per group.
+
+        Routing mirrors legacy Element._process_ranking():
+          - P50 / P2093 (authors): deduplicate by ordinal (P1545), P50 beats P2093.
+          - P1215 (magnitude): keep latest per spectral band (P1227).
+          - P304, P433, P478, P953, P1476, P6257–P6259: keep latest across all values.
+          - All other properties: fall through to select_outdated with caller-supplied group_by.
+
+        Returns the number of statements queued for deletion.
+        """
+        if property_id == 'P50' or (property_id == 'P2093' and 'P50' not in self.claims):
+            stmts = self.claims.get('P2093', []) + self.claims.get('P50', [])
+            to_delete = Statement.deduplicate_authors(stmts, 'P1545')
+            for stmt in to_delete:
+                self.delete_claim(stmt)
+            # Delete saved statements server-side and strip IDs so they are recreated in sorted order.
+            for prop in ('P2093', 'P50'):
+                bucket = self.claims.get(prop, [])
+                for stmt in bucket:
+                    if stmt.mainsnak.hash is not None and stmt.id is not None:
+                        self._removals.append((prop, stmt.id))
+                        stmt.id = None
+                bucket.sort(key=lambda s: _ordinal_key(s, 'P1545'))
+            return len(to_delete)
+
+        stmts = self.claims.get(property_id, [])
+        prop_type = Snak.type_of(property_id)
+
+        if property_id == 'P1215':
+            to_delete = Statement.select_outdated(stmts, 'P1227')
+        elif property_id in {'P304', 'P433', 'P478', 'P953', 'P1476', 'P6257', 'P6258', 'P6259'}:
+            to_delete = Statement.select_outdated(stmts)
+        elif prop_type == 'time':
+            Statement.rank_by_precision(stmts)
+            return 0
+        elif prop_type == 'external-id':
+            self._strip_ref_snaks(property_id)
+            return 0
+        elif prop_type == 'quantity':
+            Statement.rank_by_recency(stmts)
+            return 0
+        elif group_by is not None:
+            to_delete = Statement.select_outdated(stmts, group_by)
+        else:
+            return 0  # unknown property, no routing — matches legacy _process_ranking fallthrough
+
+        for stmt in to_delete:
+            self.delete_claim(stmt)
+        return len(to_delete)
+
     def json(self) -> str:
         data: Dict[str, Any] = {}
         if self.qid:
@@ -184,25 +248,25 @@ class Item:
             data['claims'] = claims
         return json.dumps(data, ensure_ascii=False)
 
-    def postprocess(self) -> None:
-        author_stmts = (self.claims.get('P50') or []) + (self.claims.get('P2093') or [])
-        for stmt in Statement.deduplicate_authors(author_stmts, 'P1545'):
-            self.delete_claim(stmt)
+    def _strip_ref_snaks(self, property_id: str) -> None:
+        """Remove property_id snaks from all references item-wide.
 
-        for prop, stmts in self.claims.items():
-            if Snak.type_of(prop) != 'external-id':
-                continue
-            if sum(1 for s in stmts if s.rank != 'deprecated') != 1:
-                continue
-            for all_stmts in self.claims.values():
-                for stmt in all_stmts:
-                    if stmt.references:
-                        for ref in stmt.references._items:
-                            ref[:] = [s for s in ref if s.property != prop]
-                        stmt.references._items = [r for r in stmt.references._items if r]
+        Only acts when the property has exactly one non-deprecated statement,
+        i.e. the ID is unambiguous and citing it as a source adds no information.
+        """
+        stmts = self.claims.get(property_id, [])
+        if sum(1 for s in stmts if s.rank != 'deprecated') != 1:
+            return
+        for all_stmts in self.claims.values():
+            for stmt in all_stmts:
+                if stmt.references:
+                    for ref in stmt.references._items:
+                        ref[:] = [s for s in ref if s.property != property_id]
+                    stmt.references._items = [r for r in stmt.references._items if r]
 
     def write(self, summary: str) -> Optional[str]:
-        self.postprocess()
+        for prop in list(self.claims):
+            self.prune_property(prop)
         payload: Dict[str, Any] = {'data': self.json(), 'summary': summary}
         if self.qid:
             payload['id'] = self.qid

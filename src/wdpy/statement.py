@@ -235,6 +235,66 @@ class Statement:
         return to_delete
 
     @staticmethod
+    def rank_by_precision(statements: List[Statement]) -> None:
+        """Promote the most precise time statement to preferred rank.
+
+        First clears any stale 'deprecated because imprecise' marks
+        (P2241=Q42727519) so previously demoted values can compete again.
+        Then, if more than one statement exists and exactly one is the most
+        precise — i.e. every other value statement is a lower-precision
+        representation of the same date — that statement receives preferred
+        rank with reason P7452=Q71536040.
+        Does nothing if any statement already carries preferred rank.
+        """
+        _Q_IMPRECISE = 'Q42727519'
+
+        for s in statements:
+            if s.rank == 'deprecated':
+                if any(q.property == 'P2241' and q.value and q.value[0] == _Q_IMPRECISE
+                       for q in (s.qualifiers or [])):
+                    s.qualifiers = [q for q in s.qualifiers if q.property != 'P2241'] or None
+                    s.rank = 'normal'
+            if s.rank == 'preferred':
+                return
+
+        if len(statements) <= 1:
+            return
+
+        def _truncate(date_str: str, precision: int) -> str:
+            if precision >= 11:
+                return date_str
+            if precision == 10:
+                return date_str[:6] + '00'
+            return date_str[:4] + '0000'
+
+        precisions = {}
+        for i, s in enumerate(statements):
+            if s.mainsnak.snaktype == 'value' and s.mainsnak.value:
+                try:
+                    precisions[i] = int(s.mainsnak.value[1])
+                except ValueError:
+                    precisions[i] = 11
+
+        def _is_most_precise(candidate: Statement) -> bool:
+            if candidate.rank == 'deprecated' or candidate.mainsnak.snaktype != 'value':
+                return False
+            if not candidate.mainsnak.value:
+                return False
+            c_date = candidate.mainsnak.value[0]
+            for i, other in enumerate(statements):
+                if other is candidate or other.mainsnak.snaktype != 'value' or not other.mainsnak.value:
+                    continue
+                if _truncate(c_date, precisions[i]) != _truncate(other.mainsnak.value[0], precisions[i]):
+                    return False
+            return True
+
+        for s in statements:
+            if _is_most_precise(s):
+                s.rank = 'preferred'
+                s.set_qualifier('P7452', 'Q71536040')
+                return
+
+    @staticmethod
     def rank_by_recency(statements: List[Statement]) -> None:
         """Assign deprecated rank to all but the most recently sourced statement.
 

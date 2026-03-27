@@ -195,6 +195,10 @@ class Postprocess(unittest.TestCase):
         return wdpy.References([{'snaks': {p: [{'snaktype': 'value', 'property': p,
             'datavalue': {'type': 'string', 'value': 'x'}}] for p in props}}])
 
+    def _prune_all(self):
+        for prop in list(self.item.claims):
+            self.item.prune_property(prop)
+
     def test_strips_external_id_snak_from_references(self, *_):
         ref = self._ref('P819', 'P248')
         stmt = wdpy.Statement(wdpy.Snak('P31', ('Q5',)), references=ref)
@@ -202,7 +206,7 @@ class Postprocess(unittest.TestCase):
             'P819': [wdpy.Statement(wdpy.Snak('P819', ('abc',)))],
             'P31': [stmt],
         }
-        self.item.postprocess()
+        self._prune_all()
         props = {s.property for s in stmt.references._items[0]}
         self.assertNotIn('P819', props)
         self.assertIn('P248', props)
@@ -215,7 +219,7 @@ class Postprocess(unittest.TestCase):
                      wdpy.Statement(wdpy.Snak('P819', ('def',)))],
             'P31': [stmt],
         }
-        self.item.postprocess()
+        self._prune_all()
         props = {s.property for s in stmt.references._items[0]}
         self.assertIn('P819', props)
 
@@ -226,7 +230,7 @@ class Postprocess(unittest.TestCase):
             'P819': [wdpy.Statement(wdpy.Snak('P819', ('abc',)), rank='deprecated')],
             'P31': [stmt],
         }
-        self.item.postprocess()
+        self._prune_all()
         props = {s.property for s in stmt.references._items[0]}
         self.assertIn('P819', props)
 
@@ -237,7 +241,7 @@ class Postprocess(unittest.TestCase):
             'P819': [wdpy.Statement(wdpy.Snak('P819', ('abc',)))],
             'P31': [stmt],
         }
-        self.item.postprocess()
+        self._prune_all()
         self.assertEqual(stmt.references._items, [])
 
 
@@ -321,3 +325,179 @@ class Merge(unittest.TestCase):
         self.assertIsNone(kwargs.get('new'))
         self.assertEqual('Q7', kwargs.get('id'))
         self.assertIn('data', kwargs)
+
+
+class _ModelWithSource(wdpy.SourceItem):
+    """Minimal SourceItem subclass that does not auto-register (no 'source' in _config)."""
+    _db_ref: str = ''
+    _primary: str = 'PX'
+
+    @classmethod
+    def get_db_ref(cls):
+        return cls._db_ref
+
+    @classmethod
+    def get_properties(cls):
+        return [cls._primary]
+
+    @classmethod
+    def get_primary_property(cls):
+        return cls._primary
+
+
+def _make_ref(*snaks: wdpy.Snak) -> wdpy.References:
+    """Build a References with one reference item from the given snaks."""
+    refs = wdpy.References()
+    refs._items = [list(snaks)]
+    return refs
+
+
+@patch('wdpy.references._preload')
+class TransformIdempotence(unittest.TestCase):
+    """Regression: repeated transform must not duplicate a preferred statement.
+
+    Bug: transform() previously called compress() on *all* statements of the
+    affected property.  When ModelA (year P577, source QA) ran, compress was
+    also applied to the server-saved preferred /11 P577 (also source QA, no
+    P813:today) and deleted it.  ModelB then found no /11 and inserted a new
+    normal-rank duplicate.
+
+    Fix: compress() is only called on the statements actually returned by merge().
+    """
+
+    def setUp(self):
+        self.item = wdpy.Item('Q1')
+        self.item._loaded = True
+
+        today = wdpy.Snak.TODAY.strftime('%Y%m%d')
+
+        # Preferred /11 P577 loaded from server (source QA, no P813:today).
+        self.preferred = wdpy.Statement(
+            wdpy.Snak('P577', ('20230215', '11', 'Q1985727')),
+            rank='preferred',
+            references=_make_ref(wdpy.Snak('P248', ('QA',))),
+        )
+        self.preferred.mainsnak.hash = 'hash_preferred'
+        self.preferred.id = 'Q1$pref'
+
+        # Normal /10 P577 loaded from server (same source QA, no P813:today).
+        self.year_stmt = wdpy.Statement(
+            wdpy.Snak('P577', ('20230200', '10', 'Q1985727')),
+            rank='normal',
+            references=_make_ref(wdpy.Snak('P248', ('QA',))),
+        )
+        self.year_stmt.mainsnak.hash = 'hash_year'
+        self.year_stmt.id = 'Q1$year'
+
+        self.item.claims['P577'] = [self.preferred, self.year_stmt]
+
+        # ModelA: year-precision P577 sourced from QA (same source as both existing stmts).
+        class _ModelA(_ModelWithSource):
+            _db_ref = 'QA'
+
+        year_patch = wdpy.Statement(wdpy.Snak('P577', ('20230200', '10', 'Q1985727')))
+        year_patch.references = _make_ref(wdpy.Snak('P248', ('QA',)),
+                                          wdpy.Snak('P813', (today, '11', 'Q1985727')))
+        self.model_a = _ModelA(patch=[year_patch])
+
+        # ModelB: day-precision P577 sourced from QB.
+        class _ModelB(_ModelWithSource):
+            _db_ref = 'QB'
+
+        day_patch = wdpy.Statement(wdpy.Snak('P577', ('20230215', '11', 'Q1985727')))
+        day_patch.references = _make_ref(wdpy.Snak('P248', ('QB',)),
+                                         wdpy.Snak('P813', (today, '11', 'Q1985727')))
+        self.model_b = _ModelB(patch=[day_patch])
+
+    def test_preferred_statement_survives_after_both_transforms(self, _preload_mock):
+        self.item.transform(self.model_a)
+        self.item.transform(self.model_b)
+
+        p577 = self.item.claims.get('P577', [])
+        preferred_stmts = [s for s in p577 if s.rank == 'preferred']
+        self.assertEqual(len(preferred_stmts), 1, 'preferred /11 P577 must survive both transforms')
+        self.assertEqual(preferred_stmts[0].mainsnak.value, ('20230215', '11', 'Q1985727'))
+
+    def test_no_duplicate_day_precision_statement(self, _preload_mock):
+        self.item.transform(self.model_a)
+        self.item.transform(self.model_b)
+
+        p577 = self.item.claims.get('P577', [])
+        day_stmts = [s for s in p577
+                     if s.mainsnak.value == ('20230215', '11', 'Q1985727')]
+        self.assertEqual(len(day_stmts), 1,
+                         f'expected 1 /11 P577, got {len(day_stmts)}: '
+                         f'{[s.rank for s in day_stmts]}')
+
+
+@patch('wdpy.references._preload')
+class TransformDuplicatePatch(unittest.TestCase):
+    """Regression: patch with two identical statements deletes the preferred statement.
+
+    Bug: when model.patch contains two statements with the same value, merge()
+    returns the same existing preferred statement both times.
+    merged = [preferred, preferred]
+
+    compress() is then called twice on the same object:
+    - 1st call: refs = [P248:QA, P813:today] → P813 stripped, ref kept → returns False.
+    - 2nd call: refs = [P248:QA] (no P813) → stale → dropped → returns True → preferred deleted.
+    """
+
+    def setUp(self):
+        self.item = wdpy.Item('Q1')
+        self.item._loaded = True
+
+        today = wdpy.Snak.TODAY.strftime('%Y%m%d')
+
+        # Preferred /11 P577 loaded from server (source QA, no P813:today).
+        self.preferred = wdpy.Statement(
+            wdpy.Snak('P577', ('20230815', '11', 'Q1985727')),
+            rank='preferred',
+            references=_make_ref(wdpy.Snak('P248', ('QA',))),
+        )
+        self.preferred.mainsnak.hash = 'hash_pref'
+        self.preferred.id = 'Q1$pref'
+
+        # Normal /9 P577 loaded from server.
+        year_stmt = wdpy.Statement(
+            wdpy.Snak('P577', ('20230000', '9', 'Q1985727')),
+            rank='normal',
+            references=_make_ref(wdpy.Snak('P248', ('QA',))),
+        )
+        year_stmt.mainsnak.hash = 'hash_year'
+        year_stmt.id = 'Q1$year'
+
+        self.item.claims['P577'] = [self.preferred, year_stmt]
+
+        # Model whose patch has the SAME /11 P577 value TWICE.
+        # Both statements match preferred, so merge() returns the same object
+        # twice → merged = [preferred, preferred] → compress() called twice.
+        class _ModelDupPatch(_ModelWithSource):
+            _db_ref = 'QA'
+
+            def get_ref_snaks(self):
+                return {'P248': [wdpy.Snak('P248', ('QA',))]}
+
+        p1 = wdpy.Statement(wdpy.Snak('P577', ('20230815', '11', 'Q1985727')))
+        p1.references = _make_ref(
+            wdpy.Snak('P248', ('QA',)),
+            wdpy.Snak('P813', (today, '11', 'Q1985727')),
+        )
+        p2 = wdpy.Statement(wdpy.Snak('P577', ('20230815', '11', 'Q1985727')))
+        p2.references = _make_ref(
+            wdpy.Snak('P248', ('QA',)),
+            wdpy.Snak('P813', (today, '11', 'Q1985727')),
+        )
+        self.model = _ModelDupPatch(patch=[p1, p2])
+
+    def test_preferred_not_deleted_when_patch_has_duplicate_statement(self, _preload_mock):
+        """Preferred /11 P577 must survive a transform whose patch duplicates its value."""
+        self.item.transform(self.model)
+
+        p577 = self.item.claims.get('P577', [])
+        preferred_stmts = [s for s in p577 if s.rank == 'preferred']
+        self.assertEqual(
+            len(preferred_stmts), 1,
+            f'preferred /11 was deleted; remaining P577: '
+            f'{[(s.rank, s.mainsnak.value) for s in p577]}',
+        )

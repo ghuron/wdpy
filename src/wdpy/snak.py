@@ -140,7 +140,7 @@ class Snak:
                 d.setdefault(s.property, set()).add(s.value)
             return d
         src, dst = group(source), group(target)
-        return all((p in {'P248', 'P12132'} or Snak.type_of(p) == 'external-id') and
+        return all((p in {'P248', 'P12132', 'P813'} or Snak.type_of(p) == 'external-id') and
                    (not (s := src.get(p)) or not (t := dst.get(p)) or s == t)
                    for p in set(src) | set(dst))
 
