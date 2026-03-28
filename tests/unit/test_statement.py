@@ -489,3 +489,24 @@ class RankByRecency(TestCase):
         self.assertIsNone(with_reason.rank)
         self.assertEqual(new.rank, 'normal')
         self.assertEqual(old.rank, 'deprecated')
+
+
+def _p577(date: str, precision: int) -> Statement:
+    return Statement(Snak('P577', (date, str(precision), 'Q1985727')))
+
+
+class RankByPrecision(TestCase):
+
+    def test_higher_precision_gets_preferred_over_lower(self):
+        """Precision-9 must not be promoted when a precision-10 statement
+        for the same year exists.
+
+        Bug: both ('20130000','9',...) and ('20130000','10',...) truncate to
+        the same string at precision-10, so _is_most_precise() returned True
+        for the precision-9 statement and it was promoted first.
+        """
+        p9  = _p577('20130000', 9)
+        p10 = _p577('20130000', 10)
+        Statement.rank_by_precision([p9, p10])
+        self.assertEqual(p10.rank, 'preferred')
+        self.assertNotEqual(p9.rank, 'preferred')

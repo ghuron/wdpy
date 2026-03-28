@@ -281,9 +281,15 @@ class Statement:
             if not candidate.mainsnak.value:
                 return False
             c_date = candidate.mainsnak.value[0]
+            try:
+                c_precision = int(candidate.mainsnak.value[1])
+            except (ValueError, IndexError):
+                c_precision = 11
             for i, other in enumerate(statements):
                 if other is candidate or other.mainsnak.snaktype != 'value' or not other.mainsnak.value:
                     continue
+                if precisions[i] > c_precision:
+                    return False
                 if _truncate(c_date, precisions[i]) != _truncate(other.mainsnak.value[0], precisions[i]):
                     return False
             return True
