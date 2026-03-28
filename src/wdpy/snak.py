@@ -71,6 +71,8 @@ class Snak:
             for r, pr, idx in pats:
                 if m := re.match(r, s):
                     y, mo, d = [m.group(i) if i else None for i in idx]
+                    if pr == 11 and d is not None and not int(d):
+                        pr = 10
                     return Snak(property_id, (f"{y.zfill(4)}{mo.zfill(2) if mo else '00'}"
                                              f"{d.zfill(2) if d else '00'}",
                                              str(pr), 'Q1985727'))

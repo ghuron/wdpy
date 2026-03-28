@@ -197,6 +197,7 @@ class Create(TestCase):
         self.assertEqual(('20090402', '11', 'Q1985727'), Snak.create('P813', '2009-04-2').value)
         self.assertEqual(('34560102', '11', 'Q1985727'), Snak.create('P813', '1/2/3456').value)
         self.assertEqual(('19030100', '10', 'Q1985727'), Snak.create('P813', '01/1903').value)
+        self.assertEqual(('20130100', '10', 'Q1985727'), Snak.create('P813', '2013-01-00').value)
 
     @mock.patch.object(Snak, 'type_of', return_value='wikibase-item')
     def test_snaktype(self, *_):
