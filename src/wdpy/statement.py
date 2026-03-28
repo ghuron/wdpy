@@ -106,7 +106,7 @@ class Statement:
                 if candidate.mainsnak.snaktype != self.mainsnak.snaktype:
                     continue
             elif (candidate.mainsnak.snaktype != 'value' or
-                  candidate.mainsnak.value != self.mainsnak.value):
+                  not self.mainsnak.value_matches(candidate.mainsnak)):
                 continue
             if self._qualifiers_present_in(candidate):
                 self._merge_references_into(candidate)

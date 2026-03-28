@@ -125,6 +125,29 @@ class Snak:
             else: d.pop('datatype', None)
         return json.dumps(d, sort_keys=True)
 
+    def value_matches(self, other: Snak) -> bool:
+        """Return True if this snak's value is compatible with other's.
+
+        For time snaks both dates are truncated to the lower of the two
+        precisions before comparing, so a month-precision date matches a
+        day-precision date for the same month.  The calendar model must also
+        agree.  For all other property types exact tuple equality is used.
+        """
+        if Snak.type_of(self.property) != 'time':
+            return self.value == other.value
+        if not self.value or not other.value:
+            return self.value == other.value
+        if self.value[2:] != other.value[2:]:   # calendar mismatch
+            return False
+        try:
+            p_self  = int(self.value[1])
+            p_other = int(other.value[1])
+        except (ValueError, IndexError):
+            return self.value == other.value
+        if p_self > p_other:                     # patch is more precise → insert, don't merge
+            return False
+        return _truncate_date(self.value[0], p_self) == _truncate_date(other.value[0], p_self)
+
     @staticmethod
     def resolve_redirect(items: Iterable[Iterable[Snak]], redirects: Dict[str, str]) -> None:
         """Resolve redirects for all P248 snaks in items."""
@@ -160,6 +183,14 @@ class Snak:
         """Extract QIDs from P248 (stated in) snaks from multiple references."""
         return {s.value[0] for it in items for s in it
                 if s.property == 'P248' and s.value and s.value[0]}
+
+def _truncate_date(date_str: str, precision: int) -> str:
+    if precision >= 11:
+        return date_str
+    if precision == 10:
+        return date_str[:6] + '00'
+    return date_str[:4] + '0000'
+
 
 def _normalize_type(uri: str) -> str:
     s = uri.rsplit('#', 1)[-1]

@@ -155,6 +155,73 @@ class Upsert(TestCase):
         hit = Statement(Snak('P31', ('Q5',)))
         self.assertIs(incoming.upsert([miss, hit]), hit)
 
+    # --- upsert: time precision-aware matching ---
+
+    @mock.patch.object(Snak, 'type_of', return_value='time')
+    def test_time_same_value_same_precision_matches(self, *_):
+        incoming  = Statement(Snak('P577', ('20130101', '11', 'Q1985727')))
+        candidate = Statement(Snak('P577', ('20130101', '11', 'Q1985727')))
+        self.assertIs(incoming.upsert([candidate]), candidate)
+
+    @mock.patch.object(Snak, 'type_of', return_value='time')
+    def test_time_month_patch_matches_day_candidate(self, *_):
+        """('20130100','10') covers ('20130101','11'): January 2013 ⊇ 1 Jan 2013."""
+        incoming  = Statement(Snak('P577', ('20130100', '10', 'Q1985727')))
+        candidate = Statement(Snak('P577', ('20130101', '11', 'Q1985727')))
+        self.assertIs(incoming.upsert([candidate]), candidate)
+
+    @mock.patch.object(Snak, 'type_of', return_value='time')
+    def test_time_day_patch_does_not_match_month_candidate(self, *_):
+        """More-precise patch must not merge into a less-precise candidate."""
+        incoming  = Statement(Snak('P577', ('20130101', '11', 'Q1985727')))
+        candidate = Statement(Snak('P577', ('20130100', '10', 'Q1985727')))
+        self.assertIsNone(incoming.upsert([candidate]))
+
+    @mock.patch.object(Snak, 'type_of', return_value='time')
+    def test_time_year_patch_matches_day_candidate(self, *_):
+        """('20130000','9') covers ('20130101','11'): 2013 ⊇ 1 Jan 2013."""
+        incoming  = Statement(Snak('P577', ('20130000', '9', 'Q1985727')))
+        candidate = Statement(Snak('P577', ('20130101', '11', 'Q1985727')))
+        self.assertIs(incoming.upsert([candidate]), candidate)
+
+    @mock.patch.object(Snak, 'type_of', return_value='time')
+    def test_time_day_patch_does_not_match_year_candidate(self, *_):
+        """More-precise patch must not merge into a less-precise candidate."""
+        incoming  = Statement(Snak('P577', ('20130101', '11', 'Q1985727')))
+        candidate = Statement(Snak('P577', ('20130000', '9',  'Q1985727')))
+        self.assertIsNone(incoming.upsert([candidate]))
+
+    @mock.patch.object(Snak, 'type_of', return_value='time')
+    def test_time_month_patch_does_not_match_year_candidate(self, *_):
+        """More-precise patch (month) must not merge into year-precision candidate."""
+        incoming  = Statement(Snak('P577', ('20130100', '10', 'Q1985727')))
+        candidate = Statement(Snak('P577', ('20130000', '9',  'Q1985727')))
+        self.assertIsNone(incoming.upsert([candidate]))
+
+    @mock.patch.object(Snak, 'type_of', return_value='time')
+    def test_time_year_patch_matches_month_candidate(self, *_):
+        incoming  = Statement(Snak('P577', ('20130000', '9',  'Q1985727')))
+        candidate = Statement(Snak('P577', ('20130100', '10', 'Q1985727')))
+        self.assertIs(incoming.upsert([candidate]), candidate)
+
+    @mock.patch.object(Snak, 'type_of', return_value='time')
+    def test_time_different_month_no_match(self, *_):
+        incoming  = Statement(Snak('P577', ('20130200', '10', 'Q1985727')))
+        candidate = Statement(Snak('P577', ('20130101', '11', 'Q1985727')))
+        self.assertIsNone(incoming.upsert([candidate]))
+
+    @mock.patch.object(Snak, 'type_of', return_value='time')
+    def test_time_different_year_no_match(self, *_):
+        incoming  = Statement(Snak('P577', ('20140000', '9', 'Q1985727')))
+        candidate = Statement(Snak('P577', ('20130101', '11', 'Q1985727')))
+        self.assertIsNone(incoming.upsert([candidate]))
+
+    @mock.patch.object(Snak, 'type_of', return_value='time')
+    def test_time_different_calendar_no_match(self, *_):
+        incoming  = Statement(Snak('P577', ('20130101', '11', 'Q1985727')))
+        candidate = Statement(Snak('P577', ('20130101', '11', 'Q1985786')))
+        self.assertIsNone(incoming.upsert([candidate]))
+
     # --- upsert: reference merging ---
 
     def test_no_incoming_references_leaves_candidate_unchanged(self):
