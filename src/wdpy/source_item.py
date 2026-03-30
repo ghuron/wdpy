@@ -167,11 +167,13 @@ class SourceItem:
     def extract(cls, ident: Statement) -> SourceItem:
         """Fetch and parse the record for `ident`. Always returns a SourceItem.
 
-        Empty (patch None): no info — network error, unrecognised property,
-        or parse failure.
+        patch None: unrecognised property (make_request returned None).
 
-        patch set with a deprecated statement: ident confirmed gone or
-        redirected; patch may also carry additional claims.
+        patch with only the non-deprecated ident: network error — the ident
+        is preserved as-is so it is not inadvertently removed from the item.
+
+        patch with a deprecated statement: ident confirmed gone or redirected;
+        patch may also carry additional claims.
 
         Only normal statements in patch: ident unchanged; patch carries new
         claims to merge.
@@ -180,12 +182,14 @@ class SourceItem:
             return cls()
         url = req.full_url
         try:
-            resp = build_opener().open(req, timeout=30)
+            resp = build_opener().open(req, timeout=90)
         except urllib.error.HTTPError as e:
             resp = e
         except Exception as e:
             logging.error('Request failed for %s: %s', url, e)
-            return cls()
+            item = cls()
+            item.patch = [ident]
+            return item
         handled = cls._config.get('extract', [])
         primary_prop = cls.get_primary_property()
         with resp:
