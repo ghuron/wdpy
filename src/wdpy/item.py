@@ -267,7 +267,31 @@ class Item:
                         ref[:] = [s for s in ref if s.property != property_id]
                     stmt.references._items = [r for r in stmt.references._items if r]
 
-    def write(self, summary: str) -> Optional[str]:
+    def _build_summary(self) -> str:
+        """Build an edit summary from P248/external-ID pairs found in references."""
+        seen: Dict[str, set] = {}
+        for stmts in self.claims.values():
+            for stmt in stmts:
+                if stmt.rank == 'deprecated' or not stmt.references:
+                    continue
+                for ref in stmt.references._items:
+                    p248 = next(
+                        (s.value[0] for s in ref if s.property == 'P248' and s.value),
+                        None,
+                    )
+                    if not p248:
+                        continue
+                    for s in ref:
+                        if s.property not in ('P248', 'P813') and s.value:
+                            seen.setdefault(p248, set()).add(s.value[0])
+        parts = [
+            f'[[{qid}]] {", ".join(sorted(ids))}'
+            for qid, ids in sorted(seen.items())
+        ]
+        return '; '.join(parts)
+
+    def write(self) -> Optional[str]:
+        summary = self._build_summary()
         for prop in list(self.claims):
             self.prune_property(prop)
         payload: Dict[str, Any] = {'data': self.json(), 'summary': summary}
