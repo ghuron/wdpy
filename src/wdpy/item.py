@@ -207,7 +207,7 @@ class Item:
 
         if property_id == 'P1215':
             to_delete = Statement.select_outdated(stmts, 'P1227')
-        elif property_id in {'P304', 'P433', 'P478', 'P953', 'P1476', 'P6257', 'P6258', 'P6259'}:
+        elif property_id in {'P304', 'P433', 'P478', 'P953', 'P1433', 'P1476', 'P6257', 'P6258', 'P6259'}:
             to_delete = Statement.select_outdated(stmts)
         elif prop_type == 'time':
             Statement.rank_by_precision(stmts)

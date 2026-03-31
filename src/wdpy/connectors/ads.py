@@ -1,5 +1,6 @@
 import json
 import logging
+import re
 from pathlib import Path
 from typing import Optional
 from urllib.request import Request
@@ -41,6 +42,12 @@ class ADS(SourceItem):
                     pass
         fields = self._config.get('fields', {})
         translate = self._config.get('translate', {})
+
+        bibcode = d.get('bibcode', '')
+        if d.get('pub') == 'The Astrophysical Journal' and (
+            'ApJL' in bibcode or re.search(r'ApJ\.+\d+L', bibcode)
+        ):
+            d['pub'] = 'The Astrophysical Journal Letters'
 
         redirected = False
         if ident.mainsnak.property == 'P819':
