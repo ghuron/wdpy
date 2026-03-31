@@ -11,10 +11,19 @@ class Violation:
     property_id: str
     statement_id: Optional[str]
     detail: str
+    qid: Optional[str] = None
+
+    @property
+    def url(self) -> Optional[str]:
+        if not self.qid:
+            return None
+        if self.statement_id:
+            return f'https://www.wikidata.org/wiki/{self.qid}#{self.statement_id}'
+        return f'https://www.wikidata.org/wiki/{self.qid}#{self.property_id}'
 
     def __str__(self) -> str:
-        stmt = f' [{self.statement_id}]' if self.statement_id else ''
-        return f'[{self.rule}] {self.property_id}{stmt}: {self.detail}'
+        link = f' {self.url}' if self.url else ''
+        return f'[{self.rule}]{link}: {self.detail}'
 
 
 @runtime_checkable

@@ -6,11 +6,13 @@ from wdpy import Item
 from .rule import Rule, Violation
 from .rules.single_best_rank import SingleBestRankRule
 from .rules.ref_snak_redundancy import RefSnakRedundancyRule
+from .rules.rank_qualifier import RankQualifierRule
 
 
 _DEFAULT_RULES: List[Rule] = [
     SingleBestRankRule(),
     RefSnakRedundancyRule(),
+    RankQualifierRule(),
 ]
 
 
@@ -25,7 +27,7 @@ class Evaluator:
         # You own sync+write, evaluator just checks:
         item = Item('Q123456')
         if synced := item.sync():
-            qid = synced.write('summary')
+            qid = synced.write()
             violations = Evaluator().check(item, qid)
     """
 
@@ -48,13 +50,15 @@ class Evaluator:
                 violations.extend(rule.check(post_write, item._loaded_claims))
             except Exception:
                 logging.exception('Rule %s raised for %s', type(rule).__name__, written_qid)
+        for v in violations:
+            v.qid = written_qid
         return violations
 
-    def evaluate(self, qid: str, summary: str = 'Evaluated by wdpy evaluator') -> List[Violation]:
+    def evaluate(self, qid: str) -> List[Violation]:
         """Sync-write the item then run check(). Convenience for automated sweeps."""
         item = Item(qid)
         synced = item.sync()
         if synced is None:
             logging.warning('sync() returned None for %s — skipping evaluation', qid)
             return []
-        return self.check(item, synced.write(summary))
+        return self.check(item, synced.write())
