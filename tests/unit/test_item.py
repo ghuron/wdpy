@@ -35,7 +35,7 @@ class ItemTestCase(unittest.TestCase):
     def test_write_creates_item(self, api_write_mock, *_):
         item = wdpy.Item()
 
-        result = item.write('test summary')
+        result = item.write()
 
         self.assertEqual('Q9', result)
         self.assertEqual('Q9', item.qid)
@@ -316,7 +316,7 @@ class Merge(unittest.TestCase):
     def test_write_updates_existing_item(self, api_write_mock, *_):
         item = wdpy.Item('Q7')
 
-        result = item.write('test summary')
+        result = item.write()
 
         self.assertEqual('Q7', result)
         self.assertEqual('Q7', item.qid)

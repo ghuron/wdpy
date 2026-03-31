@@ -55,6 +55,10 @@ class Item:
             self.transform(model)
             transformed.append(model)
 
+        self._post_process(transformed)
+        self._summary = self._build_summary()
+        for prop in list(self.claims):
+            self.prune_property(prop)
         return self if self.claims.get('P31') else None
 
     def _extract_new(self, transformed: List[SourceItem]) -> Optional[SourceItem]:
@@ -267,6 +271,62 @@ class Item:
                         ref[:] = [s for s in ref if s.property != property_id]
                     stmt.references._items = [r for r in stmt.references._items if r]
 
+    def _post_process(self, transformed: List[SourceItem]) -> None:
+        """Strip stale source references left on statements not matched in this sync.
+
+        For each transformed model with at least two patch statements (ident + data)
+        and exactly one non-deprecated ident in the item: scan every property bucket
+        and, wherever at least one statement already carries the current
+        {P248=db_ref, primary_prop=ident_val} reference, remove from all other
+        statements any reference that has P248=db_ref but lacks the current
+        primary_prop snak.  Statements that lose all their references are deleted.
+        """
+        for model in transformed:
+            if not model.patch or len(model.patch) < 2:
+                continue
+            primary_prop = model.get_primary_property()
+            db_ref = model.get_db_ref()
+            if not primary_prop or not db_ref:
+                continue
+            ident_stmts = self.claims.get(primary_prop, [])
+            if sum(1 for s in ident_stmts if s.rank != 'deprecated') != 1:
+                continue
+            ident_val = next(
+                (s.mainsnak.value[0] for s in ident_stmts
+                 if s.rank != 'deprecated' and s.mainsnak.value),
+                None,
+            )
+            if not ident_val:
+                continue
+
+            def _ref_has_current(ref: List[Snak]) -> bool:
+                return (
+                    any(s.property == 'P248' and s.value and s.value[0] == db_ref for s in ref) and
+                    any(s.property == primary_prop and s.value and s.value[0] == ident_val for s in ref)
+                )
+
+            def _ref_is_stale(ref: List[Snak]) -> bool:
+                return (
+                    any(s.property == 'P248' and s.value and s.value[0] == db_ref for s in ref) and
+                    not any(s.property == primary_prop and s.value and s.value[0] == ident_val for s in ref)
+                )
+
+            for stmts in self.claims.values():
+                if not any(
+                    any(_ref_has_current(ref) for ref in (stmt.references._items if stmt.references else []))
+                    for stmt in stmts
+                ):
+                    continue
+                to_delete = []
+                for stmt in stmts:
+                    if not stmt.references:
+                        continue
+                    stmt.references._items = [r for r in stmt.references._items if not _ref_is_stale(r)]
+                    if not stmt.references._items:
+                        to_delete.append(stmt)
+                for stmt in to_delete:
+                    self.delete_claim(stmt)
+
     def _build_summary(self) -> str:
         """Build an edit summary from P248/external-ID pairs found in references."""
         seen: Dict[str, set] = {}
@@ -291,10 +351,7 @@ class Item:
         return ('sync based on ' + '; '.join(parts)) if parts else ''
 
     def write(self) -> Optional[str]:
-        summary = self._build_summary()
-        for prop in list(self.claims):
-            self.prune_property(prop)
-        payload: Dict[str, Any] = {'data': self.json(), 'summary': summary}
+        payload: Dict[str, Any] = {'data': self.json(), 'summary': getattr(self, '_summary', '')}
         if self.qid:
             payload['id'] = self.qid
         else:
