@@ -72,15 +72,19 @@ class ADS(SourceItem):
 
         has_journal_doi = any('ARXIV' not in doi.upper() for doi in dois)
         for doi in dois:
-            s = self.add_claim('P356', doi)
-            if s and has_journal_doi and 'ARXIV' in doi.upper():
-                s.rank = 'deprecated'
+            if has_journal_doi and 'ARXIV' in doi.upper():
+                if snak := Snak.create('P356', doi):
+                    self.deprecate_ident(Statement(snak), 'Q67125514')
+            else:
+                self.add_claim('P356', doi)
 
         has_journal_bibcode = any('arxiv' not in bc.lower() for bc in bibcodes)
         for bc in bibcodes:
-            s = self.add_claim('P819', bc)
-            if s and has_journal_bibcode and 'arxiv' in bc.lower():
-                s.rank = 'deprecated'
+            if has_journal_bibcode and 'arxiv' in bc.lower():
+                if snak := Snak.create('P819', bc):
+                    self.deprecate_ident(Statement(snak), 'Q67125514')
+            else:
+                self.add_claim('P819', bc)
 
         self.add_claim('P31', 'Q13442814')
 
