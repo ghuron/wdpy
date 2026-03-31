@@ -282,7 +282,7 @@ class Item:
                     if not p248:
                         continue
                     for s in ref:
-                        if s.property not in ('P248', 'P813') and s.value:
+                        if s.property not in ('P248', 'P813') and s.value and Snak.type_of(s.property) == 'external-id':
                             seen.setdefault(p248, set()).add(s.value[0])
         parts = [
             f'[[{qid}]] {", ".join(sorted(ids))}'
