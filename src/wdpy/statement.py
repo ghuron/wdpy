@@ -4,6 +4,8 @@ from dataclasses import dataclass
 from typing import Any, Dict, List, Literal, Optional
 from wdpy import Snak, References, api_write
 
+_RANK_QUALS = frozenset({'P2241', 'P7452'})
+
 @dataclass
 class Statement:
     """Wrapper around a Wikibase statement."""
@@ -68,8 +70,13 @@ class Statement:
         return '{' + ','.join(parts) + '}'
 
     def _qualifiers_present_in(self, other: Statement) -> bool:
-        """Return True if every qualifier of self is present in other."""
-        if not self.qualifiers:
+        """Return True if every content qualifier of self is present in other.
+
+        Rank-metadata qualifiers (P2241, P7452) are excluded from the check;
+        they are propagated separately by upsert() and must not block matching.
+        """
+        content_quals = [q for q in (self.qualifiers or []) if q.property not in _RANK_QUALS]
+        if not content_quals:
             return True
         if not other.qualifiers:
             return False
@@ -78,7 +85,7 @@ class Statement:
             other_by_prop.setdefault(s.property, []).append(s)
         return all(
             any(c.value == s.value for c in other_by_prop.get(s.property, []))
-            for s in self.qualifiers
+            for s in content_quals
         )
 
     def _merge_references_into(self, target: Statement) -> None:
@@ -112,6 +119,12 @@ class Statement:
                 self._merge_references_into(candidate)
                 if self.rank is not None:
                     candidate.rank = self.rank
+                    rank_quals = [q for q in (self.qualifiers or []) if q.property in _RANK_QUALS]
+                    if rank_quals:
+                        candidate.qualifiers = (
+                            [q for q in (candidate.qualifiers or []) if q.property not in _RANK_QUALS]
+                            + rank_quals
+                        ) or None
                 return candidate
         return None
 

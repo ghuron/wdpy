@@ -280,6 +280,52 @@ class UpsertRank(TestCase):
         incoming.upsert([candidate])
         self.assertEqual(candidate.rank, 'deprecated')
 
+    def test_deprecated_with_p2241_matches_normal_no_quals(self):
+        """ADS case: deprecated+P2241 should match existing normal statement."""
+        incoming = Statement(Snak('P356', ('10.1/x',)), rank='deprecated',
+                             qualifiers=[Snak('P2241', ('Q67125514',))])
+        candidate = Statement(Snak('P356', ('10.1/x',)), rank='normal')
+        result = incoming.upsert([candidate])
+        self.assertIs(result, candidate)
+        self.assertEqual(candidate.rank, 'deprecated')
+        self.assertIsNotNone(candidate.qualifiers)
+        self.assertTrue(any(q.property == 'P2241' and q.value == ('Q67125514',)
+                            for q in candidate.qualifiers))
+
+    def test_p2241_reason_replaced_on_match(self):
+        """Incoming P2241 value replaces existing one."""
+        incoming = Statement(Snak('P356', ('10.1/x',)), rank='deprecated',
+                             qualifiers=[Snak('P2241', ('Q67125514',))])
+        candidate = Statement(Snak('P356', ('10.1/x',)), rank='deprecated',
+                              qualifiers=[Snak('P2241', ('Q21441764',))])
+        incoming.upsert([candidate])
+        p2241_vals = [q.value for q in candidate.qualifiers if q.property == 'P2241']
+        self.assertEqual(p2241_vals, [('Q67125514',)])
+
+    def test_preferred_with_p7452_matches_normal_no_quals(self):
+        incoming = Statement(Snak('P31', ('Q5',)), rank='preferred',
+                             qualifiers=[Snak('P7452', ('Q71536040',))])
+        candidate = Statement(Snak('P31', ('Q5',)), rank='normal')
+        result = incoming.upsert([candidate])
+        self.assertIs(result, candidate)
+        self.assertEqual(candidate.rank, 'preferred')
+        self.assertTrue(any(q.property == 'P7452' for q in candidate.qualifiers))
+
+    def test_content_qualifier_still_required_for_match(self):
+        """P2241 exclusion must not suppress content-qualifier mismatch."""
+        incoming = Statement(Snak('P31', ('Q5',)),
+                             qualifiers=[Snak('P580', ('2020',)), Snak('P2241', ('Q1',))])
+        candidate = Statement(Snak('P31', ('Q5',)),
+                              qualifiers=[Snak('P580', ('2019',))])
+        self.assertIsNone(incoming.upsert([candidate]))
+
+    def test_content_qualifier_present_with_p2241_matches(self):
+        incoming = Statement(Snak('P31', ('Q5',)),
+                             qualifiers=[Snak('P580', ('2020',)), Snak('P2241', ('Q1',))])
+        candidate = Statement(Snak('P31', ('Q5',)),
+                              qualifiers=[Snak('P580', ('2020',))])
+        self.assertIs(incoming.upsert([candidate]), candidate)
+
 
 class DeduplicateAuthors(TestCase):
 
