@@ -44,9 +44,11 @@ class Snak:
             case 'wikibase-entityid': res = (v.get('id', ''),)
             case 'quantity': res = (str(v.get('amount', '')), str(v.get('lowerBound', '')),
                                   str(v.get('upperBound', '')), v.get('unit') or '1')
-            case 'time': res = (_format_time(v.get('time')) or '',
-                              str(v.get('precision', '')),
-                              (v.get('calendarmodel') or '').rsplit('/', 1)[-1])
+            case 'time':
+                _t = _format_time(v.get('time')) or ''
+                _p = str(v.get('precision', ''))
+                res = (_zero_subprecision(_t, _p), _p,
+                       (v.get('calendarmodel') or '').rsplit('/', 1)[-1])
             case 'monolingualtext': res = (v.get('text', ''), v.get('language', ''))
             case _: res = (str(v),)
         return Snak(p, res, hash=h)
@@ -144,7 +146,7 @@ class Snak:
             p_other = int(other.value[1])
         except (ValueError, IndexError):
             return self.value == other.value
-        if p_self > p_other:                     # patch is more precise → insert, don't merge
+        if p_self != p_other:                    # different precision → insert, don't merge
             return False
         return _truncate_date(self.value[0], p_self) == _truncate_date(other.value[0], p_self)
 
@@ -197,6 +199,18 @@ def _normalize_type(uri: str) -> str:
     m = {'CommonsMedia': 'commonsMedia', 'GlobeCoordinate': 'globecoordinate',
          'WikibaseEntitySchema': 'entity-schema'}
     return m.get(s, re.sub(r'([a-z])([A-Z])', r'\1-\2', s).lower())
+
+
+def _zero_subprecision(time_str: str, precision: str) -> str:
+    """Zero out date digits below the given precision level."""
+    if len(time_str) != 8 or not precision.isdigit():
+        return time_str
+    p = int(precision)
+    if p <= 9:
+        return time_str[:4] + '0000'
+    if p == 10:
+        return time_str[:6] + '00'
+    return time_str
 
 
 def _format_time(raw: Any) -> Optional[str]:

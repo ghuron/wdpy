@@ -107,6 +107,28 @@ class Parse(TestCase):
         expected, payload = ETHALONS['time']
         self.assertEqual(Snak.parse(payload).value, expected.value)
 
+    def test_time_month_precision_zeroes_day(self):
+        payload = {
+            'property': 'P577', 'snaktype': 'value',
+            'datavalue': {'type': 'time', 'value': {
+                'time': '+2024-02-01T00:00:00Z', 'precision': 10,
+                'calendarmodel': 'http://www.wikidata.org/entity/Q1985727',
+            }},
+        }
+        snak = Snak.parse(payload)
+        self.assertEqual(snak.value, ('20240200', '10', 'Q1985727'))
+
+    def test_time_year_precision_zeroes_month_and_day(self):
+        payload = {
+            'property': 'P577', 'snaktype': 'value',
+            'datavalue': {'type': 'time', 'value': {
+                'time': '+2013-01-01T00:00:00Z', 'precision': 9,
+                'calendarmodel': 'http://www.wikidata.org/entity/Q1985727',
+            }},
+        }
+        snak = Snak.parse(payload)
+        self.assertEqual(snak.value, ('20130000', '9', 'Q1985727'))
+
     def test_monolingual(self):
         expected, payload = ETHALONS['monolingual']
         self.assertEqual(Snak.parse(payload).value, expected.value)

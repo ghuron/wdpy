@@ -164,11 +164,11 @@ class Upsert(TestCase):
         self.assertIs(incoming.upsert([candidate]), candidate)
 
     @mock.patch.object(Snak, 'type_of', return_value='time')
-    def test_time_month_patch_matches_day_candidate(self, *_):
-        """('20130100','10') covers ('20130101','11'): January 2013 ⊇ 1 Jan 2013."""
+    def test_time_month_patch_does_not_match_day_candidate(self, *_):
+        """Different precisions must never merge, regardless of direction."""
         incoming  = Statement(Snak('P577', ('20130100', '10', 'Q1985727')))
         candidate = Statement(Snak('P577', ('20130101', '11', 'Q1985727')))
-        self.assertIs(incoming.upsert([candidate]), candidate)
+        self.assertIsNone(incoming.upsert([candidate]))
 
     @mock.patch.object(Snak, 'type_of', return_value='time')
     def test_time_day_patch_does_not_match_month_candidate(self, *_):
@@ -178,11 +178,11 @@ class Upsert(TestCase):
         self.assertIsNone(incoming.upsert([candidate]))
 
     @mock.patch.object(Snak, 'type_of', return_value='time')
-    def test_time_year_patch_matches_day_candidate(self, *_):
-        """('20130000','9') covers ('20130101','11'): 2013 ⊇ 1 Jan 2013."""
+    def test_time_year_patch_does_not_match_day_candidate(self, *_):
+        """Different precisions must never merge, regardless of direction."""
         incoming  = Statement(Snak('P577', ('20130000', '9', 'Q1985727')))
         candidate = Statement(Snak('P577', ('20130101', '11', 'Q1985727')))
-        self.assertIs(incoming.upsert([candidate]), candidate)
+        self.assertIsNone(incoming.upsert([candidate]))
 
     @mock.patch.object(Snak, 'type_of', return_value='time')
     def test_time_day_patch_does_not_match_year_candidate(self, *_):
@@ -199,10 +199,11 @@ class Upsert(TestCase):
         self.assertIsNone(incoming.upsert([candidate]))
 
     @mock.patch.object(Snak, 'type_of', return_value='time')
-    def test_time_year_patch_matches_month_candidate(self, *_):
+    def test_time_year_patch_does_not_match_month_candidate(self, *_):
+        """Different precisions must never merge, regardless of direction."""
         incoming  = Statement(Snak('P577', ('20130000', '9',  'Q1985727')))
         candidate = Statement(Snak('P577', ('20130100', '10', 'Q1985727')))
-        self.assertIs(incoming.upsert([candidate]), candidate)
+        self.assertIsNone(incoming.upsert([candidate]))
 
     @mock.patch.object(Snak, 'type_of', return_value='time')
     def test_time_different_month_no_match(self, *_):
