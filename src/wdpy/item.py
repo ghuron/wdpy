@@ -1,4 +1,5 @@
 from __future__ import annotations
+import copy
 import json
 import logging
 import uuid
@@ -24,6 +25,7 @@ class Item:
         self.claims: Dict[str, List[Statement]] = {}
         self._loaded = False
         self._removals: List[Tuple[str, str]] = []
+        self._loaded_claims: Dict[str, List[Statement]] = {}
 
     def sync(self) -> Optional[Item]:
         """Fetch data from all applicable sources and transform them into this item.
@@ -122,6 +124,7 @@ class Item:
                                 bucket.append(Statement.parse(row))
                     claims[prop] = bucket
             self.claims = claims
+            self._loaded_claims = copy.deepcopy(claims)
         self._loaded = True
 
     def transform(self, model: SourceItem) -> None:
