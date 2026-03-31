@@ -182,14 +182,10 @@ class SourceItem:
             return cls()
         url = req.full_url
         try:
-            resp = build_opener().open(req, timeout=90)
-        except urllib.error.HTTPError as e:
-            resp = e
+            resp = build_opener().open(req, timeout=120)
         except Exception as e:
             logging.error('Request failed for %s: %s', url, e)
-            item = cls()
-            item.patch = [ident]
-            return item
+            return cls(patch = [ident])
         handled = cls._config.get('extract', [])
         primary_prop = cls.get_primary_property()
         with resp:
