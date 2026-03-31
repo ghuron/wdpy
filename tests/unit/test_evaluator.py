@@ -47,12 +47,22 @@ class TestSingleBestRankRule(unittest.TestCase):
         self.assertEqual([], self._check(item))
 
     @patch('wdpy.Snak.type_of', return_value='string')
-    def test_single_preferred_plus_deprecated_no_violation(self, _):
+    def test_single_preferred_is_violation(self, _):
+        item = _item(('P31', [_stmt('P31', rank='preferred')]))
+        violations = self._check(item)
+        self.assertEqual(1, len(violations))
+        self.assertEqual('single_best_rank', violations[0].rule)
+        self.assertEqual('P31', violations[0].property_id)
+
+    @patch('wdpy.Snak.type_of', return_value='string')
+    def test_single_preferred_plus_deprecated_is_violation(self, _):
         item = _item(('P31', [
             _stmt('P31', rank='preferred'),
             _stmt('P31', rank='deprecated'),
         ]))
-        self.assertEqual([], self._check(item))
+        violations = self._check(item)
+        self.assertEqual(1, len(violations))
+        self.assertEqual('single_best_rank', violations[0].rule)
 
     @patch('wdpy.Snak.type_of', return_value='string')
     def test_two_normal_no_preferred_is_violation(self, _):
@@ -221,6 +231,49 @@ class TestRefSnakRedundancyRule(unittest.TestCase):
         stmt = _stmt('P1476', value=('Title', 'en'), refs=refs)
         item = _item(('P1476', [stmt]))
         self.assertEqual([], self._check(item))
+
+
+# ── RankQualifierRule ─────────────────────────────────────────────────────────
+
+from wdpy.evaluator.rules.rank_qualifier import RankQualifierRule
+
+
+class TestRankQualifierRule(unittest.TestCase):
+
+    def _check(self, item):
+        return RankQualifierRule().check(item, {})
+
+    def test_normal_rank_no_violation(self):
+        item = _item(('P577', [_stmt('P577')]))
+        self.assertEqual([], self._check(item))
+
+    def test_preferred_with_p7452_no_violation(self):
+        item = _item(('P577', [
+            _stmt('P577', rank='preferred', qualifiers=[_qual('P7452', 'Q71536040')]),
+        ]))
+        self.assertEqual([], self._check(item))
+
+    def test_deprecated_with_p2241_no_violation(self):
+        item = _item(('P577', [
+            _stmt('P577', rank='deprecated', qualifiers=[_qual('P2241', 'Q42727519')]),
+        ]))
+        self.assertEqual([], self._check(item))
+
+    def test_preferred_without_p7452_is_violation(self):
+        stmt = _stmt('P577', rank='preferred')
+        item = _item(('P577', [stmt]))
+        violations = self._check(item)
+        self.assertEqual(1, len(violations))
+        self.assertEqual('rank_qualifier', violations[0].rule)
+        self.assertEqual('P577', violations[0].property_id)
+
+    def test_deprecated_without_p2241_is_violation(self):
+        stmt = _stmt('P577', rank='deprecated')
+        item = _item(('P577', [stmt]))
+        violations = self._check(item)
+        self.assertEqual(1, len(violations))
+        self.assertEqual('rank_qualifier', violations[0].rule)
+        self.assertEqual('P577', violations[0].property_id)
 
 
 if __name__ == '__main__':

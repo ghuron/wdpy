@@ -35,7 +35,16 @@ class SingleBestRankRule:
             if prop in _AUTHOR_PROPS:
                 continue
             active = [s for s in stmts if s.rank != 'deprecated']
-            if len(active) <= 1:
+            if not active:
+                continue
+            if len(active) == 1:
+                if active[0].rank == 'preferred':
+                    violations.append(Violation(
+                        rule='single_best_rank',
+                        property_id=prop,
+                        statement_id=active[0].id,
+                        detail='Single non-deprecated statement should not have preferred rank',
+                    ))
                 continue
             preferred = [s for s in active if s.rank == 'preferred']
             if len(preferred) == 0:
