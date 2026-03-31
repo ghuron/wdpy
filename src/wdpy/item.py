@@ -288,7 +288,7 @@ class Item:
             f'[[{qid}]] {", ".join(sorted(ids))}'
             for qid, ids in sorted(seen.items())
         ]
-        return '; '.join(parts)
+        return ('sync based on ' + '; '.join(parts)) if parts else ''
 
     def write(self) -> Optional[str]:
         summary = self._build_summary()
