@@ -74,8 +74,8 @@ def parse_csv(req: Request) -> Optional[Dict[str, Union[Dict[str, str], List[Dic
             result[vals[0]] = row
     return result
 
-def exec(query: str) -> Optional[Dict[str, Union[Dict[str, str], List[Dict[str, str]]]]]:
-    return parse_csv(build_request('https://query.wikidata.org/sparql', params={'query': query}))
+def exec(query: str, endpoint: str = 'https://query.wikidata.org/sparql') -> Optional[Dict[str, Union[Dict[str, str], List[Dict[str, str]]]]]:
+    return parse_csv(build_request(endpoint, params={'query': query}))
 
 def fetch_json(action: str, **params: Any) -> Optional[Any]:
     req = build_request('https://www.wikidata.org/w/api.php', params={'action': action,
