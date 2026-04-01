@@ -7,9 +7,31 @@ import pkgutil
 import sys
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, ClassVar, Dict, List, Optional
+from typing import Any, Callable, ClassVar, Dict, List, Optional
 import urllib.error
 from urllib.request import Request, build_opener
+
+
+_CLASS_HANDLER_CACHE: Dict[type, Dict[str, str]] = {}
+
+
+def obtain_handler(key: str) -> Callable:
+    """Decorator: register this method to intercept `key` during obtain() traversal."""
+    def decorator(fn: Callable) -> Callable:
+        fn._obtain_key = key
+        return fn
+    return decorator
+
+
+def _get_class_handlers(cls: type) -> Dict[str, str]:
+    if cls not in _CLASS_HANDLER_CACHE:
+        handlers: Dict[str, str] = {}
+        for name in dir(cls):
+            m = getattr(cls, name, None)
+            if callable(m) and (k := getattr(m, '_obtain_key', None)):
+                handlers[k] = name
+        _CLASS_HANDLER_CACHE[cls] = handlers
+    return _CLASS_HANDLER_CACHE[cls]
 
 
 from wdpy import haswbstatement, References, Snak, Statement
@@ -117,9 +139,15 @@ class SourceItem:
             self.patch = []
         self.patch.append(s)
 
-    def obtain(self, source: dict, properties: dict, translate: dict = {}) -> None:
+    def obtain(self, source: dict, properties: dict, translate: Optional[dict] = None) -> None:
+        if translate is None:
+            translate = self._config.get('translate', {})
+        handlers = _get_class_handlers(type(self))
+        for key, method_name in handlers.items():
+            if (val := source.get(key)) is not None:
+                getattr(self, method_name)(val)
         for key, prop in properties.items():
-            if (val := source.get(key)) is None or not prop:
+            if key in handlers or (val := source.get(key)) is None or not prop:
                 continue
             if isinstance(val, list):
                 for v in val:
@@ -129,15 +157,25 @@ class SourceItem:
             elif isinstance(prop, dict):
                 self.obtain(val, prop, translate)
 
-    def add_author(self, full_name: str, orcid: Optional[str] = None) -> Statement:
+    def add_author(self, full_name: str, orcid: Optional[str] = None) -> Optional[Statement]:
         full_name = full_name.strip()
-        if orcid and (qid := self.lookup('P496', orcid)):
+        qid = self.lookup('P496', orcid) if orcid else None
+        if orcid and qid is None:
+            from wdpy.item import Item
+            if person := Item.get_by_id('P496', orcid):
+                person.labels.setdefault('mul', full_name)
+                if new_qid := person.write():
+                    SourceItem._lookup_cache.setdefault('P496', {})[orcid] = new_qid
+                    qid = new_qid
+        if qid:
             s = self.add_claim('P50', qid)
-            s.set_qualifier('P1932', full_name)
+            if s:
+                s.set_qualifier('P1932', full_name)
         else:
             s = self.add_claim('P2093', full_name)
-        self._author_num = getattr(self, '_author_num', 0) + 1
-        s.set_qualifier('P1545', str(self._author_num))
+        if s:
+            self._author_num = getattr(self, '_author_num', 0) + 1
+            s.set_qualifier('P1545', str(self._author_num))
         return s
 
     @staticmethod

@@ -3,7 +3,8 @@ import sys
 from unittest import TestCase, mock
 
 import wdpy
-from wdpy import SourceItem, Statement, Snak
+from wdpy import obtain_handler, SourceItem, Statement, Snak
+from wdpy.source_item import _CLASS_HANDLER_CACHE
 
 
 class TestRequest(TestCase):
@@ -471,3 +472,54 @@ class TestApplyReferences(TestCase):
         item._apply_references()
 
         self.assertIsNotNone(doi_stmt.references)
+
+
+class TestObtainHandler(TestCase):
+    def setUp(self):
+        _CLASS_HANDLER_CACHE.clear()
+
+    def _make_connector(self, translate=None):
+        class _Connector(SourceItem):
+            _config = {'translate': translate or {}, 'properties': {}}
+            _intercepted = []
+
+            @obtain_handler('special')
+            def _handle_special(self, val):
+                self._intercepted.append(val)
+
+            def parse(self, text, ident):
+                pass
+
+        return _Connector
+
+    def test_handler_fires_for_matching_key(self):
+        cls = self._make_connector()
+        item = cls()
+        item.obtain({'special': 'hello', 'other': 'x'}, {})
+        self.assertEqual(item._intercepted, ['hello'])
+
+    def test_handler_does_not_fire_when_key_absent(self):
+        cls = self._make_connector()
+        item = cls()
+        item.obtain({'other': 'x'}, {})
+        self.assertEqual(item._intercepted, [])
+
+    def test_handler_takes_priority_over_property_mapping(self):
+        cls = self._make_connector()
+        item = cls()
+        item.obtain({'special': 'hello'}, {'special': 'P31'})
+        self.assertEqual(item._intercepted, ['hello'])
+        self.assertIsNone(item.patch)  # add_claim was NOT called
+
+    def test_non_handled_keys_still_use_property_mapping(self):
+        cls = self._make_connector()
+        item = cls()
+        item.obtain({'normal': 'Q5'}, {'normal': 'P31'})
+        self.assertIsNotNone(item.patch)
+        self.assertEqual(item.patch[0].mainsnak.property, 'P31')
+
+    def test_translate_defaults_from_config(self):
+        cls = self._make_connector(translate={'eng': 'Q1860'})
+        item = cls()
+        item.obtain({'lang': 'eng'}, {'lang': 'P407'})
+        self.assertEqual(item.patch[0].mainsnak.value, ('Q1860',))
