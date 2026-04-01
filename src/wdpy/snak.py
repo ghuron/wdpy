@@ -80,6 +80,8 @@ class Snak:
                                              str(pr), 'Q1985727'))
             return None
         if property_id == 'P356' and s: s = s.upper()
+        if k in ('wikibase-item', 'wikibase-property'):
+            return Snak(property_id, (s,)) if re.match(r'^[QP]\d+$', s) else None
         return Snak(property_id, (s,)) if s or k == 'string' else None
 
     def json(self) -> str:

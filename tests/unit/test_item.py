@@ -12,7 +12,7 @@ class DummyModel(wdpy.SourceItem):
 
     @classmethod
     def get_db_ref(cls):
-        return 'QX'
+        return 'Q1'
 
 
 @patch('wdpy.Snak.type_of', return_value='string')
@@ -50,7 +50,7 @@ class Transform(unittest.TestCase):
         self.item = wdpy.Item('Q1')
         self.item._loaded = True
 
-    def _refs(self, qid='QX'):
+    def _refs(self, qid='Q1'):
         return wdpy.References([{'snaks': {'P248': [{'snaktype': 'value', 'property': 'P248',
                                   'datavalue': {'type': 'wikibase-entityid', 'value': {'id': qid}}}]}}])
 
@@ -102,7 +102,7 @@ class Transform(unittest.TestCase):
             self.item.transform(DummyModel(patch=[wdpy.Statement(wdpy.Snak('P31', ('Q5',)))]))
         m.assert_called_once()
         (ref_snaks,), _ = m.call_args
-        self.assertEqual(ref_snaks['P248'][0].value, ('QX',))
+        self.assertEqual(ref_snaks['P248'][0].value, ('Q1',))
 
     def test_compress_not_called_on_unaffected_property(self):
         ref = self._refs()
