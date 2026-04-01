@@ -40,9 +40,9 @@ class Item:
         transformed: List[SourceItem] = []
 
         while model := self._extract_new(transformed):
+            if model.proposed_label and 'mul' not in self.labels:
+                self.labels['mul'] = model.proposed_label
             if self.qid is None:
-                if not self.labels and model.proposed_label:
-                    self.labels['mul'] = model.proposed_label
                 for stmt in (model.patch or []):
                     if Snak.type_of(stmt.mainsnak.property) == 'external-id' and stmt.mainsnak.value:
                         if qid := SourceItem.lookup(stmt.mainsnak.property, stmt.mainsnak.value[0]):
